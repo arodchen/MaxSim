@@ -116,6 +116,20 @@ julong os::physical_memory() {
   return Linux::physical_memory();
 }
 
+julong os::allocatable_physical_memory(julong size) {
+#ifdef _LP64
+  return size;
+#else
+  julong result = MIN2(size, (julong)3800*M);
+   if (!is_allocatable(result)) {
+     // See comments under solaris for alignment considerations
+     julong reasonable_size = (julong)2*G - 2 * os::vm_page_size();
+     result =  MIN2(size, reasonable_size);
+   }
+   return result;
+#endif // _LP64
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // environment support
 
@@ -1247,17 +1261,11 @@ jlong os::elapsed_frequency() {
   return (1000 * 1000);
 }
 
-jlong os::timeofday() {
+jlong os::javaTimeMillis() {
   timeval time;
   int status = gettimeofday(&time, NULL);
   assert(status != -1, "linux error");
   return jlong(time.tv_sec) * 1000  +  jlong(time.tv_usec / 1000);
-}
-
-// Must return millis since Jan 1 1970 for JVM_CurrentTimeMillis
-// _use_global_time is only set if CacheTimeMillis is true
-jlong os::javaTimeMillis() {
-  return (_use_global_time ? read_global_time() : timeofday());
 }
 
 #ifndef CLOCK_MONOTONIC

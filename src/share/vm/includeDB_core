@@ -714,6 +714,11 @@ ciObjArray.hpp                          ciArray.hpp
 ciObjArray.hpp                          ciClassList.hpp
 ciObjArray.hpp                          objArrayOop.hpp
 
+ciObjArray.cpp                          ciObjArray.hpp
+ciObjArray.cpp                          ciNullObject.hpp
+ciObjArray.cpp                          ciUtilities.hpp
+ciObjArray.cpp                          objArrayOop.hpp
+
 ciObjArrayKlass.cpp                     ciInstanceKlass.hpp
 ciObjArrayKlass.cpp                     ciObjArrayKlass.hpp
 ciObjArrayKlass.cpp                     ciObjArrayKlassKlass.hpp
@@ -3062,6 +3067,7 @@ oopMap.hpp                              vmreg.hpp
 
 oopMapCache.cpp                         allocation.inline.hpp
 oopMapCache.cpp                         handles.inline.hpp
+oopMapCache.cpp                         jvmtiRedefineClassesTrace.hpp
 oopMapCache.cpp                         oop.inline.hpp
 oopMapCache.cpp                         oopMapCache.hpp
 oopMapCache.cpp                         resourceArea.hpp

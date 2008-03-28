@@ -344,12 +344,6 @@ class CommandLineFlags {
   product(bool, ForceTimeHighResolution, false,                             \
           "Using high time resolution(For Win32 only)")                     \
                                                                             \
-  product(bool, CacheTimeMillis, false,                                     \
-          "Cache os::javaTimeMillis with CacheTimeMillisGranularity")       \
-                                                                            \
-  diagnostic(uintx, CacheTimeMillisGranularity, 50,                         \
-          "Granularity for CacheTimeMillis")                                \
-                                                                            \
   develop(bool, TraceItables, false,                                        \
           "Trace initialization and use of itables")                        \
                                                                             \
@@ -948,6 +942,12 @@ class CommandLineFlags {
                                                                             \
   product(bool, UseXmmRegToRegMoveAll, false,                               \
           "Copy all XMM register bits when moving value between registers") \
+                                                                            \
+  product(bool, UseXmmI2D, false,                                           \
+          "Use SSE2 CVTDQ2PD instruction to convert Integer to Double")     \
+                                                                            \
+  product(bool, UseXmmI2F, false,                                           \
+          "Use SSE2 CVTDQ2PS instruction to convert Integer to Float")      \
                                                                             \
   product(intx, FieldsAllocationStyle, 1,                                   \
           "0 - type based with oops first, 1 - with oops last")             \
