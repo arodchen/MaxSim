@@ -1307,7 +1307,14 @@ class CommandLineFlags {
   product(intx, ParGCArrayScanChunk, 50,                                    \
           "Scan a subset and push remainder, if array is bigger than this") \
                                                                             \
-  product(intx, ParGCDesiredObjsFromOverflowList, 20,                       \
+  notproduct(bool, ParGCWorkQueueOverflowALot, false,                       \
+          "Whether we should simulate work queue overflow in ParNew")       \
+                                                                            \
+  notproduct(uintx, ParGCWorkQueueOverflowInterval, 1000,                   \
+          "An `interval' counter that determines how frequently"            \
+          " we simulate overflow; a smaller number increases frequency")    \
+                                                                            \
+  product(uintx, ParGCDesiredObjsFromOverflowList, 20,                      \
           "The desired number of objects to claim from the overflow list")  \
                                                                             \
   product(uintx, CMSParPromoteBlocksToClaim, 50,                            \
@@ -1419,18 +1426,18 @@ class CommandLineFlags {
   develop(bool, CMSOverflowEarlyRestoration, false,                         \
           "Whether preserved marks should be restored early")               \
                                                                             \
-  product(uintx, CMSMarkStackSize, 32*K,                                    \
+  product(uintx, CMSMarkStackSize, NOT_LP64(32*K) LP64_ONLY(4*M),           \
           "Size of CMS marking stack")                                      \
                                                                             \
-  product(uintx, CMSMarkStackSizeMax, 4*M,                                  \
+  product(uintx, CMSMarkStackSizeMax, NOT_LP64(4*M) LP64_ONLY(512*M),       \
           "Max size of CMS marking stack")                                  \
                                                                             \
   notproduct(bool, CMSMarkStackOverflowALot, false,                         \
           "Whether we should simulate frequent marking stack / work queue"  \
           " overflow")                                                      \
                                                                             \
-  notproduct(intx, CMSMarkStackOverflowInterval, 1000,                      \
-          "A per-thread `interval' counter that determines how frequently"  \
+  notproduct(uintx, CMSMarkStackOverflowInterval, 1000,                     \
+          "An `interval' counter that determines how frequently"            \
           " we simulate overflow; a smaller number increases frequency")    \
                                                                             \
   product(uintx, CMSMaxAbortablePrecleanLoops, 0,                           \
@@ -1648,7 +1655,14 @@ class CommandLineFlags {
   develop(uintx, WorkStealingYieldsBeforeSleep, 1000,                       \
           "Number of yields before a sleep is done during workstealing")    \
                                                                             \
-  product(uintx, PreserveMarkStackSize, 40,                                 \
+  develop(uintx, WorkStealingHardSpins, 4096,                               \
+          "Number of iterations in a spin loop between checks on "          \
+          "time out of hard spin")                                          \
+                                                                            \
+  develop(uintx, WorkStealingSpinToYieldRatio, 10,                          \
+          "Ratio of hard spins to calls to yield")                          \
+                                                                            \
+  product(uintx, PreserveMarkStackSize, 1024,                               \
            "Size for stack used in promotion failure handling")             \
                                                                             \
   product_pd(bool, UseTLAB, "Use thread-local object allocation")           \
