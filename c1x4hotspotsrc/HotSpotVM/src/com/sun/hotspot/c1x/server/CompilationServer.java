@@ -21,14 +21,10 @@
 package com.sun.hotspot.c1x.server;
 
 import java.io.*;
-import java.lang.reflect.Proxy;
 import java.net.*;
-import java.rmi.registry.*;
 
 import javax.net.*;
 
-import com.sun.cri.ci.*;
-import com.sun.cri.ri.*;
 import com.sun.hotspot.c1x.*;
 import com.sun.hotspot.c1x.Compiler;
 import com.sun.hotspot.c1x.logging.*;
@@ -40,101 +36,33 @@ import com.sun.hotspot.c1x.logging.*;
  */
 public class CompilationServer {
 
-    private Registry registry;
-    private ServerSocket serverSocket;
-    private Socket socket;
-    private ObjectOutputStream output;
-    private ObjectInputStream input;
-
     public static void main(String[] args) throws Exception {
         new CompilationServer().run();
     }
 
-    public static class Container implements Serializable {
-
-        public final Class<?> clazz;
-        public final Object[] values;
-
-        public Container(Class<?> clazz, Object... values) {
-            this.clazz = clazz;
-            this.values = values;
-        }
-    }
-
-    /**
-     * Replaces certain cir objects that cannot easily be made Serializable.
-     */
-    public static class ReplacingOutputStream extends ObjectOutputStream {
-
-        public ReplacingOutputStream(OutputStream out) throws IOException {
-            super(out);
-            enableReplaceObject(true);
-        }
-
-        @Override
-        protected Object replaceObject(Object obj) throws IOException {
-            Class<? extends Object> clazz = obj.getClass();
-            if (clazz == CiConstant.class) {
-                CiConstant o = (CiConstant) obj;
-                return new Container(clazz, o.kind, o.boxedValue());
-            } else if (clazz == CiDebugInfo.class) {
-                CiDebugInfo o = (CiDebugInfo) obj;
-                return new Container(clazz, o.codePos, o.registerRefMap, o.frameRefMap);
-            } else if (clazz == CiCodePos.class) {
-                CiCodePos o = (CiCodePos) obj;
-                return new Container(clazz, o.caller, o.method, o.bci);
-            }
-            return obj;
-        }
-    }
-
-    /**
-     * Replaces certain cir objects that cannot easily be made Serializable.
-     */
-    public static class ReplacingInputStream extends ObjectInputStream {
-
-        public ReplacingInputStream(InputStream in) throws IOException {
-            super(in);
-            enableResolveObject(true);
-        }
-
-        @Override
-        protected Object resolveObject(Object obj) throws IOException {
-            if (obj instanceof Container) {
-                Container c = (Container) obj;
-                if (c.clazz == CiConstant.class) {
-                    return CiConstant.forBoxed((CiKind) c.values[0], c.values[1]);
-                } else if (c.clazz == CiDebugInfo.class) {
-                    return new CiDebugInfo((CiCodePos) c.values[0], (CiBitMap) c.values[2], (CiBitMap) c.values[3]);
-                } else if (c.clazz == CiCodePos.class) {
-                    return new CiCodePos((CiCodePos) c.values[0], (RiMethod) c.values[1], (Integer) c.values[2]);
-                }
-                throw new RuntimeException("unexpected container class");
-            }
-            return obj;
-        }
-    }
-
     private void run() throws IOException, ClassNotFoundException {
-        serverSocket = ServerSocketFactory.getDefault().createServerSocket(1199);
-        while (true) {
+        ServerSocket serverSocket = ServerSocketFactory.getDefault().createServerSocket(1199);
+        do {
+            Socket socket = null;
             try {
                 Logger.log("Compilation server ready, waiting for client to connect...");
                 socket = serverSocket.accept();
                 Logger.log("Connected to " + socket.getRemoteSocketAddress());
-                output = new ReplacingOutputStream(socket.getOutputStream());
-                input = new ReplacingInputStream(socket.getInputStream());
 
-                InvocationSocket invocation = new InvocationSocket(output, input);
-                VMEntries entries = (VMEntries) Proxy.newProxyInstance(VMEntries.class.getClassLoader(), new Class<?>[] {VMEntries.class}, invocation);
-                VMExits exits = Compiler.initializeServer(entries);
-                invocation.setDelegate(exits);
+                ReplacingStreams streams = new ReplacingStreams(socket.getOutputStream(), socket.getInputStream());
 
-                invocation.waitForResult();
+                VMEntries entries = (VMEntries) streams.getInvocation().waitForResult();
+                Compiler compiler = CompilerImpl.initializeServer(entries);
+
+                streams.getInvocation().sendResult(compiler);
+
+                streams.getInvocation().waitForResult();
             } catch (IOException e) {
                 e.printStackTrace();
-                socket.close();
+                if (socket != null) {
+                    socket.close();
+                }
             }
-        }
+        } while (false);
     }
 }

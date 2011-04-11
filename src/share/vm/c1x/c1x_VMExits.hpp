@@ -25,6 +25,7 @@
 class VMExits : public AllStatic {
 
 private:
+  static jobject _compilerPermObject;
   static jobject _vmExitsPermObject;
   static jobject _vmExitsPermKlass;
 
@@ -32,6 +33,7 @@ private:
   static Handle instance();
 
 public:
+  static Handle compilerInstance();
 
   // public abstract boolean setOption(String option);
   static jboolean setOption(Handle option);
@@ -76,13 +78,22 @@ public:
   static oop createCiConstantObject(Handle object, TRAPS);
 };
 
-inline void check_pending_exception(const char* message) {
+inline void check_pending_exception(const char* message, bool dump_core = false) {
   Thread* THREAD = Thread::current();
   if (THREAD->has_pending_exception()) {
     Handle exception = PENDING_EXCEPTION;
     CLEAR_PENDING_EXCEPTION;
+    tty->print_cr("%s", message);
     java_lang_Throwable::print(exception, tty);
+    tty->cr();
     java_lang_Throwable::print_stack_trace(exception(), tty);
-    fatal(message);
+    vm_abort(dump_core);
+  }
+}
+
+inline void check_not_null(void* value, const char* message, bool dump_core = false) {
+  if (value == NULL) {
+    tty->print_cr("%s", message);
+    vm_abort(dump_core);
   }
 }

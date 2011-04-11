@@ -26,32 +26,43 @@
 #include "c1x/c1x_VMExits.hpp"
 
 // this is a *global* handle
+jobject VMExits::_compilerPermObject;
 jobject VMExits::_vmExitsPermObject;
 jobject VMExits::_vmExitsPermKlass;
 
 KlassHandle VMExits::vmExitsKlass() {
   if (JNIHandles::resolve(_vmExitsPermKlass) == NULL) {
     klassOop result = SystemDictionary::resolve_or_null(vmSymbols::com_sun_hotspot_c1x_VMExits(), SystemDictionary::java_system_loader(), NULL, Thread::current());
-    if (result == NULL) {
-      fatal("Could not find class com.sun.hotspot.c1x.VMExits");
-    }
+    check_not_null(result, "Couldn't find class com.sun.hotspot.c1x.VMExits");
     _vmExitsPermKlass = JNIHandles::make_global(result);
   }
   return KlassHandle((klassOop)JNIHandles::resolve_non_null(_vmExitsPermKlass));
 }
 
+Handle VMExits::compilerInstance() {
+  if (JNIHandles::resolve(_compilerPermObject) == NULL) {
+    KlassHandle compilerImplKlass = SystemDictionary::resolve_or_null(vmSymbols::com_sun_hotspot_c1x_CompilerImpl(), SystemDictionary::java_system_loader(), NULL, Thread::current());
+    check_not_null(compilerImplKlass(), "Couldn't find class com.sun.hotspot.c1x.CompilerImpl");
+
+    JavaValue result(T_OBJECT);
+    JavaCalls::call_static(&result, compilerImplKlass, vmSymbols::getInstance_name(), vmSymbols::getInstance_signature(), Thread::current());
+    check_pending_exception("Couldn't get Compiler");
+    _compilerPermObject = JNIHandles::make_global((oop) result.get_jobject());
+  }
+  return Handle(JNIHandles::resolve_non_null(_compilerPermObject));
+}
+
 Handle VMExits::instance() {
   if (JNIHandles::resolve(_vmExitsPermObject) == NULL) {
-    KlassHandle compiler_klass = SystemDictionary::resolve_or_null(vmSymbols::com_sun_hotspot_c1x_Compiler(), SystemDictionary::java_system_loader(), NULL, Thread::current());
-    if (compiler_klass.is_null()) {
-      fatal("Could not find class com.sun.hotspot.c1x.Compiler");
-    }
+    KlassHandle compilerKlass = SystemDictionary::resolve_or_null(vmSymbols::com_sun_hotspot_c1x_Compiler(), SystemDictionary::java_system_loader(), NULL, Thread::current());
+    check_not_null(compilerKlass(), "Couldn't find class com.sun.hotspot.c1x.Compiler");
+
     JavaValue result(T_OBJECT);
     JavaCallArguments args;
-    JavaCalls::call_static(&result, compiler_klass(), vmSymbols::getVMExits_name(), vmSymbols::getVMExits_signature(), &args, Thread::current());
+    args.set_receiver(compilerInstance());
+    JavaCalls::call_interface(&result, compilerKlass, vmSymbols::getVMExits_name(), vmSymbols::getVMExits_signature(), &args, Thread::current());
     check_pending_exception("Couldn't get VMExits");
-    oop res = (oop) result.get_jobject();
-    _vmExitsPermObject = JNIHandles::make_global(res);
+    _vmExitsPermObject = JNIHandles::make_global((oop) result.get_jobject());
   }
   return Handle(JNIHandles::resolve_non_null(_vmExitsPermObject));
 }
@@ -212,9 +223,16 @@ oop VMExits::createCiConstantDouble(jdouble value, TRAPS) {
 oop VMExits::createCiConstantObject(Handle object, TRAPS) {
   JavaValue result(T_OBJECT);
   JavaCallArguments args;
+  /*
   args.push_oop(instance());
   args.push_oop(object);
   JavaCalls::call_interface(&result, vmExitsKlass(), vmSymbols::createCiConstantObject_name(), vmSymbols::createCiConstantObject_signature(), &args, THREAD);
   check_pending_exception("Error while calling createCiConstantObject");
+  */
+
+
+  KlassHandle klass = SystemDictionary::resolve_or_null(vmSymbols::com_sun_cri_ci_CiConstant(), SystemDictionary::java_system_loader(), NULL, Thread::current());
+  JavaCalls::call_static(&result, klass(), vmSymbols::forObject_name(), vmSymbols::createCiConstantObject_signature(), object, THREAD);
+  check_pending_exception("Error while calling CiConstant.forObject");
   return (oop) result.get_jobject();
 }

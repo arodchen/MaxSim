@@ -72,13 +72,15 @@ public class HotSpotXirGenerator implements RiXirGenerator {
     private final HotSpotVMConfig config;
     private final CiTarget target;
     private final RiRegisterConfig registerConfig;
+    private final Compiler compiler;
 
     private CiXirAssembler asm;
 
-    public HotSpotXirGenerator(HotSpotVMConfig config, CiTarget target, RiRegisterConfig registerConfig) {
+    public HotSpotXirGenerator(HotSpotVMConfig config, CiTarget target, RiRegisterConfig registerConfig, Compiler compiler) {
         this.config = config;
         this.target = target;
         this.registerConfig = registerConfig;
+        this.compiler = compiler;
     }
 
     private SimpleTemplates prologueTemplates = new SimpleTemplates(STATIC_METHOD) {
@@ -336,8 +338,8 @@ public class HotSpotXirGenerator implements RiXirGenerator {
         }
     };
 
-    private static CiRegister getGeneralParameterRegister(int index) {
-        return Compiler.getInstance().getRegisterConfig().getCallingConventionRegisters(CiCallingConvention.Type.RuntimeCall, RegisterFlag.CPU)[index];
+    private CiRegister getGeneralParameterRegister(int index) {
+        return registerConfig.getCallingConventionRegisters(CiCallingConvention.Type.RuntimeCall, RegisterFlag.CPU)[index];
     }
 
     private SimpleTemplates monitorExitTemplates = new SimpleTemplates(NULL_CHECK) {
@@ -1144,7 +1146,7 @@ public class HotSpotXirGenerator implements RiXirGenerator {
     @Override
     public XirSnippet genResolveClass(XirSite site, RiType type, Representation rep) {
         assert rep == Representation.ObjectHub || rep == Representation.StaticFields || rep == Representation.JavaClass : "unexpected representation: " + rep;
-        if (type instanceof HotSpotTypeResolved) {
+        if (type.isResolved()) {
             return new XirSnippet(resolveClassTemplates.get(site), XirArgument.forObject(type));
         }
         return new XirSnippet(resolveClassTemplates.get(site, UNRESOLVED));
@@ -1224,7 +1226,7 @@ public class HotSpotXirGenerator implements RiXirGenerator {
 
     @Override
     public XirSnippet genNewInstance(XirSite site, RiType type) {
-        if (type instanceof HotSpotTypeResolved) {
+        if (type.isResolved()) {
             int instanceSize = ((HotSpotTypeResolved) type).instanceSize();
             return new XirSnippet(newInstanceTemplates.get(site, instanceSize), XirArgument.forObject(type));
         }
@@ -1234,13 +1236,13 @@ public class HotSpotXirGenerator implements RiXirGenerator {
     @Override
     public XirSnippet genNewArray(XirSite site, XirArgument length, CiKind elementKind, RiType componentType, RiType arrayType) {
         if (elementKind == CiKind.Object) {
-            if (arrayType instanceof HotSpotTypeResolved) {
+            if (arrayType.isResolved()) {
                 return new XirSnippet(newObjectArrayTemplates.get(site), length, XirArgument.forObject(arrayType));
             }
             return new XirSnippet(newObjectArrayTemplates.get(site, UNRESOLVED), length);
         }
         assert arrayType == null;
-        arrayType = Compiler.getVMEntries().getPrimitiveArrayType(elementKind);
+        arrayType = compiler.getVMEntries().getPrimitiveArrayType(elementKind);
         return new XirSnippet(newTypeArrayTemplates.get(site, elementKind), length, XirArgument.forObject(arrayType));
     }
 
@@ -1251,7 +1253,7 @@ public class HotSpotXirGenerator implements RiXirGenerator {
 
     @Override
     public XirSnippet genNewMultiArray(XirSite site, XirArgument[] lengths, RiType type) {
-        if (type instanceof HotSpotTypeResolved) {
+        if (type.isResolved()) {
             XirArgument[] params = Arrays.copyOf(lengths, lengths.length + 1);
             params[lengths.length] = XirArgument.forObject(type);
             return new XirSnippet(multiNewArrayTemplate.get(site, lengths.length), params);
