@@ -656,7 +656,8 @@ public final class GraphBuilder {
         if (initialized) {
             holderInstr = appendConstant(holder.getEncoding(representation));
         } else {
-            holderInstr = append(new ResolveClass(holder, representation, graph));
+            ResolveClass rc = new ResolveClass(holder, representation, graph);
+            holderInstr = append(rc);
         }
         return holderInstr;
     }

@@ -297,7 +297,7 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     @Override
     public void visitResolveClass(ResolveClass i) {
-        LIRDebugInfo info = stateFor(i);
+        LIRDebugInfo info = stateFor(i, i.stateAfter());
         XirSnippet snippet = xir.genResolveClass(site(i), i.type, i.portion);
         emitXir(snippet, i, info, null, true);
     }
@@ -905,9 +905,9 @@ public abstract class LIRGenerator extends ValueVisitor {
         lir.move(exceptionOpr, argumentOperand);
 
         if (unwind) {
-            lir.unwindException(exceptionPcOpr(), exceptionOpr, info);
+            lir.unwindException(CiValue.IllegalValue, exceptionOpr, info);
         } else {
-            lir.throwException(exceptionPcOpr(), argumentOperand, info);
+            lir.throwException(CiValue.IllegalValue, argumentOperand, info);
         }
     }
 
@@ -1572,10 +1572,6 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     protected abstract boolean canStoreAsConstant(Value i, CiKind kind);
 
-    protected abstract CiValue exceptionPcOpr();
-
-    protected abstract CiValue osrBufferPointer();
-
     protected abstract boolean strengthReduceMultiply(CiValue left, int constant, CiValue result, CiValue tmp);
 
     protected abstract CiAddress genAddress(CiValue base, CiValue index, int shift, int disp, CiKind kind);
@@ -1583,10 +1579,6 @@ public abstract class LIRGenerator extends ValueVisitor {
     protected abstract void genCmpMemInt(Condition condition, CiValue base, int disp, int c, LIRDebugInfo info);
 
     protected abstract void genCmpRegMem(Condition condition, CiValue reg, CiValue base, int disp, CiKind kind, LIRDebugInfo info);
-
-    protected abstract void genGetObjectUnsafe(CiValue dest, CiValue src, CiValue offset, CiKind kind, boolean isVolatile);
-
-    protected abstract void genPutObjectUnsafe(CiValue src, CiValue offset, CiValue data, CiKind kind, boolean isVolatile);
 
     /**
      * Implements site-specific information for the XIR interface.
@@ -1648,5 +1640,11 @@ public abstract class LIRGenerator extends ValueVisitor {
             return "XirSupport<" + current + ">";
         }
 
+
+    }
+
+    @Override
+    public void visitFrameState(FrameState i) {
+        // nothing to do for now
     }
 }
