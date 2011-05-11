@@ -331,7 +331,7 @@ public final class GraphBuilder {
         if (con instanceof RiType) {
             // this is a load of class constant which might be unresolved
             RiType riType = (RiType) con;
-            if (!riType.isResolved() || C1XOptions.TestPatching) {
+            if (!riType.isResolved()) {
                 ResolveClass rc = new ResolveClass(riType, RiType.Representation.JavaClass, graph, frameState.create(bci()));
                 frameState.push(CiKind.Object, append(rc));
             } else {
@@ -509,59 +509,50 @@ public final class GraphBuilder {
         append(new If(x, cond, y, tsucc, fsucc, isSafepoint ? stateBefore : null, isSafepoint, graph));
     }
 
-    void genIfZero(Condition cond) {
+    private void genIfZero(Condition cond) {
         Value y = appendConstant(CiConstant.INT_0);
         FrameState stateBefore = frameState.create(bci());
         Value x = frameState.ipop();
         ifNode(x, cond, y, stateBefore);
     }
 
-    void genIfNull(Condition cond) {
+    private void genIfNull(Condition cond) {
         FrameState stateBefore = frameState.create(bci());
         Value y = appendConstant(CiConstant.NULL_OBJECT);
         Value x = frameState.apop();
         ifNode(x, cond, y, stateBefore);
     }
 
-    void genIfSame(CiKind kind, Condition cond) {
+    private void genIfSame(CiKind kind, Condition cond) {
         FrameState stateBefore = frameState.create(bci());
         Value y = frameState.pop(kind);
         Value x = frameState.pop(kind);
         ifNode(x, cond, y, stateBefore);
     }
 
-    void genThrow(int bci) {
+    private void genThrow(int bci) {
         FrameState stateBefore = frameState.create(bci);
         Throw t = new Throw(frameState.apop(), !noSafepoints(), graph);
         t.setStateBefore(stateBefore);
         appendWithoutOptimization(t, bci);
     }
 
-    void genCheckCast() {
+    private void genCheckCast() {
         int cpi = stream().readCPI();
         RiType type = constantPool().lookupType(cpi, CHECKCAST);
-        boolean isInitialized = !C1XOptions.TestPatching && type.isResolved() && type.isInitialized();
+        boolean isInitialized = type.isResolved() && type.isInitialized();
         Value typeInstruction = genResolveClass(RiType.Representation.ObjectHub, type, isInitialized, cpi);
         CheckCast c = new CheckCast(type, typeInstruction, frameState.apop(), graph);
         frameState.apush(append(c));
-        checkForDirectCompare(c);
     }
 
-    void genInstanceOf() {
+    private void genInstanceOf() {
         int cpi = stream().readCPI();
         RiType type = constantPool().lookupType(cpi, INSTANCEOF);
-        boolean isInitialized = !C1XOptions.TestPatching && type.isResolved() && type.isInitialized();
+        boolean isInitialized = type.isResolved() && type.isInitialized();
         Value typeInstruction = genResolveClass(RiType.Representation.ObjectHub, type, isInitialized, cpi);
         InstanceOf i = new InstanceOf(type, typeInstruction, frameState.apop(), graph);
         frameState.ipush(append(i));
-        checkForDirectCompare(i);
-    }
-
-    private void checkForDirectCompare(TypeCheck check) {
-        RiType type = check.targetClass();
-        if (!type.isResolved() || type.isArrayClass()) {
-            return;
-        }
     }
 
     void genNewInstance(int cpi) {
@@ -575,14 +566,14 @@ public final class GraphBuilder {
         frameState.apush(append(n));
     }
 
-    void genNewTypeArray(int typeCode) {
+    private void genNewTypeArray(int typeCode) {
         CiKind kind = CiKind.fromArrayTypeCode(typeCode);
         RiType elementType = compilation.runtime.asRiType(kind);
         NewTypeArray nta = new NewTypeArray(frameState.ipop(), elementType, graph);
         frameState.apush(append(nta));
     }
 
-    void genNewObjectArray(int cpi) {
+    private void genNewObjectArray(int cpi) {
         RiType type = constantPool().lookupType(cpi, ANEWARRAY);
         FrameState stateBefore = null;
         if (!type.isResolved()) {
@@ -593,7 +584,7 @@ public final class GraphBuilder {
         n.setStateBefore(stateBefore);
     }
 
-    void genNewMultiArray(int cpi) {
+    private void genNewMultiArray(int cpi) {
         RiType type = constantPool().lookupType(cpi, MULTIANEWARRAY);
         FrameState stateBefore = null;
         if (!type.isResolved()) {
@@ -609,7 +600,7 @@ public final class GraphBuilder {
         n.setStateBefore(stateBefore);
     }
 
-    void genGetField(int cpi, RiField field) {
+    private void genGetField(int cpi, RiField field) {
         // Must copy the state here, because the field holder must still be on the stack.
         FrameState stateBefore = null;
         if (!field.isResolved()) {
@@ -620,7 +611,7 @@ public final class GraphBuilder {
         load.setStateBefore(stateBefore);
     }
 
-    void genPutField(int cpi, RiField field) {
+    private void genPutField(int cpi, RiField field) {
         // Must copy the state here, because the field holder must still be on the stack.
         FrameState stateBefore = null;
         if (!field.isResolved()) {
@@ -632,9 +623,9 @@ public final class GraphBuilder {
         store.setStateBefore(stateBefore);
     }
 
-    void genGetStatic(int cpi, RiField field) {
+    private void genGetStatic(int cpi, RiField field) {
         RiType holder = field.holder();
-        boolean isInitialized = !C1XOptions.TestPatching && field.isResolved();
+        boolean isInitialized = field.isResolved();
         CiConstant constantValue = null;
         FrameState stateBefore = null;
         if (isInitialized) {
@@ -652,7 +643,7 @@ public final class GraphBuilder {
         }
     }
 
-    void genPutStatic(int cpi, RiField field) {
+    private void genPutStatic(int cpi, RiField field) {
         RiType holder = field.holder();
         FrameState stateBefore = null;
         if (!field.isResolved()) {
@@ -686,9 +677,9 @@ public final class GraphBuilder {
         frameState.push(kind.stackKind(), optimized);
     }
 
-    void genInvokeStatic(RiMethod target, int cpi, RiConstantPool constantPool) {
+    private void genInvokeStatic(RiMethod target, int cpi, RiConstantPool constantPool) {
         RiType holder = target.holder();
-        boolean isInitialized = !C1XOptions.TestPatching && target.isResolved() && holder.isInitialized();
+        boolean isInitialized = target.isResolved() && holder.isInitialized();
         if (!isInitialized && C1XOptions.ResolveClassBeforeStaticInvoke) {
             // Re-use the same resolution code as for accessing a static field. Even though
             // the result of resolution is not used by the invocation (only the side effect
@@ -699,19 +690,19 @@ public final class GraphBuilder {
         appendInvoke(INVOKESTATIC, target, args, cpi, constantPool);
     }
 
-    void genInvokeInterface(RiMethod target, int cpi, RiConstantPool constantPool) {
+    private void genInvokeInterface(RiMethod target, int cpi, RiConstantPool constantPool) {
         Value[] args = frameState.popArguments(target.signature().argumentSlots(true));
         genInvokeIndirect(INVOKEINTERFACE, target, args, cpi, constantPool);
 
     }
 
-    void genInvokeVirtual(RiMethod target, int cpi, RiConstantPool constantPool) {
+    private void genInvokeVirtual(RiMethod target, int cpi, RiConstantPool constantPool) {
         Value[] args = frameState.popArguments(target.signature().argumentSlots(true));
         genInvokeIndirect(INVOKEVIRTUAL, target, args, cpi, constantPool);
 
     }
 
-    void genInvokeSpecial(RiMethod target, RiType knownHolder, int cpi, RiConstantPool constantPool) {
+    private void genInvokeSpecial(RiMethod target, RiType knownHolder, int cpi, RiConstantPool constantPool) {
         Value[] args = frameState.popArguments(target.signature().argumentSlots(true));
         invokeDirect(target, args, knownHolder, cpi, constantPool);
 
@@ -966,10 +957,6 @@ public final class GraphBuilder {
         return x;
     }
 
-    private boolean hasUncontrollableSideEffects(Value x) {
-        return x instanceof Invoke || x instanceof ResolveClass;
-    }
-
     private BlockBegin blockAtOrNull(int bci) {
         return blockMap.get(bci);
     }
@@ -980,12 +967,12 @@ public final class GraphBuilder {
         return result;
     }
 
-    private Value synchronizedObject(FrameStateAccess curState2, RiMethod target) {
+    private Value synchronizedObject(FrameStateAccess state, RiMethod target) {
         if (isStatic(target.accessFlags())) {
             Constant classConstant = new Constant(target.holder().getEncoding(Representation.JavaClass), graph);
             return appendWithoutOptimization(classConstant, Instruction.SYNCHRONIZATION_ENTRY_BCI);
         } else {
-            return curState2.localAt(0);
+            return state.localAt(0);
         }
     }
 
