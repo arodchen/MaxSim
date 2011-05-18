@@ -94,7 +94,6 @@ public final class BlockBegin extends StateSplit {
     public enum BlockFlag {
         StandardEntry,
         ExceptionEntry,
-        SubroutineEntry,
         BackwardBranchTarget,
         IsOnWorkList,
         WasVisited,
@@ -157,14 +156,6 @@ public final class BlockBegin extends StateSplit {
     public List<BlockEnd> blockPredecessors() {
 //      return Collections.unmodifiableList(predecessors);
       return predecessors;
-    }
-
-    /**
-     * Gets the dominator of this block.
-     * @return the dominator block
-     */
-    public BlockBegin dominator() {
-        return dominator;
     }
 
     /**
@@ -497,14 +488,6 @@ public final class BlockBegin extends StateSplit {
         setBlockFlag(BlockFlag.ExceptionEntry);
     }
 
-    public boolean isSubroutineEntry() {
-        return checkBlockFlag(BlockFlag.SubroutineEntry);
-    }
-
-    public void setSubroutineEntry() {
-        setBlockFlag(BlockFlag.SubroutineEntry);
-    }
-
     public boolean isOnWorkList() {
         return checkBlockFlag(BlockFlag.IsOnWorkList);
     }
@@ -555,7 +538,6 @@ public final class BlockBegin extends StateSplit {
 
     public void copyBlockFlags(BlockBegin other) {
         copyBlockFlag(other, BlockBegin.BlockFlag.ParserLoopHeader);
-        copyBlockFlag(other, BlockBegin.BlockFlag.SubroutineEntry);
         copyBlockFlag(other, BlockBegin.BlockFlag.ExceptionEntry);
         copyBlockFlag(other, BlockBegin.BlockFlag.WasVisited);
     }
@@ -697,9 +679,6 @@ public final class BlockBegin extends StateSplit {
         if (isExceptionEntry()) {
             sb.append('E');
         }
-        if (isSubroutineEntry()) {
-            sb.append('s');
-        }
         if (isParserLoopHeader()) {
             sb.append("LH");
         }
@@ -730,11 +709,6 @@ public final class BlockBegin extends StateSplit {
                 out.print(" B").print(handler.blockID);
             }
             out.print(')');
-        }
-
-        // print dominator block
-        if (dominator() != null) {
-            out.print(" dom B").print(dominator().blockID);
         }
 
         // print predecessors
