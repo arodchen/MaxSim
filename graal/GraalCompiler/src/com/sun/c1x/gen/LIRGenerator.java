@@ -392,8 +392,8 @@ public abstract class LIRGenerator extends ValueVisitor {
 
         // emit phi-instruction moves after safepoint since this simplifies
         // describing the state at the safepoint.
-        moveToPhi(x.stateAfter());
 
+        moveToPhi();
         lir.jump(getLIRBlock(x.defaultSuccessor()));
     }
 
@@ -578,7 +578,6 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     protected LIRBlock getLIRBlock(Instruction b) {
-        assert b instanceof BlockBegin : "only BlockBegin, for now...";
         return ir.valueToBlock.get(b);
     }
 
@@ -1266,11 +1265,6 @@ public abstract class LIRGenerator extends ValueVisitor {
         }
     }
 
-    protected void moveToPhi() {
-        assert lastState != null;
-        this.moveToPhi(lastState);
-    }
-
     private List<Phi> getPhis(LIRBlock block) {
         if (block.getInstructions().size() > 0) {
             Instruction i = block.getInstructions().get(0);
@@ -1287,7 +1281,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         return null;
     }
 
-    protected void moveToPhi(FrameState curState) {
+    protected void moveToPhi() {
         // Moves all stack values into their phi position
         LIRBlock bb = currentBlock;
         if (bb.numberOfSux() == 1) {

@@ -24,7 +24,6 @@ package com.sun.c1x.graph;
 
 import java.util.*;
 
-import com.oracle.graal.graph.*;
 import com.oracle.max.graal.schedule.*;
 import com.sun.c1x.*;
 import com.sun.c1x.debug.*;
@@ -82,15 +81,24 @@ public class IR {
 
         Schedule schedule = new Schedule(this.compilation.graph);
         List<Block> blocks = schedule.getBlocks();
-        NodeMap<Block> nodeToBlock = schedule.getNodeToBlock();
+        List<LIRBlock> lirBlocks = new ArrayList<LIRBlock>();
         Map<Block, LIRBlock> map = new HashMap<Block, LIRBlock>();
         for (Block b : blocks) {
-            map.put(b, new LIRBlock(b.blockID()));
+            LIRBlock block = new LIRBlock(b.blockID());
+            block.setExceptionEntry(b.isExceptionEntry());
+            map.put(b, block);
+            block.setInstructions(b.getInstructions());
+            block.setLinearScanNumber(b.blockID());
+            lirBlocks.add(block);
         }
 
         for (Block b : blocks) {
             for (Block succ : b.getSuccessors()) {
-                map.get(b).blockSuccessors().add(map.get(succ));
+                if (succ.isExceptionEntry()) {
+                    map.get(b).getExceptionHandlerSuccessors().add(map.get(succ));
+                } else {
+                    map.get(b).blockSuccessors().add(map.get(succ));
+                }
             }
 
             for (Block pred : b.getPredecessors()) {
@@ -98,11 +106,36 @@ public class IR {
             }
         }
 
-        // TODO(tw): Schedule nodes within a block.
+
+     // TODO(tw): Schedule nodes within a block.
 
 
-        valueToBlock = computeLinearScanOrder();
+        CriticalEdgeFinder finder = new CriticalEdgeFinder(lirBlocks, compilation.graph);
+        finder.splitCriticalEdges();
+
+
+        orderedBlocks = lirBlocks;
+
+        valueToBlock = new HashMap<Value, LIRBlock>();
+        for (LIRBlock b : orderedBlocks) {
+            for (Instruction i : b.getInstructions()) {
+                valueToBlock.put(i, b);
+            }
+        }
+        startBlock = valueToBlock.get(getHIRStartBlock());
+        assert startBlock != null;
         verifyAndPrint("After linear scan order");
+
+        ComputeLinearScanOrder clso = new ComputeLinearScanOrder(lirBlocks.size(), startBlock);
+        orderedBlocks = clso.linearScanOrder();
+        this.compilation.stats.loopCount = clso.numLoops();
+
+        int z = 0;
+        for (LIRBlock b : orderedBlocks) {
+            b.setLinearScanNumber(z++);
+        }
+
+
 
         if (C1XOptions.PrintTimers) {
             C1XTimers.HIR_OPTIMIZE.stop();
@@ -119,61 +152,6 @@ public class IR {
         }
     }
 
-    private Map<Value, LIRBlock> computeLinearScanOrder() {
-        return makeLinearScanOrder();
-    }
-
-    private Map<Value, LIRBlock> makeLinearScanOrder() {
-
-        Map<Value, LIRBlock> valueToBlock = new HashMap<Value, LIRBlock>();
-
-        if (orderedBlocks == null) {
-            CriticalEdgeFinder finder = new CriticalEdgeFinder(this);
-            ((BlockBegin) getHIRStartBlock()).iteratePreOrder(finder);
-            finder.splitCriticalEdges();
-            ComputeLinearScanOrder computeLinearScanOrder = new ComputeLinearScanOrder(compilation.stats.blockCount, (BlockBegin) getHIRStartBlock());
-            List<BlockBegin> blocks = computeLinearScanOrder.linearScanOrder();
-            orderedBlocks = new ArrayList<LIRBlock>();
-
-            int z = 0;
-            for (BlockBegin bb : blocks) {
-                LIRBlock lirBlock = new LIRBlock(z);
-                lirBlock.getInstructions().add(bb);
-                valueToBlock.put(bb, lirBlock);
-                lirBlock.setLinearScanNumber(bb.linearScanNumber());
-                // TODO(tw): Initialize LIRBlock.linearScanLoopHeader and LIRBlock.linearScanLoopEnd
-                lirBlock.setStateBefore(bb.stateBefore());
-                orderedBlocks.add(lirBlock);
-                ++z;
-            }
-
-            z = 0;
-            for (BlockBegin bb : blocks) {
-                LIRBlock lirBlock = orderedBlocks.get(z);
-                for (int i = 0; i < bb.numberOfPreds(); ++i) {
-                    lirBlock.blockPredecessors().add(valueToBlock.get(bb.predAt(i).block()));
-                }
-
-                BlockEnd end = bb.end();
-                for (int i = 0; i < end.blockSuccessorCount(); ++i) {
-                    lirBlock.blockSuccessors().add(valueToBlock.get(end.blockSuccessor(i)));
-                }
-
-                Instruction first = bb;
-                while (first != null) {
-                    lirBlock.getInstructions().add(first);
-                    first = first.next();
-                }
-                ++z;
-            }
-
-            startBlock = valueToBlock.get(getHIRStartBlock());
-            assert startBlock != null;
-            compilation.stats.loopCount = computeLinearScanOrder.numLoops();
-        }
-        return valueToBlock;
-    }
-
     /**
      * Gets the linear scan ordering of blocks as a list.
      * @return the blocks in linear scan order
@@ -187,7 +165,7 @@ public class IR {
             TTY.println("IR for " + compilation.method);
             final InstructionPrinter ip = new InstructionPrinter(TTY.out());
             final BlockPrinter bp = new BlockPrinter(this, ip, cfgOnly);
-            ((BlockBegin) getHIRStartBlock()).iteratePreOrder(bp);
+            getHIRStartBlock().iteratePreOrder(bp);
         }
     }
 
@@ -206,55 +184,6 @@ public class IR {
         }
     }
 
-    /**
-     * Creates and inserts a new block between this block and the specified successor,
-     * altering the successor and predecessor lists of involved blocks appropriately.
-     * @param source the source of the edge
-     * @param target the successor before which to insert a block
-     * @return the new block inserted
-     */
-    public BlockBegin splitEdge(BlockBegin source, BlockBegin target) {
-        int bci = -2;
-
-        int backEdgeIndex = target.predecessors().indexOf(source.end());
-
-        // create new successor and mark it for special block order treatment
-        BlockBegin newSucc = new BlockBegin(bci, nextBlockNumber(), false, compilation.graph);
-
-        List<Integer> removePhiInputs = null;
-        for (int i = backEdgeIndex + 1; i < target.predecessors().size(); ++i) {
-            if (target.predecessors().get(i) == source.end()) {
-                if (removePhiInputs == null) {
-                    removePhiInputs = new ArrayList<Integer>();
-                }
-                removePhiInputs.add(i);
-            }
-        }
-
-        // This goto is not a safepoint.
-        Goto e = new Goto(target, compilation.graph);
-        newSucc.appendNext(e);
-        e.reorderSuccessor(0, backEdgeIndex);
-
-        // link predecessor to new block
-        source.end().substituteSuccessor(target, newSucc);
-        if (removePhiInputs != null && removePhiInputs.size() > 0) {
-
-            for (Node n : target.usages()) {
-                if (n instanceof Phi) {
-                    Phi phi = (Phi) n;
-                    int correction = 0;
-                    for (int index : removePhiInputs) {
-                        phi.removeInput(index - correction);
-                        correction++;
-                    }
-                }
-            }
-
-        }
-
-        return newSucc;
-    }
 
     public int nextBlockNumber() {
         return compilation.stats.blockCount++;
