@@ -27,6 +27,7 @@ import static java.lang.reflect.Modifier.*;
 
 import java.util.*;
 
+import com.oracle.graal.graph.*;
 import com.sun.c1x.*;
 import com.sun.c1x.alloc.Interval.*;
 import com.sun.c1x.debug.*;
@@ -725,7 +726,7 @@ public final class LinearScan {
         // this is checked by these assertions to be sure about it.
         // the entry block may have incoming
         // values in registers, which is ok.
-        if (!operand.isVariable() /*&& block != ir.startBlock*/) {
+        if (!operand.isVariable() && block != ir.startBlock) {
             if (isProcessed(operand)) {
                 assert liveKill.get(operandNumber(operand)) : "using fixed register that is not defined in this block";
             }
@@ -812,12 +813,16 @@ public final class LinearScan {
                 reportFailure(numBlocks);
             }
 
+            TTY.println("preds=" + startBlock.blockPredecessors().size() + ", succs=" + startBlock.blockSuccessors().size());
+            TTY.println("startBlock-ID: " + startBlock.blockID());
+
             // bailout of if this occurs in product mode.
             throw new CiBailout("liveIn set of first block must be empty");
         }
     }
 
     private void reportFailure(int numBlocks) {
+        TTY.println(compilation.method.toString());
         TTY.println("Error: liveIn set of first block must be empty (when this fails, variables are used before they are defined)");
         TTY.print("affected registers:");
         TTY.println(ir.startBlock.liveIn.toString());
@@ -828,6 +833,17 @@ public final class LinearScan {
                 CiValue operand = operands.operandFor(operandNum);
                 Value instr = operand.isVariable() ? gen.operands.instructionForResult(((CiVariable) operand)) : null;
                 TTY.println(" var %d (HIR instruction %s)", operandNum, instr == null ? " " : instr.toString());
+
+                if (instr instanceof Phi) {
+                    Phi phi = (Phi) instr;
+                    TTY.println("phi block begin: " + phi.block());
+                    TTY.println("pred count on blockbegin: " + phi.block().predecessors().size());
+                    TTY.println("phi values: " + phi.valueCount());
+                    TTY.println("phi block preds:");
+                    for (Node n : phi.block().predecessors()) {
+                        TTY.println(n.toString());
+                    }
+                }
 
                 for (int j = 0; j < numBlocks; j++) {
                     LIRBlock block = blockAt(j);

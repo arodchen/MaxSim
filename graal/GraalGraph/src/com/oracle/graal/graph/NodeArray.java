@@ -24,12 +24,13 @@ package com.oracle.graal.graph;
 
 import java.util.AbstractList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 
 public class NodeArray extends AbstractList<Node> {
 
     private final Node node;
-    private final Node[] nodes;
+    final Node[] nodes;
 
     public NodeArray(Node node, int length) {
         this.node = node;
@@ -61,40 +62,17 @@ public class NodeArray extends AbstractList<Node> {
             } else {
                 assert self().successors == this;
                 if (old != null) {
-                    old.predecessors.remove(self());
+                    for (int i = 0; i < old.predecessors.size(); ++i) {
+                        Node cur = old.predecessors.get(i);
+                        if (cur == self() && old.predecessorsIndex.get(i) == index) {
+                            old.predecessors.remove(i);
+                            old.predecessorsIndex.remove(i);
+                        }
+                    }
                 }
                 if (node != null) {
                     node.predecessors.add(self());
-                }
-            }
-        }
-
-        return old;
-    }
-
-    /**
-     * Sets the specified input/successor to the given node, and inserts the back edge (usage/predecessor) at the given index.
-     */
-    public Node set(int index, Node node, int backIndex) {
-        assert node == Node.Null || node.graph == self().graph;
-        Node old = nodes[index];
-
-        if (old != node) {
-            nodes[index] = node;
-            if (self().inputs == this) {
-                if (old != null) {
-                    old.usages.remove(self());
-                }
-                if (node != null) {
-                    node.usages.add(backIndex, self());
-                }
-            } else {
-                assert self().successors == this;
-                if (old != null) {
-                    old.predecessors.remove(self());
-                }
-                if (node != null) {
-                    node.predecessors.add(backIndex, self());
+                    node.predecessorsIndex.add(index);
                 }
             }
         }
@@ -136,6 +114,22 @@ public class NodeArray extends AbstractList<Node> {
             }
         }
         return result;
+    }
+
+    public void setAndClear(int index, Node clearedNode, int clearedIndex) {
+        assert self().successors == this;
+        Node value = clearedNode.successors.get(clearedIndex);
+        assert value != Node.Null;
+        clearedNode.successors.nodes[clearedIndex] = Node.Null;
+        set(index, Node.Null);
+        nodes[index] = value;
+
+        for (int i = 0; i < value.predecessors.size(); ++i) {
+            if (value.predecessors.get(i) == clearedNode && value.predecessorsIndex.get(i) == clearedIndex) {
+                value.predecessors.set(i, self());
+                value.predecessorsIndex.set(i, index);
+            }
+        }
     }
 
     public int size() {

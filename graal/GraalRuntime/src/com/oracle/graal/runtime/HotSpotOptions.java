@@ -31,7 +31,6 @@ import com.sun.c1x.*;
 public class HotSpotOptions {
 
     public static void setDefaultOptions() {
-        C1XOptions.DetailedAsserts = false;
         C1XOptions.CommentedAssembly = false;
         C1XOptions.MethodEndBreakpointGuards = 2;
         C1XOptions.ResolveClassBeforeStaticInvoke = false;
@@ -78,7 +77,7 @@ public class HotSpotOptions {
             }
             if (value != null) {
                 f.set(null, value);
-                Logger.info("Set option " + fieldName + " to " + value);
+                //Logger.info("Set option " + fieldName + " to " + value);
             } else {
                 Logger.info("Wrong value \"" + valueString + "\" for option " + fieldName);
                 return false;

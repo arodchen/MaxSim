@@ -253,6 +253,10 @@ public abstract class LIRGenerator extends ValueVisitor {
                 }
             }
         }
+        if (block.blockSuccessors().size() == 1 && (block.getInstructions().size() == 0  || !(block.getInstructions().get(block.getInstructions().size() - 1) instanceof BlockEnd))) {
+            moveToPhi();
+            block.lir().jump(block.blockSuccessors().get(0));
+        }
 
         if (C1XOptions.TraceLIRGeneratorLevel >= 1) {
             TTY.println("END Generating LIR for block B" + block.blockID());
@@ -587,7 +591,11 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     protected LIRBlock getLIRBlock(Instruction b) {
-        return ir.valueToBlock.get(b);
+        LIRBlock result = ir.valueToBlock.get(b);
+        if (result == null) {
+            TTY.println("instruction without lir block: " + b);
+        }
+        return result;
     }
 
     @Override
@@ -1320,7 +1328,7 @@ public abstract class LIRGenerator extends ValueVisitor {
 
                     PhiResolver resolver = new PhiResolver(this);
                     for (Phi phi : phis) {
-                        if (!phi.isDeadPhi() && phi.valueCount() > predIndex) {
+                        if (!phi.isDeadPhi()) {
                             Value curVal = phi.valueAt(predIndex);
                             if (curVal != null && curVal != phi) {
                                 if (curVal instanceof Phi) {

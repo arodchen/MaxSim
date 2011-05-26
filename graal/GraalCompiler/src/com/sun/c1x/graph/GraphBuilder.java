@@ -178,6 +178,7 @@ public final class GraphBuilder {
                 }
             }
             flags |= Flag.HasHandler.mask;
+
         }
 
         // 1. create the start block
@@ -220,20 +221,11 @@ public final class GraphBuilder {
         for (Node n : graph.getNodes()) {
             if (n instanceof Placeholder) {
                 Placeholder p = (Placeholder) n;
-
-                /*if (p == graph.start().successors().get(0)) {
-                    // nothing to do...
-                } else*/ if (p.blockPredecessors().size() == 0) {
-                    assert p.next() == null;
-                    p.delete();
-                } else {
-                    assert p.blockPredecessors().size() == 1;
-                    for (Node pred : new ArrayList<Node>(p.predecessors())) {
-                        pred.successors().replace(p, p.next());
-                    }
-                    p.successors().clearAll();
-                    p.delete();
-                }
+                assert p.blockPredecessors().size() == 1;
+                Node pred = p.blockPredecessors().get(0);
+                int predIndex = p.predecessorsIndex().get(0);
+                pred.successors().setAndClear(predIndex, p, 0);
+                p.delete();
             }
         }
 
@@ -290,8 +282,7 @@ public final class GraphBuilder {
     private void finishStartBlock(Block startBlock) {
         assert bci() == 0;
         Instruction target = createTargetAt(0, frameState);
-        Goto base = new Goto(target, graph);
-        appendWithBCI(base);
+        appendGoto(target);
     }
 
     public void mergeOrClone(Block target, FrameStateAccess newState) {
@@ -319,6 +310,8 @@ public final class GraphBuilder {
         } else {
             if (!C1XOptions.AssumeVerifiedBytecode && !existingState.isCompatibleWith(newState)) {
                 // stacks or locks do not match--bytecodes would not verify
+                TTY.println(existingState.toString());
+                TTY.println(newState.duplicate(0).toString());
                 throw new CiBailout("stack or locks do not match");
             }
             assert existingState.localsSize() == newState.localsSize();
@@ -326,9 +319,10 @@ public final class GraphBuilder {
 
             if (first instanceof Placeholder) {
                 BlockBegin merge = new BlockBegin(existingState.bci, target.blockID, target.isLoopHeader, graph);
-                for (Node n : new ArrayList<Node>(first.predecessors())) {
-                    n.successors().replace(first, merge);
-                }
+
+                Placeholder p = (Placeholder) first;
+                assert p.next() == null;
+                p.replace(merge);
                 target.firstInstruction = merge;
                 merge.setStateBefore(existingState);
             }
@@ -610,7 +604,7 @@ public final class GraphBuilder {
     }
 
     private void genGoto(int fromBCI, int toBCI) {
-        append(new Goto(createTargetAt(toBCI, frameState), graph));
+        appendGoto(createTargetAt(toBCI, frameState));
     }
 
     private void ifNode(Value x, Condition cond, Value y) {
@@ -1062,8 +1056,13 @@ public final class GraphBuilder {
     }
 
     private Instruction createTarget(Block block, FrameStateAccess stateAfter) {
+
         assert block != null && stateAfter != null;
         assert block.isLoopHeader || block.firstInstruction == null || block.firstInstruction.next() == null : "non-loop block must be iterated after all its predecessors";
+
+        if (block.isExceptionEntry) {
+            assert stateAfter.stackSize() == 1;
+        }
 
         if (block.firstInstruction == null) {
             if (block.isLoopHeader) {
@@ -1165,9 +1164,19 @@ public final class GraphBuilder {
                 deopt.setMessage("unresolved " + block.handler.catchType().name());
                 append(deopt);
                 Instruction nextDispatch = createTarget(block.next, frameState);
-                append(new Goto(nextDispatch, graph));
+                appendGoto(nextDispatch);
             }
         }
+    }
+
+    private void appendGoto(Instruction target) {
+        //if (target instanceof BlockBegin && !((BlockBegin)target).isLoopHeader) {
+        //    System.out.println("NOTOMITTED");
+            //append(new Goto(target, graph));
+        //} else {
+        //    System.out.println("omitted");
+            lastInstr.appendNext(target);
+        //}
     }
 
     private void iterateBytecodesForBlock(Block block) {
@@ -1175,7 +1184,6 @@ public final class GraphBuilder {
 
         stream.setBCI(block.startBci);
 
-        BlockEnd end = null;
         int endBCI = stream.endBCI();
         boolean blockStart = true;
 
@@ -1183,10 +1191,10 @@ public final class GraphBuilder {
         while (bci < endBCI) {
             Block nextBlock = blockFromBci[bci];
             if (nextBlock != null && nextBlock != block) {
+                assert !nextBlock.isExceptionEntry;
                 // we fell through to the next block, add a goto and break
                 Instruction next = createTarget(nextBlock, frameState);
-                end = new Goto(next, graph);
-                lastInstr = lastInstr.appendNext(end);
+                appendGoto(next);
                 break;
             }
             // read the opcode
@@ -1196,10 +1204,10 @@ public final class GraphBuilder {
             traceInstruction(bci, opcode, blockStart);
             processBytecode(bci, opcode);
 
-            if (lastInstr instanceof BlockEnd) {
-                end = (BlockEnd) lastInstr;
+            if (lastInstr instanceof BlockEnd || lastInstr.next() != null) {
                 break;
             }
+
             stream.next();
             bci = stream.currentBCI();
             if (lastInstr instanceof StateSplit) {

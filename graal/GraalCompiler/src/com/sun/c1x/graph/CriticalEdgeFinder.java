@@ -45,9 +45,9 @@ public class CriticalEdgeFinder {
      * The graph edges represented as a map from source to target nodes.
      * Using a linked hash map makes compilation tracing more deterministic and thus eases debugging.
      */
-    private Map<LIRBlock, Set<LIRBlock>> edges = C1XOptions.DetailedAsserts ?
-                    new LinkedHashMap<LIRBlock, Set<LIRBlock>>() :
-                    new HashMap<LIRBlock, Set<LIRBlock>>();
+    private Map<LIRBlock, List<LIRBlock>> edges = C1XOptions.DetailedAsserts ?
+                    new LinkedHashMap<LIRBlock, List<LIRBlock>>() :
+                    new HashMap<LIRBlock, List<LIRBlock>>();
 
     public CriticalEdgeFinder(List<LIRBlock> lirBlocks, Graph graph) {
         this.lirBlocks = lirBlocks;
@@ -71,14 +71,14 @@ public class CriticalEdgeFinder {
 
     private void recordCriticalEdge(LIRBlock block, LIRBlock succ) {
         if (!edges.containsKey(block)) {
-            edges.put(block, new HashSet<LIRBlock>());
+            edges.put(block, new ArrayList<LIRBlock>());
         }
 
         edges.get(block).add(succ);
     }
 
     public void splitCriticalEdges() {
-        for (Map.Entry<LIRBlock, Set<LIRBlock>> entry : edges.entrySet()) {
+        for (Map.Entry<LIRBlock, List<LIRBlock>> entry : edges.entrySet()) {
             LIRBlock from = entry.getKey();
             for (LIRBlock to : entry.getValue()) {
                 LIRBlock split = splitEdge(from, to);
@@ -104,17 +104,20 @@ public class CriticalEdgeFinder {
         lirBlocks.add(newSucc);
 
         // This goto is not a safepoint.
-        Goto e = new Goto(target.getInstructions().get(0), graph);
+        Goto e = new Goto(null, graph);
+        Instruction sourceInstruction = source.getInstructions().get(source.getInstructions().size() - 1);
+        Instruction targetInstruction = target.getInstructions().get(0);
+        int sourceInstructionPredIndex = targetInstruction.predecessors().indexOf(sourceInstruction);
+        int replacedIndex = targetInstruction.predecessorsIndex().get(sourceInstructionPredIndex);
+        assert replacedIndex != -1 && sourceInstruction.successors().get(replacedIndex) != null;
+        e.successors().setAndClear(1, sourceInstruction, replacedIndex);
+        sourceInstruction.successors().set(replacedIndex, e);
         newSucc.getInstructions().add(e);
-
-        // link predecessor to new block
-        ((BlockEnd) source.getInstructions().get(source.getInstructions().size() - 1)).successors().replace(target.getInstructions().get(0), newSucc.getInstructions().get(0));
-
+        assert e.defaultSuccessor() != null;
         source.substituteSuccessor(target, newSucc);
         target.substitutePredecessor(source, newSucc);
         newSucc.blockPredecessors().add(source);
         newSucc.blockSuccessors().add(target);
-
         return newSucc;
     }
 }
