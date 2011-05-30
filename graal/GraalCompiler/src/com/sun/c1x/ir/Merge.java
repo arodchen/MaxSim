@@ -259,4 +259,12 @@ public class Merge extends StateSplit {
     public String shortName() {
         return "Merge #" + id();
     }
+
+    @Override
+    public Node copy(Graph into) {
+        assert getClass() == Merge.class : "copy of " + getClass();
+        Merge x = new Merge(into);
+        x.setNonNull(isNonNull());
+        return x;
+    }
 }
