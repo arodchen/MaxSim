@@ -34,13 +34,11 @@ public class Graph {
 
     private final ArrayList<Node> nodes;
     private final StartNode start;
-    private final EndNode end;
     int nextId;
 
     public Graph() {
         nodes = new ArrayList<Node>();
         start = new StartNode(this);
-        end = new EndNode(this);
     }
 
     public List<Node> getNodes() {
@@ -59,10 +57,6 @@ public class Graph {
 
     public StartNode start() {
         return start;
-    }
-
-    public EndNode end() {
-        return end;
     }
 
     public NodeBitMap createNodeBitMap() {
