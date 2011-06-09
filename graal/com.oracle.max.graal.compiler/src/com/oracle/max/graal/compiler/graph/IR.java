@@ -74,7 +74,7 @@ public class IR {
         printGraph("After GraphBuilding", compilation.graph);
 
         if (GraalOptions.Inline) {
-            new InliningPhase(compilation, this).apply(compilation.graph);
+            new InliningPhase(compilation, this, GraalOptions.TraceInlining).apply(compilation.graph);
         }
 
         if (GraalOptions.Time) {
@@ -171,7 +171,12 @@ public class IR {
         int maxLocks = 0;
         for (Node node : compilation.graph.getNodes()) {
             if (node instanceof FrameState) {
-                int lockCount = ((FrameState) node).locksSize();
+                FrameState current = (FrameState) node;
+                int lockCount = 0;
+                while (current != null) {
+                    lockCount += current.locksSize();
+                    current = current.outerFrameState();
+                }
                 if (lockCount > maxLocks) {
                     maxLocks = lockCount;
                 }
