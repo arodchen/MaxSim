@@ -61,7 +61,7 @@ public class LoopPhase extends Phase {
                     acounters[j] = null;
                     IntegerSub sub = new IntegerSub(c1.kind, c2.init(), c1.init(), graph);
                     IntegerAdd add = new IntegerAdd(c1.kind, c1, sub, graph);
-                    Phi phi = new Phi(c1.kind, loopBegin, 2, graph); // TODO (gd) assumes order on loppBegin preds
+                    Phi phi = new Phi(c1.kind, loopBegin, graph); // TODO (gd) assumes order on loppBegin preds
                     phi.addInput(c2.init());
                     phi.addInput(add);
                     c2.replace(phi);
@@ -140,6 +140,12 @@ public class LoopPhase extends Phase {
             }
             for (Node pred : n.predecessors()) {
                 workCFG.add(pred);
+            }
+            if (n instanceof Merge) {
+                Merge merge = (Merge) n;
+                for (int i = 0; i < merge.endCount(); i++) {
+                    workCFG.add(merge.endAt(i));
+                }
             }
         }
         for (Node n : workData) {

@@ -252,10 +252,8 @@ public abstract class LIRGenerator extends ValueVisitor {
                     }
                 }
             }
-            if (!(instr instanceof Merge) && instr != instr.graph().start()) {
+            if (instr != instr.graph().start()) {
                 walkState(instr, stateAfter);
-            }
-            if (instr instanceof Value) {
                 doRoot((Value) instr);
             }
             if (stateAfter != null) {
@@ -268,9 +266,8 @@ public abstract class LIRGenerator extends ValueVisitor {
                 }
             }
         }
-        if (block.blockSuccessors().size() >= 1 && (block.getInstructions().size() == 0  || !jumpsToNextBlock(block.getInstructions().get(block.getInstructions().size() - 1)))) {
-            moveToPhi();
-            block.lir().jump(block.blockSuccessors().get(0));
+        if (block.blockSuccessors().size() >= 1 && !jumpsToNextBlock(block.lastInstruction())) {
+            block.lir().jump(getLIRBlock((FixedNode) block.lastInstruction().successors().get(0)));
         }
 
         if (GraalOptions.TraceLIRGeneratorLevel >= 1) {
@@ -282,8 +279,13 @@ public abstract class LIRGenerator extends ValueVisitor {
         blockDoEpilog();
     }
 
+    @Override
+    public void visitMerge(Merge x) {
+        // Nothing to do.
+    }
+
     private static boolean jumpsToNextBlock(Node node) {
-        return node instanceof BlockEnd || node instanceof Anchor;
+        return node instanceof BlockEnd || node instanceof EndNode || node instanceof LoopEnd;
     }
 
     @Override
@@ -463,12 +465,6 @@ public abstract class LIRGenerator extends ValueVisitor {
     @Override
     public void visitAnchor(Anchor x) {
         setNoResult(x);
-
-        // emit phi-instruction moves after safepoint since this simplifies
-        // describing the state at the safepoint.
-
-        moveToPhi();
-        lir.jump(getLIRBlock(x.next()));
     }
 
     @Override
@@ -476,7 +472,9 @@ public abstract class LIRGenerator extends ValueVisitor {
         emitCompare(x.compare());
         emitBranch(x.compare(), getLIRBlock(x.trueSuccessor()), getLIRBlock(x.falseSuccessor()));
         assert x.defaultSuccessor() == x.falseSuccessor() : "wrong destination above";
-        lir.jump(getLIRBlock(x.defaultSuccessor()));
+        LIRBlock block = getLIRBlock(x.defaultSuccessor());
+        assert block != null : x;
+        lir.jump(block);
     }
 
     public void emitBranch(Compare compare, LIRBlock trueSuccessor, LIRBlock falseSucc) {
@@ -705,7 +703,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         }
     }
 
-    protected LIRBlock getLIRBlock(Instruction b) {
+    protected LIRBlock getLIRBlock(FixedNode b) {
         if (b == null) {
             return null;
         }
@@ -1423,68 +1421,60 @@ public abstract class LIRGenerator extends ValueVisitor {
         return null;
     }
 
-    protected void moveToPhi() {
-        // Moves all stack values into their phi position
-        LIRBlock bb = currentBlock;
-        if (bb.numberOfSux() == 1) {
-            LIRBlock sux = bb.suxAt(0);
-            assert sux.numberOfPreds() > 0 : "invalid CFG";
-
-            // a block with only one predecessor never has phi functions
-            if (sux.numberOfPreds() > 1) {
+    @Override
+    public void visitEndNode(EndNode end) {
+        setNoResult(end);
+        Merge merge = end.merge();
+        moveToPhi(merge, merge.endIndex(end));
+        lir.jump(getLIRBlock(end.merge()));
+    }
 
 
-                List<Phi> phis = getPhis(sux);
+    @Override
+    public void visitLoopEnd(LoopEnd x) {
+        setNoResult(x);
+        moveToPhi(x.loopBegin(), x.loopBegin().endCount());
+        lir.jump(getLIRBlock(x.loopBegin()));
+    }
 
-                if (phis != null) {
-
-                    int predIndex = 0;
-                    for (; predIndex < sux.numberOfPreds(); ++predIndex) {
-                        if (sux.predAt(predIndex) == bb) {
-                            break;
+    private void moveToPhi(Merge merge, int nextSuccIndex) {
+        PhiResolver resolver = new PhiResolver(this);
+        for (Node n : merge.usages()) {
+            if (n instanceof Phi) {
+                Phi phi = (Phi) n;
+                if (!phi.isDead()) {
+                    Value curVal = phi.valueAt(nextSuccIndex);
+                    if (curVal != null && curVal != phi) {
+                        if (curVal instanceof Phi) {
+                            operandForPhi((Phi) curVal);
                         }
-                    }
-                    assert predIndex < sux.numberOfPreds();
-
-                    PhiResolver resolver = new PhiResolver(this);
-                    for (Phi phi : phis) {
-                        if (!phi.isDead()) {
-                            Value curVal = phi.valueAt(predIndex);
-                            if (curVal != null && curVal != phi) {
-                                if (curVal instanceof Phi) {
-                                    operandForPhi((Phi) curVal);
-                                }
-                                CiValue operand = curVal.operand();
-                                if (operand.isIllegal()) {
-                                    assert curVal instanceof Constant || curVal instanceof Local : "these can be produced lazily" + curVal + "/" + phi;
-                                    operand = operandForInstruction(curVal);
-                                }
-                                resolver.move(operand, operandForPhi(phi));
-                            }
+                        CiValue operand = curVal.operand();
+                        if (operand.isIllegal()) {
+                            assert curVal instanceof Constant || curVal instanceof Local : "these can be produced lazily" + curVal + "/" + phi;
+                            operand = operandForInstruction(curVal);
                         }
+                        resolver.move(operand, operandForPhi(phi));
                     }
-                    resolver.dispose();
-
-                    //TODO (gd) remove that later
-                    Node suxFirstInstr = sux.firstInstruction();
-                    if (suxFirstInstr instanceof LoopBegin) {
-                        for (Node n : suxFirstInstr.usages()) {
-                            if (n instanceof LoopCounter) {
-                                LoopCounter counter = (LoopCounter) n;
-                                if (counter.operand().isIllegal()) {
-                                    createResultVariable(counter);
-                                }
-                                if (predIndex == 0) {
-                                    lir.move(operandForInstruction(counter.init()), counter.operand());
-                                } else {
-                                    if (counter.kind == CiKind.Int) {
-                                        this.arithmeticOpInt(IADD, counter.operand(), counter.operand(), operandForInstruction(counter.stride()), CiValue.IllegalValue);
-                                    } else {
-                                        assert counter.kind == CiKind.Long;
-                                        this.arithmeticOpLong(LADD, counter.operand(), counter.operand(), operandForInstruction(counter.stride()));
-                                    }
-                                }
-                            }
+                }
+            }
+        }
+        resolver.dispose();
+        //TODO (gd) remove that later
+        if (merge instanceof LoopBegin) {
+            for (Node usage : merge.usages()) {
+                if (usage instanceof LoopCounter) {
+                    LoopCounter counter = (LoopCounter) usage;
+                    if (counter.operand().isIllegal()) {
+                        createResultVariable(counter);
+                    }
+                    if (nextSuccIndex == 0) { // (gd) nasty
+                        lir.move(operandForInstruction(counter.init()), counter.operand());
+                    } else {
+                        if (counter.kind == CiKind.Int) {
+                            this.arithmeticOpInt(IADD, counter.operand(), counter.operand(), operandForInstruction(counter.stride()), CiValue.IllegalValue);
+                        } else {
+                            assert counter.kind == CiKind.Long;
+                            this.arithmeticOpLong(LADD, counter.operand(), counter.operand(), operandForInstruction(counter.stride()));
                         }
                     }
                 }

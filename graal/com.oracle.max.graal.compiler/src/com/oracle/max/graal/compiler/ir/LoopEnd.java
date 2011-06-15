@@ -78,4 +78,9 @@ public class LoopEnd extends Merge {
         LoopEnd x = new LoopEnd(into);
         return x;
     }
+
+    @Override
+    public String toString() {
+        return "LoopEnd:" + super.toString();
+    }
 }

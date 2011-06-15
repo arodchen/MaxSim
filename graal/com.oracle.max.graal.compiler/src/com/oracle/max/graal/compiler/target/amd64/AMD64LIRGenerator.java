@@ -466,11 +466,6 @@ public class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void visitMerge(Merge x) {
-        // nothing to do for now
-    }
-
-    @Override
     public void visitExceptionDispatch(ExceptionDispatch x) {
         // TODO ls: this needs some more work...
 
@@ -491,13 +486,6 @@ public class AMD64LIRGenerator extends LIRGenerator {
     @Override
     public void visitLoopBegin(LoopBegin x) {
         visitMerge(x);
-    }
-
-    @Override
-    public void visitLoopEnd(LoopEnd x) {
-        setNoResult(x);
-        //moveToPhi();
-        //lir.jump(getLIRBlock(x.loopBegin()));
     }
 
     @Override
