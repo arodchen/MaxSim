@@ -31,8 +31,10 @@ import java.util.*;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.graph.*;
-import com.oracle.max.graal.compiler.graph.BlockMap.*;
 import com.oracle.max.graal.compiler.graph.BlockMap.Block;
+import com.oracle.max.graal.compiler.graph.BlockMap.BranchOverride;
+import com.oracle.max.graal.compiler.graph.BlockMap.DeoptBlock;
+import com.oracle.max.graal.compiler.graph.BlockMap.ExceptionBlock;
 import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.compiler.ir.Deoptimize.DeoptAction;
 import com.oracle.max.graal.compiler.schedule.*;
@@ -42,7 +44,7 @@ import com.oracle.max.graal.graph.*;
 import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
-import com.sun.cri.ri.RiType.*;
+import com.sun.cri.ri.RiType.Representation;
 
 /**
  * The {@code GraphBuilder} class parses the bytecode of a method and builds the IR graph.
@@ -70,6 +72,7 @@ public final class GraphBuilderPhase extends Phase {
     private final RiRuntime runtime;
     private final RiMethod method;
     private final RiConstantPool constantPool;
+    private RiExceptionHandler[] exceptionHandlers;
 
     private final BytecodeStream stream;           // the bytecode stream
     private final LogStream log;
@@ -85,7 +88,7 @@ public final class GraphBuilderPhase extends Phase {
     private Value methodSynchronizedObject;
     private CiExceptionHandler unwindHandler;
 
-    private Block unwindBlock;
+    private ExceptionBlock unwindBlock;
     private Block returnBlock;
 
     private boolean storeResultGraph;
@@ -125,7 +128,7 @@ public final class GraphBuilderPhase extends Phase {
 
         this.constantPool = runtime.getConstantPool(method);
         this.createUnwind = createUnwind;
-        this.storeResultGraph = true;
+        this.storeResultGraph = GraalOptions.CacheGraphs;
     }
 
     @Override
@@ -152,6 +155,7 @@ public final class GraphBuilderPhase extends Phase {
         BlockMap blockMap = compilation.getBlockMap(method);
         this.branchOverride = blockMap.branchOverride;
 
+        exceptionHandlers = blockMap.exceptionHandlers();
         blockList = new ArrayList<Block>(blockMap.blocks);
         blockFromBci = new Block[method.codeSize()];
         for (int i = 0; i < blockList.size(); i++) {
@@ -234,11 +238,12 @@ public final class GraphBuilderPhase extends Phase {
         return block;
     }
 
-    private Block unwindBlock() {
+    private Block unwindBlock(int bci) {
         if (unwindBlock == null) {
-            unwindBlock = new Block();
-            unwindBlock.startBci = Instruction.SYNCHRONIZATION_ENTRY_BCI;
-            unwindBlock.endBci = Instruction.SYNCHRONIZATION_ENTRY_BCI;
+            unwindBlock = new ExceptionBlock();
+            unwindBlock.startBci = -1;
+            unwindBlock.endBci = -1;
+            unwindBlock.deoptBci = bci;
             unwindBlock.blockID = nextBlockNumber();
             addToWorkList(unwindBlock);
         }
@@ -281,17 +286,23 @@ public final class GraphBuilderPhase extends Phase {
         StateSplit first = (StateSplit) target.firstInstruction;
 
         if (target.isLoopHeader && isVisited(target)) {
-            first = ((LoopBegin) target.firstInstruction.next()).loopEnd();
+            first = loopBegin(target).loopEnd();
         }
+
+        int bci = target.startBci;
+        if (target instanceof ExceptionBlock) {
+            bci = ((ExceptionBlock) target).deoptBci;
+        }
+
         FrameState existingState = first.stateAfter();
 
         if (existingState == null) {
             // copy state because it is modified
-            FrameState duplicate = newState.duplicate(target.startBci);
+            FrameState duplicate = newState.duplicate(bci);
 
             // if the block is a loop header, insert all necessary phis
             if (target.isLoopHeader && !isVisited(target)) {
-                LoopBegin loopBegin = (LoopBegin) target.firstInstruction.next();
+                LoopBegin loopBegin = loopBegin(target);
                 assert target.firstInstruction instanceof Placeholder && loopBegin != null;
                 //System.out.println("insertLoopPhis with " + target.loopHeaderState);
                 insertLoopPhis(loopBegin, loopBegin.stateAfter());
@@ -310,7 +321,7 @@ public final class GraphBuilderPhase extends Phase {
             if (first instanceof Placeholder) {
                 Placeholder p = (Placeholder) first;
                 if (p.predecessors().size() == 0) {
-                    p.setStateAfter(newState.duplicate(target.startBci));
+                    p.setStateAfter(newState.duplicate(bci));
                     return;
                 } else {
                     Merge merge = new Merge(graph);
@@ -376,7 +387,6 @@ public final class GraphBuilderPhase extends Phase {
         assert bci == Instruction.SYNCHRONIZATION_ENTRY_BCI || bci == bci() : "invalid bci";
 
         RiExceptionHandler firstHandler = null;
-        RiExceptionHandler[] exceptionHandlers = method.exceptionHandlers();
         // join with all potential exception handlers
         if (exceptionHandlers != null) {
             for (RiExceptionHandler handler : exceptionHandlers) {
@@ -410,7 +420,7 @@ public final class GraphBuilderPhase extends Phase {
                 assert isCatchAll(firstHandler);
                 int handlerBCI = firstHandler.handlerBCI();
                 if (handlerBCI == Instruction.SYNCHRONIZATION_ENTRY_BCI) {
-                    dispatchBlock = unwindBlock();
+                    dispatchBlock = unwindBlock(bci);
                 } else {
                     dispatchBlock = blockFromBci[handlerBCI];
                 }
@@ -428,7 +438,7 @@ public final class GraphBuilderPhase extends Phase {
                 currentNext = exception;
                 currentExceptionObject = exception;
             }
-            FrameState stateWithException = entryState.duplicateModified(bci, CiKind.Void, currentExceptionObject);
+            FrameState stateWithException = entryState.duplicateWithException(bci, currentExceptionObject);
 
             currentNext.setNext(createTarget(dispatchBlock, stateWithException));
             return entry;
@@ -711,7 +721,7 @@ public final class GraphBuilderPhase extends Phase {
         } else {
             frameState.clearStack();
             frameState.apush(exception);
-            appendGoto(createTarget(unwindBlock(), frameState));
+            appendGoto(createTarget(unwindBlock(bci), frameState));
         }
     }
 
@@ -794,7 +804,7 @@ public final class GraphBuilderPhase extends Phase {
     private void genGetField(int cpi, RiField field) {
         CiKind kind = field.kind();
         Value receiver = frameState.apop();
-        if (field.isResolved()) {
+        if (field.isResolved() && field.holder().isInitialized()) {
             LoadField load = new LoadField(receiver, field, graph);
             appendOptimizedLoadField(kind, load);
         } else {
@@ -807,7 +817,7 @@ public final class GraphBuilderPhase extends Phase {
     private void genPutField(int cpi, RiField field) {
         Value value = frameState.pop(field.kind().stackKind());
         Value receiver = frameState.apop();
-        if (field.isResolved()) {
+        if (field.isResolved() && field.holder().isInitialized()) {
             StoreField store = new StoreField(receiver, field, value, graph);
             appendOptimizedStoreField(store);
         } else {
@@ -818,7 +828,7 @@ public final class GraphBuilderPhase extends Phase {
 
     private void genGetStatic(int cpi, RiField field) {
         RiType holder = field.holder();
-        boolean isInitialized = field.isResolved();
+        boolean isInitialized = field.isResolved() && field.holder().isInitialized();
         CiConstant constantValue = null;
         if (isInitialized) {
             constantValue = field.constantValue(null);
@@ -840,7 +850,7 @@ public final class GraphBuilderPhase extends Phase {
 
     private void genPutStatic(int cpi, RiField field) {
         RiType holder = field.holder();
-        Value container = genTypeOrDeopt(RiType.Representation.StaticFields, holder, field.isResolved(), cpi);
+        Value container = genTypeOrDeopt(RiType.Representation.StaticFields, holder, field.isResolved() && field.holder().isInitialized(), cpi);
         Value value = frameState.pop(field.kind().stackKind());
         if (container != null) {
             StoreField store = new StoreField(container, field, value, graph);
@@ -1045,11 +1055,11 @@ public final class GraphBuilderPhase extends Phase {
     }
 
     private void genJsr(int dest) {
-        throw new CiBailout("jsr/ret not supported");
+        throw new JSRNotSupportedBailout();
     }
 
     private void genRet(int localIndex) {
-        throw new CiBailout("jsr/ret not supported");
+        throw new JSRNotSupportedBailout();
     }
 
     private void genTableswitch() {
@@ -1151,7 +1161,7 @@ public final class GraphBuilderPhase extends Phase {
                 LoopEnd loopEnd = new LoopEnd(graph);
                 loopEnd.setLoopBegin(loopBegin);
                 Placeholder p = new Placeholder(graph);
-                p.setNext(loopBegin);
+                p.setNext(loopBegin.forwardEdge());
                 loopBegin.setStateAfter(stateAfter.duplicate(block.startBci));
                 block.firstInstruction = p;
             } else {
@@ -1163,7 +1173,7 @@ public final class GraphBuilderPhase extends Phase {
 
         FixedNode result = null;
         if (block.isLoopHeader && isVisited(block)) {
-            result = ((LoopBegin) block.firstInstruction.next()).loopEnd();
+            result = loopBegin(block).loopEnd();
         } else {
             result = block.firstInstruction;
         }
@@ -1171,11 +1181,15 @@ public final class GraphBuilderPhase extends Phase {
         assert result instanceof Merge || result instanceof Placeholder : result;
 
         if (result instanceof Merge) {
-            EndNode end = new EndNode(graph);
-            //end.setNext(result);
-            ((Merge) result).addEnd(end);
-            result = end;
+            if (result instanceof LoopBegin) {
+                result = ((LoopBegin) result).forwardEdge();
+            } else {
+                EndNode end = new EndNode(graph);
+                ((Merge) result).addEnd(end);
+                result = end;
+            }
         }
+        assert !(result instanceof LoopBegin || result instanceof Merge);
         return result;
     }
 
@@ -1202,7 +1216,7 @@ public final class GraphBuilderPhase extends Phase {
                 markVisited(block);
                 // now parse the block
                 if (block.isLoopHeader) {
-                    lastInstr = (LoopBegin) block.firstInstruction.next();
+                    lastInstr = loopBegin(block);
                 } else {
                     lastInstr = block.firstInstruction;
                 }
@@ -1224,8 +1238,7 @@ public final class GraphBuilderPhase extends Phase {
         }
         for (Block b : blocksVisited) {
             if (b.isLoopHeader) {
-                Instruction loopHeaderInstr = b.firstInstruction;
-                LoopBegin begin = (LoopBegin) loopHeaderInstr.next();
+                LoopBegin begin = loopBegin(b);
                 LoopEnd loopEnd = begin.loopEnd();
 
 //              This can happen with degenerated loops like this one:
@@ -1242,16 +1255,19 @@ public final class GraphBuilderPhase extends Phase {
                 } else {
                     loopEnd.delete();
                     Merge merge = new Merge(graph);
-                    EndNode end = new EndNode(graph);
-                    int nbrReplacement = begin.singlePredecessor().successors().replace(begin, end);
-                    assert nbrReplacement > 0;
-                    merge.addEnd(end);
+                    merge.addEnd(begin.forwardEdge());
                     merge.setNext(begin.next());
                     merge.setStateAfter(begin.stateAfter());
                     begin.replace(merge);
                 }
             }
         }
+    }
+
+    private static LoopBegin loopBegin(Block block) {
+        EndNode endNode = (EndNode) block.firstInstruction.next();
+        LoopBegin loopBegin = (LoopBegin) endNode.merge();
+        return loopBegin;
     }
 
     private void createDeoptBlock(DeoptBlock block) {
@@ -1289,9 +1305,9 @@ public final class GraphBuilderPhase extends Phase {
             assert frameState.stackSize() == 1 : "only exception object expected on stack, actual size: " + frameState.stackSize();
             createUnwindBlock(block);
         } else {
-            assert frameState.stackSize() == 1;
+            assert frameState.stackSize() == 1 : frameState;
 
-            Block nextBlock = block.next == null ? unwindBlock() : block.next;
+            Block nextBlock = block.next == null ? unwindBlock(block.deoptBci) : block.next;
             if (block.handler.catchType().isResolved()) {
                 FixedNode catchSuccessor = createTarget(blockFromBci[block.handler.handlerBCI()], frameState);
                 FixedNode nextDispatch = createTarget(nextBlock, frameState);
@@ -1300,16 +1316,14 @@ public final class GraphBuilderPhase extends Phase {
                 Deoptimize deopt = new Deoptimize(DeoptAction.InvalidateRecompile, graph);
                 deopt.setMessage("unresolved " + block.handler.catchType().name());
                 append(deopt);
-                FixedNode nextDispatch = createTarget(nextBlock, frameState);
-                appendGoto(nextDispatch);
             }
         }
     }
 
     private void appendGoto(FixedNode target) {
         if (lastInstr != null) {
-        lastInstr.setNext(target);
-    }
+            lastInstr.setNext(target);
+        }
     }
 
     private void iterateBytecodesForBlock(Block block) {

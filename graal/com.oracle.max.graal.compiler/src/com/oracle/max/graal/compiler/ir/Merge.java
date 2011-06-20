@@ -35,7 +35,7 @@ import com.sun.cri.ci.*;
  * about the basic block, including the successor and
  * predecessor blocks, exception handlers, liveness information, etc.
  */
-public class Merge extends StateSplit implements PhiPoint{
+public class Merge extends StateSplit{
 
     private static final int INPUT_COUNT = 0;
 
@@ -90,6 +90,29 @@ public class Merge extends StateSplit implements PhiPoint{
 
     public EndNode endAt(int index) {
         return (EndNode) inputs().variablePart().get(index);
+    }
+
+    public Iterable<Node> mergePredecessors() {
+        return new Iterable<Node>() {
+            @Override
+            public Iterator<Node> iterator() {
+                return new Iterator<Node>() {
+                    int i = 0;
+                    @Override
+                    public void remove() {
+                        throw new UnsupportedOperationException();
+                    }
+                    @Override
+                    public Node next() {
+                        return Merge.this.endAt(i++);
+                    }
+                    @Override
+                    public boolean hasNext() {
+                        return i < Merge.this.endCount();
+                    }
+                };
+            }
+        };
     }
 
     @Override
@@ -292,34 +315,27 @@ public class Merge extends StateSplit implements PhiPoint{
         for (Node usage : usages()) {
             if (usage instanceof Phi) {
                 Phi phi = (Phi) usage;
-                phi.removeInput(predIndex);
+                if (!phi.isDead()) {
+                    phi.removeInput(predIndex);
+                }
             }
         }
     }
 
-    @Override
-    public int phiPointPredecessorCount() {
+    public int phiPredecessorCount() {
         return endCount();
     }
 
-    @Override
-    public int phiPointPredecessorIndex(Node pred) {
+    public int phiPredecessorIndex(Node pred) {
         EndNode end = (EndNode) pred;
         return endIndex(end);
     }
 
-    @Override
-    public Node asNode() {
-        return this;
-    }
-
-    @Override
     public Collection<Phi> phis() {
         return Util.filter(this.usages(), Phi.class);
     }
 
-    @Override
-    public List<Node> phiPointPredecessors() {
+    public List<Node> phiPredecessors() {
         return Collections.unmodifiableList(inputs().variablePart());
     }
 }

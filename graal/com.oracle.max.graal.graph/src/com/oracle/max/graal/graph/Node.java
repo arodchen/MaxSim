@@ -88,7 +88,7 @@ public abstract class Node {
     }
 
     public Node replace(Node other) {
-        assert !isDeleted() && (other == null || !other.isDeleted()) : "id: " + id() + ", other: " + other;
+        assert !isDeleted() && (other == null || !other.isDeleted()) && other != this : "id: " + id() + ", other: " + other;
         assert other == null || other.graph == graph;
         for (Node usage : usages) {
             usage.inputs.replaceFirstOccurrence(this, other);
@@ -165,7 +165,7 @@ public abstract class Node {
         return true;
     }
 
-    public Node copy() {
+    public final Node copy() {
         return copy(graph);
     }
 

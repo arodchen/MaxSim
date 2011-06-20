@@ -27,15 +27,11 @@ import java.util.*;
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.graph.*;
-import com.sun.cri.ci.*;
 
-public class LoopBegin extends StateSplit implements PhiPoint{
-
-    private static final int INPUT_COUNT = 0;
-    private static final int SUCCESSOR_COUNT = 0;
-
+public class LoopBegin extends Merge{
     public LoopBegin(Graph graph) {
-        super(CiKind.Illegal, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(graph);
+        this.addEnd(new EndNode(graph));
     }
 
     public LoopEnd loopEnd() {
@@ -73,34 +69,18 @@ public class LoopBegin extends StateSplit implements PhiPoint{
     }
 
     @Override
-    public int phiPointPredecessorCount() {
+    public int phiPredecessorCount() {
         return 2;
     }
 
     @Override
-    public int phiPointPredecessorIndex(Node pred) {
-        Node singlePredecessor = this.singlePredecessor();
-        if (pred == singlePredecessor) {
+    public int phiPredecessorIndex(Node pred) {
+        if (pred == forwardEdge()) {
             return 0;
         } else if (pred == this.loopEnd()) {
             return 1;
-        } else if (singlePredecessor instanceof Placeholder) {
-            singlePredecessor = singlePredecessor.singlePredecessor();
-            if (pred == singlePredecessor) {
-                return 0;
-            }
         }
-        throw Util.shouldNotReachHere("unknown pred : " + pred + "(sp=" + singlePredecessor + ", le=" + this.loopEnd() + ")");
-    }
-
-    @Override
-    public Node asNode() {
-        return this;
-    }
-
-    @Override
-    public Collection<Phi> phis() {
-        return Util.filter(this.usages(), Phi.class);
+        throw Util.shouldNotReachHere("unknown pred : " + pred + "(sp=" + forwardEdge() + ", le=" + this.loopEnd() + ")");
     }
 
     public Collection<LoopCounter> counters() {
@@ -108,7 +88,18 @@ public class LoopBegin extends StateSplit implements PhiPoint{
     }
 
     @Override
-    public List<Node> phiPointPredecessors() {
-        return Arrays.asList(new Node[]{this.singlePredecessor(), this.loopEnd()});
+    public List<Node> phiPredecessors() {
+        return Arrays.asList(new Node[]{this.forwardEdge(), this.loopEnd()});
+    }
+
+    public EndNode forwardEdge() {
+        return this.endAt(0);
+    }
+
+    @Override
+    public boolean verify() {
+        assertTrue(loopEnd() != null);
+        assertTrue(forwardEdge() != null);
+        return true;
     }
 }

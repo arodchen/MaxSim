@@ -119,6 +119,7 @@ public class IdealGraphPrinter {
             schedule.apply(graph);
         } catch (Throwable t) {
             // nothing to do here...
+            t.printStackTrace();
         }
 
         stream.println("  <nodes>");
@@ -239,7 +240,7 @@ public class IdealGraphPrinter {
 
         if (nodes.size() > 0) {
             // if this is the first block: add all locals to this block
-            if (block.getInstructions() == graph.start()) {
+            if (block.getInstructions().size() > 0  && block.getInstructions().get(0) == graph.start()) {
                 for (Node node : graph.getNodes()) {
                     if (node instanceof Local) {
                         nodes.add(node);
@@ -253,12 +254,6 @@ public class IdealGraphPrinter {
                     nodes.add(((Instruction) node).stateAfter());
                 }
                 if (node instanceof Merge) {
-                    Merge merge = (Merge) node;
-                    if (merge.stateAfter() != null) {
-                        nodes.add(merge.stateAfter());
-                    }
-                }
-                if (node instanceof PhiPoint) {
                     for (Node usage : node.usages()) {
                         if (usage instanceof Phi || usage instanceof LoopCounter) {
                             nodes.add(usage);

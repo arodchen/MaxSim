@@ -79,11 +79,15 @@ public class IR {
             new GraphBuilderPhase(compilation, compilation.method, false, false).apply(compilation.graph);
 //        }
 
+        //printGraph("After GraphBuilding", compilation.graph);
+
         if (GraalOptions.TestGraphDuplication) {
             new DuplicationPhase().apply(compilation.graph);
+            //printGraph("After Duplication", compilation.graph);
         }
 
         new DeadCodeEliminationPhase().apply(compilation.graph);
+        //printGraph("After DeadCodeElimination", compilation.graph);
 
         if (GraalOptions.Inline) {
             new InliningPhase(compilation, this, GraalOptions.TraceInlining).apply(compilation.graph);
@@ -96,7 +100,6 @@ public class IR {
             new DeadCodeEliminationPhase().apply(graph);
         }
 
-        new LoopEdgeSplitingPhase().apply(graph);
         if (GraalOptions.OptLoops) {
             new LoopPhase().apply(graph);
         }
@@ -106,9 +109,6 @@ public class IR {
         IdentifyBlocksPhase schedule = new IdentifyBlocksPhase(true);
         schedule.apply(graph);
 
-        if (GraalOptions.Time) {
-            GraalTimers.COMPUTE_LINEAR_SCAN_ORDER.start();
-        }
 
         List<Block> blocks = schedule.getBlocks();
         List<LIRBlock> lirBlocks = new ArrayList<LIRBlock>();
@@ -144,6 +144,11 @@ public class IR {
         startBlock = valueToBlock.get(graph.start());
         assert startBlock != null;
         assert startBlock.blockPredecessors().size() == 0;
+
+
+        if (GraalOptions.Time) {
+            GraalTimers.COMPUTE_LINEAR_SCAN_ORDER.start();
+        }
 
         ComputeLinearScanOrder clso = new ComputeLinearScanOrder(lirBlocks.size(), startBlock);
         orderedBlocks = clso.linearScanOrder();

@@ -260,15 +260,10 @@ public abstract class LIRGenerator extends ValueVisitor {
                 }
             }
         }
-        if (block.blockSuccessors().size() == 1 && !(block.lastInstruction() instanceof LoopEnd)) {
-            Node firstInstruction = block.blockSuccessors().get(0).firstInstruction();
-            //System.out.println("suxSz == 1, fst=" + firstInstruction);
-            if (firstInstruction instanceof LoopBegin) {
-                moveToPhi((LoopBegin) firstInstruction, block.lastInstruction());
-            }
-        }
         if (block.blockSuccessors().size() >= 1 && !block.endsWithJump()) {
-            block.lir().jump(getLIRBlock((FixedNode) block.lastInstruction().successors().get(0)));
+            NodeArray successors = block.lastInstruction().successors();
+            assert successors.size() >= 1 : "should have at least one successor : " + block.lastInstruction();
+            block.lir().jump(getLIRBlock((FixedNode) successors.get(0)));
         }
 
         if (GraalOptions.TraceLIRGeneratorLevel >= 1) {
@@ -315,7 +310,7 @@ public abstract class LIRGenerator extends ValueVisitor {
             slot += arguments[arg].sizeInSlots();
         }
 
-        FrameState fs = new FrameState(compilation.method, bci, compilation.method.maxLocals(), 0, 0, compilation.graph);
+        FrameState fs = new FrameState(compilation.method, bci, compilation.method.maxLocals(), 0, 0, false, compilation.graph);
         for (Node node : compilation.graph.start().usages()) {
             if (node instanceof Local) {
                 Local local = (Local) node;
@@ -549,7 +544,7 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     protected FrameState stateBeforeInvokeReturn(Invoke invoke) {
-        return invoke.stateAfter().duplicateModified(getBeforeInvokeBci(invoke), invoke.kind);
+        return invoke.stateAfter().duplicateModified(getBeforeInvokeBci(invoke), invoke.stateAfter().rethrowException(), invoke.kind);
     }
 
     protected FrameState stateBeforeInvokeWithArguments(Invoke invoke) {
@@ -557,7 +552,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         for (int i = 0; i < invoke.argumentCount(); i++) {
             args[i] = invoke.argument(i);
         }
-        return invoke.stateAfter().duplicateModified(getBeforeInvokeBci(invoke), invoke.kind, args);
+        return invoke.stateAfter().duplicateModified(getBeforeInvokeBci(invoke), invoke.stateAfter().rethrowException(), invoke.kind, args);
     }
 
     private int getBeforeInvokeBci(Invoke invoke) {
@@ -995,6 +990,7 @@ public abstract class LIRGenerator extends ValueVisitor {
     @Override
     public void visitDeoptimize(Deoptimize deoptimize) {
         assert lastState != null : "deoptimize always needs a state";
+        assert lastState.bci != Instruction.SYNCHRONIZATION_ENTRY_BCI : "bci must not be -1 for deopt framestate";
         DeoptimizationStub stub = new DeoptimizationStub(deoptimize.action(), lastState);
         addDeoptimizationStub(stub);
         lir.branch(Condition.TRUE, stub.label, stub.info);
@@ -1437,8 +1433,8 @@ public abstract class LIRGenerator extends ValueVisitor {
         lir.jump(getLIRBlock(x.loopBegin()));
     }
 
-    private void moveToPhi(PhiPoint merge, Node pred) {
-        int nextSuccIndex = merge.phiPointPredecessorIndex(pred);
+    private void moveToPhi(Merge merge, Node pred) {
+        int nextSuccIndex = merge.phiPredecessorIndex(pred);
         PhiResolver resolver = new PhiResolver(this);
         for (Phi phi : merge.phis()) {
             if (!phi.isDead()) {

@@ -33,14 +33,13 @@ import com.sun.cri.ci.*;
 
 
 public class IdentifyBlocksPhase extends Phase {
-    private static final int MAX_DOMINATOR_ITER = 50;
     private final List<Block> blocks = new ArrayList<Block>();
     private NodeMap<Block> nodeToBlock;
     private Graph graph;
     private boolean scheduleAllNodes;
 
     public IdentifyBlocksPhase(boolean scheduleAllNodes) {
-        super(scheduleAllNodes ? "FullSchedule" : "PartSchedule");
+        super(scheduleAllNodes ? "FullSchedule" : "PartSchedule", false);
         this.scheduleAllNodes = scheduleAllNodes;
     }
 
@@ -119,7 +118,7 @@ public class IdentifyBlocksPhase extends Phase {
                     Block block = null;
                     Node currentNode = n;
                     while (nodeToBlock.get(currentNode) == null) {
-                        if (block != null && IdentifyBlocksPhase.trueSuccessorCount(currentNode) > 1) {
+                        if (block != null && (currentNode instanceof ControlSplit || trueSuccessorCount(currentNode) > 1)) {
                             // We are at a split node => start a new block.
                             block = null;
                         }
@@ -128,24 +127,18 @@ public class IdentifyBlocksPhase extends Phase {
                             // Either dead code or at a merge node => stop iteration.
                             break;
                         }
-                        if (currentNode instanceof LoopBegin) {
-                            block = null;
-                        }
                         currentNode = currentNode.singlePredecessor();
                     }
                 }
             }
         }
 
-        //System.out.println("identify blocks");
-//        print();
-
         // Connect blocks.
         for (Block block : blocks) {
             Node n = block.firstNode();
             if (n instanceof Merge) {
                 Merge m = (Merge) n;
-                for (Node pred : m.phiPointPredecessors()) {
+                for (Node pred : m.mergePredecessors()) {
                     Block predBlock = nodeToBlock.get(pred);
                     predBlock.addSuccessor(block);
                 }
@@ -158,8 +151,6 @@ public class IdentifyBlocksPhase extends Phase {
                 }
             }
         }
-        //System.out.println("connect");
-        //print();
 
         computeDominators();
 
@@ -176,15 +167,8 @@ public class IdentifyBlocksPhase extends Phase {
                 }
             }
 
-            //System.out.println("dom + cycles");
-//            print();
-
             assignLatestPossibleBlockToNodes();
-            //System.out.println("assign last");
-//            print();
             sortNodesWithinBlocks();
-            //System.out.println("sort");
-//            print();
         } else {
             computeJavaBlocks();
         }
@@ -264,7 +248,7 @@ public class IdentifyBlocksPhase extends Phase {
         }
 
         if (n instanceof Phi) {
-            Block block = nodeToBlock.get(((Phi) n).merge().asNode());
+            Block block = nodeToBlock.get(((Phi) n).merge());
             nodeToBlock.set(n, block);
         }
 
@@ -272,6 +256,7 @@ public class IdentifyBlocksPhase extends Phase {
             Block block = nodeToBlock.get(((LoopCounter) n).loopBegin());
             nodeToBlock.set(n, block);
         }
+
         Block block = null;
         for (Node succ : n.successors()) {
             block = getCommonDominator(block, assignLatestPossibleBlockToNode(succ));
@@ -279,23 +264,23 @@ public class IdentifyBlocksPhase extends Phase {
         for (Node usage : n.usages()) {
             if (usage instanceof Phi) {
                 Phi phi = (Phi) usage;
-                PhiPoint merge = phi.merge();
-                Block mergeBlock = nodeToBlock.get(merge.asNode());
-                assert mergeBlock != null : "no block for merge " + merge.asNode().id();
+                Merge merge = phi.merge();
+                Block mergeBlock = nodeToBlock.get(merge);
+                assert mergeBlock != null : "no block for merge " + merge.id();
                 for (int i = 0; i < phi.valueCount(); ++i) {
                     if (phi.valueAt(i) == n) {
                         if (mergeBlock.getPredecessors().size() == 0) {
                             TTY.println(merge.toString());
                             TTY.println(phi.toString());
-                            TTY.println(merge.phiPointPredecessors().toString());
+                            TTY.println(merge.phiPredecessors().toString());
                             TTY.println("value count: " + phi.valueCount());
                         }
                         block = getCommonDominator(block, mergeBlock.getPredecessors().get(i));
                     }
                 }
             } else if (usage instanceof FrameState && ((FrameState) usage).block() != null) {
-                PhiPoint merge = ((FrameState) usage).block();
-                for (Node pred : merge.phiPointPredecessors()) {
+                Merge merge = ((FrameState) usage).block();
+                for (Node pred : merge.mergePredecessors()) {
                     block = getCommonDominator(block, nodeToBlock.get(pred));
                 }
             } else if (usage instanceof LoopCounter) {
@@ -413,15 +398,13 @@ public class IdentifyBlocksPhase extends Phase {
         CiBitMap visited = new CiBitMap(blocks.size());
         visited.set(dominatorRoot.blockID());
         LinkedList<Block> workList = new LinkedList<Block>();
-        workList.add(dominatorRoot);
-        int iter = 0;
-        int maxIter = MAX_DOMINATOR_ITER * blocks.size();
-        while (!workList.isEmpty()) {
-            if (iter++ >= maxIter) {
-                System.out.println("Reached maxIter(" + maxIter + ") !!");
-                print();
-                throw new CiBailout("Max iteration for dominator computation reached, Cycles in the block graph?");
+        for (Block block : blocks) {
+            if (block.getPredecessors().size() == 0) {
+                workList.add(block);
             }
+        }
+
+        while (!workList.isEmpty()) {
             Block b = workList.remove();
 
             List<Block> predecessors = b.getPredecessors();
