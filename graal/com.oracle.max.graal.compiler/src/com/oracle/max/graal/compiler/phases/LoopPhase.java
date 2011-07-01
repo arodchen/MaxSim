@@ -39,6 +39,7 @@ public class LoopPhase extends Phase {
         List<Loop> loops = LoopUtil.computeLoops(graph);
 
 //        for (Loop loop : loops) {
+//            System.out.println("Peel loop : " + loop.loopBegin());
 //            LoopUtil.peelLoop(loop);
 //        }
 //        loops = LoopUtil.computeLoops(graph); // TODO (gd) avoid recomputing loops
