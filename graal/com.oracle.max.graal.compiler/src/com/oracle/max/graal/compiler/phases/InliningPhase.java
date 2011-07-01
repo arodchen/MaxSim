@@ -128,6 +128,10 @@ public class InliningPhase extends Phase {
         if (!checkInvokeConditions(invoke)) {
             return null;
         }
+        if (invoke.target.hasIntrinsicGraph() && GraalOptions.Intrinsify) {
+            // Always intrinsify.
+            return invoke.target;
+        }
         if (invoke.opcode() == Bytecodes.INVOKESPECIAL || invoke.target.canBeStaticallyBound()) {
             if (checkTargetConditions(invoke.target, iterations) && checkSizeConditions(invoke.target, invoke, profile, ratio)) {
                 return invoke.target;
@@ -173,8 +177,7 @@ public class InliningPhase extends Phase {
                 concrete = profile.types[0].resolveMethodImpl(invoke.target);
                 if (concrete != null && checkTargetConditions(concrete, iterations) && checkSizeConditions(concrete, invoke, profile, ratio)) {
                     IsType isType = new IsType(invoke.receiver(), profile.types[0], compilation.graph);
-                    FixedGuard guard = new FixedGuard(graph);
-                    guard.setNode(isType);
+                    FixedGuard guard = new FixedGuard(isType, graph);
                     assert invoke.predecessors().size() == 1;
                     invoke.predecessors().get(0).successors().replace(invoke, guard);
                     guard.setNext(invoke);
@@ -327,21 +330,6 @@ public class InliningPhase extends Phase {
             exceptionEdge = ((Placeholder) exceptionEdge).next();
         }
 
-        CompilerGraph graph;
-        Object stored = GraphBuilderPhase.cachedGraphs.get(method);
-        if (stored != null) {
-            if (GraalOptions.TraceInlining) {
-                TTY.println("Reusing graph for %s, locals: %d, stack: %d", methodName(method, invoke), method.maxLocals(), method.maxStackSize());
-            }
-            graph = (CompilerGraph) stored;
-        } else {
-            if (GraalOptions.TraceInlining) {
-                TTY.println("Building graph for %s, locals: %d, stack: %d", methodName(method, invoke), method.maxLocals(), method.maxStackSize());
-            }
-            graph = new CompilerGraph(null);
-            new GraphBuilderPhase(compilation, method, true, true).apply(graph);
-        }
-
         boolean withReceiver = !Modifier.isStatic(method.accessFlags());
 
         int argumentCount = method.signature().argumentCount(false);
@@ -354,6 +342,28 @@ public class InliningPhase extends Phase {
         }
         if (withReceiver) {
             parameters[0] = invoke.argument(0);
+        }
+
+        CompilerGraph graph = null;
+        if (GraalOptions.Intrinsify) {
+            graph = (CompilerGraph) method.intrinsicGraph(parameters);
+        }
+        if (graph != null) {
+            TTY.println("Using intrinsic graph");
+        } else {
+            graph = GraphBuilderPhase.cachedGraphs.get(method);
+        }
+
+        if (graph != null) {
+            if (GraalOptions.TraceInlining) {
+                TTY.println("Reusing graph for %s, locals: %d, stack: %d", methodName(method, invoke), method.maxLocals(), method.maxStackSize());
+            }
+        } else {
+            if (GraalOptions.TraceInlining) {
+                TTY.println("Building graph for %s, locals: %d, stack: %d", methodName(method, invoke), method.maxLocals(), method.maxStackSize());
+            }
+            graph = new CompilerGraph(null);
+            new GraphBuilderPhase(compilation, method, true, true).apply(graph);
         }
 
         invoke.inputs().clearAll();
@@ -389,9 +399,7 @@ public class InliningPhase extends Phase {
         assert invoke.predecessors().size() == 1 : "size: " + invoke.predecessors().size();
         FixedNodeWithNext pred;
         if (withReceiver) {
-            FixedGuard clipNode = new FixedGuard(compilation.graph);
-            clipNode.setNode(new IsNonNull(parameters[0], compilation.graph));
-            pred = clipNode;
+            pred = new FixedGuard(new IsNonNull(parameters[0], compilation.graph), compilation.graph);
         } else {
             pred = new Placeholder(compilation.graph);
         }
