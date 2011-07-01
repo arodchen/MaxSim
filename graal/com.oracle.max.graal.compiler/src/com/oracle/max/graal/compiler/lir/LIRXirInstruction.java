@@ -42,6 +42,8 @@ public class LIRXirInstruction extends LIRInstruction {
     public final int inputCount;
     public final List<CiValue> pointerSlots;
     public final LIRDebugInfo infoAfter;
+    private LIRBlock trueSuccessor;
+    private LIRBlock falseSuccessor;
 
     public LIRXirInstruction(XirSnippet snippet,
                              CiValue[] originalOperands,
@@ -69,6 +71,24 @@ public class LIRXirInstruction extends LIRInstruction {
         this.inputCount = operands.length - inputTempCount - tempCount;
 
         GraalMetrics.LIRXIRInstructions++;
+    }
+
+
+    public void setFalseSuccessor(LIRBlock falseSuccessor) {
+        this.falseSuccessor = falseSuccessor;
+    }
+
+
+    public void setTrueSuccessor(LIRBlock trueSuccessor) {
+        this.trueSuccessor = trueSuccessor;
+    }
+
+    public LIRBlock falseSuccessor() {
+        return falseSuccessor;
+    }
+
+    public LIRBlock trueSuccessor() {
+        return trueSuccessor;
     }
 
     public CiValue[] getOperands() {
@@ -162,5 +182,16 @@ public class LIRXirInstruction extends LIRInstruction {
         appendDebugInfo(sb, operandFmt, info);
 
         return sb.toString();
+    }
+
+
+    public void substitute(LIRBlock block, LIRBlock newTarget) {
+        if (trueSuccessor == block) {
+            trueSuccessor = newTarget;
+        }
+
+        if (falseSuccessor == block) {
+            falseSuccessor = newTarget;
+        }
     }
 }

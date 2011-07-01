@@ -108,8 +108,10 @@ public final class GraalOptions {
     public static boolean TraceInlining                      = ____;
     public static boolean TraceDeadCodeElimination           = ____;
     public static boolean TraceEscapeAnalysis                = ____;
+    public static boolean TraceCanonicalizer                 = ____;
     public static boolean TraceMemoryMaps                    = ____;
     public static boolean TraceReadElimination               = ____;
+    public static boolean TraceGVN                           = ____;
     public static int     TraceBytecodeParserLevel           = 0;
     public static boolean QuietBailout                       = ____;
 
@@ -149,6 +151,7 @@ public final class GraalOptions {
     public static boolean CommentedAssembly                  = ____;
     public static boolean PrintLIRWithAssembly               = ____;
 
+    public static boolean OptGVN                             = true;
     public static boolean OptCanonicalizer                   = true;
     public static boolean OptLoops                           = true;
 }

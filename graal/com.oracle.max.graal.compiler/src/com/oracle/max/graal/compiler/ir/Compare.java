@@ -22,7 +22,10 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
+import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.debug.*;
+import com.oracle.max.graal.compiler.graph.*;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
@@ -138,10 +141,71 @@ public final class Compare extends BooleanNode {
         return "Comp " + condition.operator;
     }
 
+    @SuppressWarnings("unchecked")
+    @Override
+    public <T extends Op> T lookup(Class<T> clazz) {
+        if (clazz == CanonicalizerOp.class) {
+            return (T) CANONICALIZER;
+        }
+        return super.lookup(clazz);
+    }
+
     @Override
     public Node copy(Graph into) {
         Compare x = new Compare(null, condition, null, into);
         x.unorderedIsTrue = unorderedIsTrue;
         return x;
     }
+
+    @Override
+    public BooleanNode negate() {
+        return new Compare(x(), condition.negate(), y(), graph());
+    }
+
+    private static CanonicalizerOp CANONICALIZER = new CanonicalizerOp() {
+        @Override
+        public Node canonical(Node node) {
+            Compare compare = (Compare) node;
+            if (compare.x().isConstant() && compare.y().isConstant()) {
+                CiConstant constX = compare.x().asConstant();
+                CiConstant constY = compare.y().asConstant();
+                Boolean result = compare.condition().foldCondition(constX, constY, ((CompilerGraph) node.graph()).runtime());
+                if (result != null) {
+                    if (GraalOptions.TraceCanonicalizer) {
+                        TTY.println("folded condition " + constX + " " + compare.condition() + " " + constY);
+                    }
+                    return Constant.forBoolean(result, compare.graph());
+                } else {
+                    if (GraalOptions.TraceCanonicalizer) {
+                        TTY.println("if not removed %s %s %s (%s %s)", constX, compare.condition(), constY, constX.kind, constY.kind);
+                    }
+                }
+            } else if (compare.x().isConstant() && compare.y() instanceof MaterializeNode) {
+                return optimizeMaterialize(compare, compare.x().asConstant(), (MaterializeNode) compare.y());
+            } else if (compare.y().isConstant() && compare.x() instanceof MaterializeNode) {
+                return optimizeMaterialize(compare, compare.y().asConstant(), (MaterializeNode) compare.x());
+            }
+            return compare;
+        }
+
+        private Node optimizeMaterialize(Compare compare, CiConstant constant, MaterializeNode materializeNode) {
+            if (constant.kind == CiKind.Int) {
+                boolean isFalseCheck = (constant.asInt() == 0);
+                if (compare.condition == Condition.EQ || compare.condition == Condition.NE) {
+                    if (compare.condition == Condition.NE) {
+                        isFalseCheck = !isFalseCheck;
+                    }
+                    BooleanNode result = materializeNode.value();
+                    if (isFalseCheck) {
+                        result = result.negate();
+                    }
+                    if (GraalOptions.TraceCanonicalizer) {
+                        TTY.println("Removed materialize replacing with " + result);
+                    }
+                    return result;
+                }
+            }
+            return compare;
+        }
+    };
 }

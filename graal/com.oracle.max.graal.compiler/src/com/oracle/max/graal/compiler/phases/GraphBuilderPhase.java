@@ -725,8 +725,7 @@ public final class GraphBuilderPhase extends Phase {
 
     private void genThrow(int bci) {
         Value exception = frameState.apop();
-        FixedGuard node = new FixedGuard(graph);
-        node.setNode(new IsNonNull(exception, graph));
+        FixedGuard node = new FixedGuard(new IsNonNull(exception, graph), graph);
         append(node);
 
         FixedNode entry = handleException(exception, bci);
@@ -743,10 +742,12 @@ public final class GraphBuilderPhase extends Phase {
         int cpi = stream().readCPI();
         RiType type = constantPool.lookupType(cpi, CHECKCAST);
         boolean isInitialized = type.isResolved();
-        Value typeInstruction = genTypeOrDeopt(RiType.Representation.ObjectHub, type, isInitialized, cpi);
+        Constant typeInstruction = genTypeOrDeopt(RiType.Representation.ObjectHub, type, isInitialized, cpi);
         Value object = frameState.apop();
         if (typeInstruction != null) {
-            frameState.apush(append(new CheckCast(type, typeInstruction, object, graph)));
+//            append(new FixedGuard(new InstanceOf(typeInstruction, object, graph), graph));
+//            frameState.apush(object);
+            frameState.apush(new CheckCast(typeInstruction, object, graph));
         } else {
             frameState.apush(appendConstant(CiConstant.NULL_OBJECT));
         }
@@ -756,10 +757,10 @@ public final class GraphBuilderPhase extends Phase {
         int cpi = stream().readCPI();
         RiType type = constantPool.lookupType(cpi, INSTANCEOF);
         boolean isInitialized = type.isResolved();
-        Value typeInstruction = genTypeOrDeopt(RiType.Representation.ObjectHub, type, isInitialized, cpi);
+        Constant typeInstruction = genTypeOrDeopt(RiType.Representation.ObjectHub, type, isInitialized, cpi);
         Value object = frameState.apop();
         if (typeInstruction != null) {
-            frameState.ipush(append(new InstanceOf(type, typeInstruction, object, graph)));
+            frameState.ipush(append(new MaterializeNode(new InstanceOf(typeInstruction, object, graph), graph)));
         } else {
             frameState.ipush(appendConstant(CiConstant.INT_0));
         }
@@ -874,7 +875,7 @@ public final class GraphBuilderPhase extends Phase {
         }
     }
 
-    private Value genTypeOrDeopt(RiType.Representation representation, RiType holder, boolean initialized, int cpi) {
+    private Constant genTypeOrDeopt(RiType.Representation representation, RiType holder, boolean initialized, int cpi) {
         if (initialized) {
             return appendConstant(holder.getEncoding(representation));
         } else {
@@ -1124,11 +1125,44 @@ public final class GraphBuilderPhase extends Phase {
         append(lookupSwitch);
     }
 
-    private Value appendConstant(CiConstant constant) {
-        return append(new Constant(constant, graph));
+    private Constant appendConstant(CiConstant constant) {
+        return new Constant(constant, graph);
     }
 
     private Value append(FixedNode fixed) {
+        if (fixed instanceof Deoptimize && lastInstr.predecessors().size() > 0) {
+            Node cur = lastInstr;
+            Node prev = cur;
+            while (cur != cur.graph().start() && !(cur instanceof ControlSplit)) {
+                assert cur.predecessors().size() == 1;
+                prev = cur;
+                cur = cur.predecessors().get(0);
+                if (cur.predecessors().size() == 0) {
+                    break;
+                }
+
+                if (cur instanceof ExceptionObject) {
+                    break;
+                }
+            }
+
+            if (cur instanceof If) {
+                If ifNode = (If) cur;
+                if (ifNode.falseSuccessor() == prev) {
+                    FixedNode successor = ifNode.trueSuccessor();
+                    BooleanNode condition = ifNode.compare();
+                    FixedGuard fixedGuard = new FixedGuard(condition, graph);
+                    fixedGuard.setNext(successor);
+                    ifNode.replaceAndDelete(fixedGuard);
+                    lastInstr = null;
+                    return fixed;
+                }
+            } else if (prev != cur) {
+                prev.replaceAtPredecessors(fixed);
+                lastInstr = null;
+                return fixed;
+            }
+        }
         lastInstr.setNext(fixed);
         lastInstr = null;
         return fixed;

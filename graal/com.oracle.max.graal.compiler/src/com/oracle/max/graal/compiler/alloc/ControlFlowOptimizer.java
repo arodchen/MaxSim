@@ -130,6 +130,8 @@ final class ControlFlowOptimizer {
                             ((LIRBranch) instr).substitute(block, newTarget);
                         } else if (instr instanceof LIRTableSwitch) {
                             ((LIRTableSwitch) instr).substitute(block, newTarget);
+                        } else if (instr instanceof LIRXirInstruction) {
+                            ((LIRXirInstruction) instr).substitute(block, newTarget);
                         }
                     }
                 }
@@ -246,8 +248,8 @@ final class ControlFlowOptimizer {
             for (LIRInstruction instr : instructions) {
                 if (instr instanceof LIRBranch) {
                     LIRBranch opBranch = (LIRBranch) instr;
-                    assert opBranch.block() == null || code.contains(opBranch.block()) : "missing successor branch from: " + block + " to: " + opBranch.block();
-                    assert opBranch.unorderedBlock() == null || code.contains(opBranch.unorderedBlock()) : "missing successor branch from: " + block + " to: " + opBranch.unorderedBlock();
+                    assert opBranch.block() == null || opBranch.block().blockID() == -1 || code.contains(opBranch.block()) : "missing successor branch from: " + block + " to: " + opBranch.block();
+                    assert opBranch.unorderedBlock() == null || opBranch.unorderedBlock().blockID() == -1 || code.contains(opBranch.unorderedBlock()) : "missing successor branch from: " + block + " to: " + opBranch.unorderedBlock();
                 }
             }
 
