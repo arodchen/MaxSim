@@ -50,7 +50,7 @@ public final class FrameState extends Value implements FrameStateAccess {
 
     protected final int locksSize;
 
-    private final boolean rethrowException;
+    private boolean rethrowException;
 
     private static final int SUCCESSOR_COUNT = 0;
 
@@ -640,5 +640,10 @@ public final class FrameState extends Value implements FrameStateAccess {
     @Override
     public Node copy(Graph into) {
         return new FrameState(method, bci, localsSize, stackSize, locksSize, rethrowException, into);
+    }
+
+    @Override
+    public void setRethrowException(boolean b) {
+        rethrowException = b;
     }
 }
