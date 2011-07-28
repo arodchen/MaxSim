@@ -27,7 +27,6 @@ package com.sun.hotspot.igv.rhino;
 import com.sun.hotspot.igv.filter.ScriptEngineAbstraction;
 import com.sun.hotspot.igv.graph.Diagram;
 import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
 /**
@@ -45,21 +44,19 @@ public class RhinoScriptEngine implements ScriptEngineAbstraction {
 
     public boolean initialize(String s) {
         this.jsHelperText = s;
-        Class importerTopLevel = null;
+        Class<?> importerTopLevel = null;
         try {
             ClassLoader cl = RhinoScriptEngine.class.getClassLoader();
-            Class context = cl.loadClass("org.mozilla.javascript.Context");
-            Class scriptable = cl.loadClass("org.mozilla.javascript.Scriptable");
+            Class<?> context = cl.loadClass("org.mozilla.javascript.Context");
+            Class<?> scriptable = cl.loadClass("org.mozilla.javascript.Scriptable");
             importerTopLevel = cl.loadClass("org.mozilla.javascript.ImporterTopLevel");
             importer = importerTopLevel.getDeclaredConstructor(context);
-            scope_put = importerTopLevel.getMethod("put", new Class[]{String.class, scriptable, Object.class});
-            cx_evaluateString = context.getDeclaredMethod("evaluateString", new Class[]{scriptable, String.class, String.class, Integer.TYPE, Object.class});
-            context_enter = context.getDeclaredMethod("enter", new Class[0]);
-            context_exit = context.getDeclaredMethod("exit", new Class[0]);
+            scope_put = importerTopLevel.getMethod("put", String.class, scriptable, Object.class);
+            cx_evaluateString = context.getDeclaredMethod("evaluateString", scriptable, String.class, String.class, Integer.TYPE, Object.class);
+            context_enter = context.getDeclaredMethod("enter");
+            context_exit = context.getDeclaredMethod("exit");
             return true;
-        } catch (NoSuchMethodException nsme) {
-            return false;
-        } catch (ClassNotFoundException cnfe) {
+        } catch (Exception e) {
             return false;
         }
     }
@@ -77,9 +74,8 @@ public class RhinoScriptEngine implements ScriptEngineAbstraction {
                 // Exit from the context.
                 context_exit.invoke(null, (Object[]) null);
             }
-        } catch (InvocationTargetException iae) {
-        } catch (IllegalAccessException iae) {
-        } catch (InstantiationException iae) {
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 }

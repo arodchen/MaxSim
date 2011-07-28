@@ -67,6 +67,8 @@ char**  Arguments::_jvm_flags_array             = NULL;
 int     Arguments::_num_jvm_flags               = 0;
 char**  Arguments::_jvm_args_array              = NULL;
 int     Arguments::_num_jvm_args                = 0;
+char**  Arguments::_graal_args_array              = NULL;
+int     Arguments::_num_graal_args                = 0;
 char*  Arguments::_java_command                 = NULL;
 SystemProperty* Arguments::_system_properties   = NULL;
 const char*  Arguments::_gc_log_filename        = NULL;
@@ -751,6 +753,10 @@ void Arguments::build_jvm_args(const char* arg) {
 
 void Arguments::build_jvm_flags(const char* arg) {
   add_string(&_jvm_flags_array, &_num_jvm_flags, arg);
+}
+
+void Arguments::add_graal_arg(const char* arg) {
+  add_string(&_graal_args_array, &_num_graal_args, arg);
 }
 
 // utility function to return a string that concatenates all
@@ -2667,6 +2673,48 @@ SOLARIS_ONLY(
           return JNI_EINVAL;
         }
       }
+    } else if (match_option(option, "-graal", &tail)) {
+      if (PrintVMOptions) {
+        tty->print("Running Graal VM... ");
+      }
+      UseGraal = true;
+      BootstrapGraal = true;
+      const int BUFFER_SIZE = 1024;
+      char maxine_dir[BUFFER_SIZE];
+      char graal_dir[BUFFER_SIZE];
+      char temp[BUFFER_SIZE];
+      if (!os::getenv("MAXINE", maxine_dir, sizeof(maxine_dir))) {
+        fatal("Must set MAXINE environment variable to a Maxine project directory.");
+      }
+      if (PrintVMOptions) tty->print("MAXINE=%s", maxine_dir);
+      if (!os::getenv("GRAAL", graal_dir, sizeof(graal_dir))) {
+        fatal("Must set GRAAL environment variable to a Graal project directory.");
+      }
+      if (PrintVMOptions) tty->print_cr(" GRAAL=%s", graal_dir);
+      sprintf(temp, "%s/com.oracle.max.cri/bin", maxine_dir);
+      scp_p->add_prefix(temp);
+      sprintf(temp, "%s/com.oracle.max.base/bin", maxine_dir);
+      scp_p->add_prefix(temp);
+      sprintf(temp, "%s/com.oracle.max.asmdis/bin", maxine_dir);
+      scp_p->add_prefix(temp);
+      sprintf(temp, "%s/com.oracle.max.asm/bin", maxine_dir);
+      scp_p->add_prefix(temp);
+      sprintf(temp, "%s/com.oracle.max.graal.graph/bin", maxine_dir);
+      scp_p->add_prefix(temp);
+      sprintf(temp, "%s/graal/com.oracle.max.graal.compiler/bin", graal_dir);
+      scp_p->add_prefix(temp);
+      sprintf(temp, "%s/graal/com.oracle.max.graal.runtime/bin", graal_dir);
+      scp_p->add_prefix(temp);
+      sprintf(temp, "%s/graal/com.oracle.max.graal.graphviz/bin", graal_dir);
+      scp_p->add_prefix(temp);
+      *scp_assembly_required_p = true;
+    } else if (match_option(option, "-G:", &tail)) { // -G:XXX
+      // Option for the graal compiler.
+      if (PrintVMOptions) {
+        tty->print_cr("graal option %s", tail);
+      }
+      Arguments::add_graal_arg(tail);
+
     // Unknown option
     } else if (is_bad_option(option, args->ignoreUnrecognized)) {
       return JNI_ERR;

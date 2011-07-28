@@ -93,7 +93,7 @@ public class ServerCompilerScheduler implements Scheduler {
 
             if (!visited.contains(parent)) {
                 visited.add(parent);
-                InputBlock block = new InputBlock(graph, "" + blockCount);
+                InputBlock block = graph.addBlock(Integer.toString(blockCount));
                 blocks.add(block);
                 if (parent == root) {
                     rootBlock = block;
@@ -125,7 +125,7 @@ public class ServerCompilerScheduler implements Scheduler {
                                 n = n.preds.get(0);
                             }
                             if (n.block != null) {
-                                n.block.addSuccessor(block);
+                                graph.addBlockEdge(n.block, block);
                             }
                         }
                     }
@@ -136,12 +136,12 @@ public class ServerCompilerScheduler implements Scheduler {
                         for (Node n2 : n.succs) {
 
                             if (n2 != parent && n2.block != null && n2.block != rootBlock) {
-                                block.addSuccessor(n2.block);
+                                graph.addBlockEdge(block, n2.block);
                             }
                         }
                     } else {
                         if (n != parent && n.block != null && n.block != rootBlock) {
-                            block.addSuccessor(n.block);
+                            graph.addBlockEdge(block, n.block);
                         }
                     }
                 }
@@ -161,7 +161,7 @@ public class ServerCompilerScheduler implements Scheduler {
                 }
 
                 if (pushed == 0 && p == root) {
-                // TODO: special handling when root backedges are not built yet
+                    // TODO: special handling when root backedges are not built yet
                 }
             }
         }
@@ -174,7 +174,7 @@ public class ServerCompilerScheduler implements Scheduler {
         }
 
         int z = 0;
-        blockIndex = new HashMap<InputBlock, Integer>();
+        blockIndex = new HashMap<InputBlock, Integer>(blocks.size());
         for (InputBlock b : blocks) {
             blockIndex.put(b, z);
             z++;
@@ -186,19 +186,23 @@ public class ServerCompilerScheduler implements Scheduler {
     }
 
     public Collection<InputBlock> schedule(InputGraph graph) {
+        if (graph.getNodes().isEmpty()) {
+            return Collections.emptyList();
+        }
+
         if (graph.getBlocks().size() > 0) {
             Collection<InputNode> tmpNodes = new ArrayList<InputNode>(graph.getNodes());
             for (InputNode n : tmpNodes) {
                 String block = getBlockName(n);
                 if (graph.getBlock(n) == null) {
-                    graph.getBlock(block).addNode(n);
+                    graph.getBlock(block).addNode(n.getId());
                     assert graph.getBlock(n) != null;
                 }
             }
             return graph.getBlocks();
         } else {
             nodes = new ArrayList<Node>();
-            inputNodeToNode = new HashMap<InputNode, Node>();
+            inputNodeToNode = new HashMap<InputNode, Node>(graph.getNodes().size());
 
             this.graph = graph;
             buildUpGraph();
@@ -207,7 +211,16 @@ public class ServerCompilerScheduler implements Scheduler {
             buildCommonDominators();
             scheduleLatest();
 
+            InputBlock noBlock = null;
             for (InputNode n : graph.getNodes()) {
+                if (graph.getBlock(n) == null) {
+                    if (noBlock == null) {
+                        noBlock = graph.addBlock("(no block)");
+                        blocks.add(noBlock);
+                    }
+                    
+                    graph.setBlock(n, noBlock);
+                }
                 assert graph.getBlock(n) != null;
             }
 
@@ -215,10 +228,12 @@ public class ServerCompilerScheduler implements Scheduler {
         }
     }
 
-    public void scheduleLatest() {
-
-
+    private void scheduleLatest() {
         Node root = findRoot();
+        if(root == null) {
+            assert false : "No root found!";
+            return;
+        }
 
         // Mark all nodes reachable in backward traversal from root
         Set<Node> reachable = new HashSet<Node>();
@@ -374,12 +389,12 @@ public class ServerCompilerScheduler implements Scheduler {
     }
 
     public void buildDominators() {
-        dominatorMap = new HashMap<InputBlock, InputBlock>();
+        dominatorMap = new HashMap<InputBlock, InputBlock>(graph.getBlocks().size());
         if (blocks.size() == 0) {
             return;
         }
-        Vector<BlockIntermediate> intermediate = new Vector<BlockIntermediate>();
-        Map<InputBlock, BlockIntermediate> map = new HashMap<InputBlock, BlockIntermediate>();
+        Vector<BlockIntermediate> intermediate = new Vector<BlockIntermediate>(graph.getBlocks().size());
+        Map<InputBlock, BlockIntermediate> map = new HashMap<InputBlock, BlockIntermediate>(graph.getBlocks().size());
         int z = 0;
         for (InputBlock b : blocks) {
             BlockIntermediate bi = new BlockIntermediate();
@@ -538,15 +553,30 @@ public class ServerCompilerScheduler implements Scheduler {
     }
 
     private Node findRoot() {
+        Node minNode = null;
+        Node alternativeRoot = null;
 
-        for (Node n : nodes) {
-            InputNode inputNode = n.inputNode;
-            if (inputNode.getProperties().get("name").equals("Root")) {
-                return n;
+        for (Node node : nodes) {
+            InputNode inputNode = node.inputNode;
+            String s = inputNode.getProperties().get("name");
+            if (s != null && s.equals("Root")) {
+                return node;
+            }
+
+            if (alternativeRoot == null && node.preds.isEmpty()) {
+                alternativeRoot = node;
+            }
+
+            if (minNode == null || node.inputNode.getId() < minNode.inputNode.getId()) {
+                minNode = node;
             }
         }
 
-        return null;
+        if (alternativeRoot != null) {
+            return alternativeRoot;
+        } else {
+            return minNode;
+        }
     }
 
     public void buildUpGraph() {
@@ -562,7 +592,7 @@ public class ServerCompilerScheduler implements Scheduler {
             inputNodeToNode.put(n, node);
         }
 
-        Map<Integer, List<InputEdge>> edgeMap = new HashMap<Integer, List<InputEdge>>();
+        Map<Integer, List<InputEdge>> edgeMap = new HashMap<Integer, List<InputEdge>>(graph.getEdges().size());
         for (InputEdge e : graph.getEdges()) {
 
             int to = e.getTo();

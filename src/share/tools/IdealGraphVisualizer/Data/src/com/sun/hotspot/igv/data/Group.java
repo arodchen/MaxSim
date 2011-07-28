@@ -23,10 +23,6 @@
  */
 package com.sun.hotspot.igv.data;
 
-import com.sun.hotspot.igv.data.ChangedEvent;
-import com.sun.hotspot.igv.data.ChangedEventProvider;
-import com.sun.hotspot.igv.data.Properties;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -40,18 +36,26 @@ import java.util.Set;
 public class Group extends Properties.Entity implements ChangedEventProvider<Group> {
 
     private List<InputGraph> graphs;
-    private transient ChangedEvent<Group> changedEvent;
-    private GraphDocument document;
     private InputMethod method;
     private String assembly;
+    private transient ChangedEvent<Group> changedEvent;
+    private transient boolean complete = true;
 
     public Group() {
         graphs = new ArrayList<InputGraph>();
-        init();
+        changedEvent = new ChangedEvent<Group>(this);
+
+        // Ensure that name and type are never null
+        getProperties().setProperty("name", "");
+        getProperties().setProperty("type", "");
     }
 
-    private void init() {
-        changedEvent = new ChangedEvent<Group>(this);
+    public void setComplete(boolean complete) {
+        this.complete = complete;
+    }
+
+    public boolean isComplete() {
+        return complete;
     }
 
     public void fireChangedEvent() {
@@ -74,14 +78,6 @@ public class Group extends Properties.Entity implements ChangedEventProvider<Gro
         return method;
     }
 
-    void setDocument(GraphDocument document) {
-        this.document = document;
-    }
-
-    public GraphDocument getDocument() {
-        return document;
-    }
-
     public ChangedEvent<Group> getChangedEvent() {
         return changedEvent;
     }
@@ -90,11 +86,15 @@ public class Group extends Properties.Entity implements ChangedEventProvider<Gro
         return Collections.unmodifiableList(graphs);
     }
 
-    public void addGraph(InputGraph g) {
-        assert g != null;
-        assert !graphs.contains(g);
+    public InputGraph addGraph(String name) {
+        return addGraph(name, null);
+    }
+
+    public InputGraph addGraph(String name, Pair<InputGraph, InputGraph> pair) {
+        InputGraph g = new InputGraph(graphs.size(), this, name, pair);
         graphs.add(g);
         changedEvent.fire();
+        return g;
     }
 
     public void removeGraph(InputGraph g) {
@@ -110,18 +110,8 @@ public class Group extends Properties.Entity implements ChangedEventProvider<Gro
         for (InputGraph g : graphs) {
             Set<Integer> ids = g.getNodesAsSet();
             result.addAll(g.getNodesAsSet());
-            for (Integer i : ids) {
-                result.add(-i);
-            }
         }
         return result;
-    }
-
-    public InputGraph getLastAdded() {
-        if (graphs.size() == 0) {
-            return null;
-        }
-        return graphs.get(graphs.size() - 1);
     }
 
     @Override
@@ -137,5 +127,9 @@ public class Group extends Properties.Entity implements ChangedEventProvider<Gro
 
     public String getName() {
         return getProperties().get("name");
+    }
+
+    public String getType() {
+        return getProperties().get("type");
     }
 }

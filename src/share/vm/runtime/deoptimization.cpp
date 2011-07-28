@@ -177,6 +177,10 @@ Deoptimization::UnrollBlock* Deoptimization::fetch_unroll_info_helper(JavaThread
   // the vframeArray is created.
   //
 
+  if (TraceDeoptimization) {
+    tty->print_cr("fetching unroll info");
+  }
+
   // Allocate our special deoptimization ResourceMark
   DeoptResourceMark* dmark = new DeoptResourceMark(thread);
   assert(thread->deopt_mark() == NULL, "Pending deopt!");
@@ -208,11 +212,11 @@ Deoptimization::UnrollBlock* Deoptimization::fetch_unroll_info_helper(JavaThread
   assert(vf->is_compiled_frame(), "Wrong frame type");
   chunk->push(compiledVFrame::cast(vf));
 
-#ifdef COMPILER2
+//#ifdef COMPILER2
   // Reallocate the non-escaping objects and restore their fields. Then
   // relock objects if synchronization on them was eliminated.
-  if (DoEscapeAnalysis) {
-    if (EliminateAllocations) {
+//  if (DoEscapeAnalysis) {
+//    if (EliminateAllocations) {
       assert (chunk->at(0)->scope() != NULL,"expect only compiled java frames");
       GrowableArray<ScopeValue*>* objects = chunk->at(0)->scope()->objects();
 
@@ -256,8 +260,8 @@ Deoptimization::UnrollBlock* Deoptimization::fetch_unroll_info_helper(JavaThread
         // Restore result.
         deoptee.set_saved_oop_result(&map, return_value());
       }
-    }
-    if (EliminateLocks) {
+//    }
+//    if (EliminateLocks) {
 #ifndef PRODUCT
       bool first = true;
 #endif
@@ -284,9 +288,9 @@ Deoptimization::UnrollBlock* Deoptimization::fetch_unroll_info_helper(JavaThread
 #endif
         }
       }
-    }
-  }
-#endif // COMPILER2
+//    }
+//  }
+//#endif // COMPILER2
   // Ensure that no safepoint is taken after pointers have been stored
   // in fields of rematerialized objects.  If a safepoint occurs from here on
   // out the java state residing in the vframeArray will be missed.
@@ -734,7 +738,7 @@ int Deoptimization::deoptimize_dependents() {
 }
 
 
-#ifdef COMPILER2
+//#ifdef COMPILER2
 bool Deoptimization::realloc_objects(JavaThread* thread, frame* fr, GrowableArray<ScopeValue*>* objects, TRAPS) {
   Handle pending_exception(thread->pending_exception());
   const char* exception_file = thread->exception_file();
@@ -914,6 +918,9 @@ void Deoptimization::reassign_fields(frame* fr, RegisterMap* reg_map, GrowableAr
     KlassHandle k(((ConstantOopReadValue*) sv->klass())->value()());
     Handle obj = sv->value();
     assert(obj.not_null(), "reallocation was missed");
+    if (TraceDeoptimization) {
+      tty->print_cr("reassign fields for object of type %s!", k->name()->as_C_string());
+    }
 
     if (k->oop_is_instance()) {
       instanceKlass* ik = instanceKlass::cast(k());
@@ -976,7 +983,7 @@ void Deoptimization::print_objects(GrowableArray<ScopeValue*>* objects) {
   }
 }
 #endif
-#endif // COMPILER2
+//#endif // COMPILER2
 
 vframeArray* Deoptimization::create_vframeArray(JavaThread* thread, frame fr, RegisterMap *reg_map, GrowableArray<compiledVFrame*>* chunk) {
 
@@ -1177,7 +1184,6 @@ JRT_LEAF(void, Deoptimization::popframe_preserve_args(JavaThread* thread, int by
 JRT_END
 
 
-#if defined(COMPILER2) || defined(SHARK)
 void Deoptimization::load_class_by_index(constantPoolHandle constant_pool, int index, TRAPS) {
   // in case of an unresolved klass entry, load the class.
   if (constant_pool->tag_at(index).is_unresolved_klass()) {
@@ -1247,17 +1253,35 @@ JRT_ENTRY(void, Deoptimization::uncommon_trap_inner(JavaThread* thread, jint tra
     DeoptAction action = trap_request_action(trap_request);
     jint unloaded_class_index = trap_request_index(trap_request); // CP idx or -1
 
+//    tty->print_cr("trap_request: %08x, cpi: %i, pc: %016x", trap_request, unloaded_class_index, fr.pc());
+
+    
     Events::log("Uncommon trap occurred @" INTPTR_FORMAT " unloaded_class_index = %d", fr.pc(), (int) trap_request);
     vframe*  vf  = vframe::new_vframe(&fr, &reg_map, thread);
     compiledVFrame* cvf = compiledVFrame::cast(vf);
-
+    
     nmethod* nm = cvf->code();
-
     ScopeDesc*      trap_scope  = cvf->scope();
+    
+    if (TraceDeoptimization) {
+      tty->print_cr("Deoptimization: bci=%d pc=%d, relative_pc=%d, method=%s", trap_scope->bci(), fr.pc(), fr.pc() - nm->code_begin(), trap_scope->method()->name()->as_C_string());
+    }
+
     methodHandle    trap_method = trap_scope->method();
     int             trap_bci    = trap_scope->bci();
     Bytecodes::Code trap_bc     = trap_method->java_code_at(trap_bci);
 
+    if (trap_scope->rethrow_exception()) {
+      if (TraceDeoptimization) {
+        tty->print_cr("Exception to be rethrown in the interpreter for method %s::%s at bci %d", instanceKlass::cast(trap_method->method_holder())->name()->as_C_string(), trap_method->name()->as_C_string(), trap_bci);
+      }
+      GrowableArray<ScopeValue*>* expressions = trap_scope->expressions();
+      guarantee(expressions != NULL, "must have exception to throw");
+      ScopeValue* topOfStack = expressions->top();
+      Handle topOfStackObj = cvf->create_stack_value(topOfStack)->get_obj();
+      THREAD->set_pending_exception(topOfStackObj(), NULL, 0);
+    }
+    
     // Record this event in the histogram.
     gather_statistics(reason, action, trap_bc);
 
@@ -1919,40 +1943,3 @@ void Deoptimization::print_statistics() {
     if (xtty != NULL)  xtty->tail("statistics");
   }
 }
-#else // COMPILER2 || SHARK
-
-
-// Stubs for C1 only system.
-bool Deoptimization::trap_state_is_recompiled(int trap_state) {
-  return false;
-}
-
-const char* Deoptimization::trap_reason_name(int reason) {
-  return "unknown";
-}
-
-void Deoptimization::print_statistics() {
-  // no output
-}
-
-void
-Deoptimization::update_method_data_from_interpreter(methodDataHandle trap_mdo, int trap_bci, int reason) {
-  // no udpate
-}
-
-int Deoptimization::trap_state_has_reason(int trap_state, int reason) {
-  return 0;
-}
-
-void Deoptimization::gather_statistics(DeoptReason reason, DeoptAction action,
-                                       Bytecodes::Code bc) {
-  // no update
-}
-
-const char* Deoptimization::format_trap_state(char* buf, size_t buflen,
-                                              int trap_state) {
-  jio_snprintf(buf, buflen, "#%d", trap_state);
-  return buf;
-}
-
-#endif // COMPILER2 || SHARK

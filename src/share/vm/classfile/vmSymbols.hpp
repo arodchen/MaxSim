@@ -257,7 +257,86 @@
   template(makeDynamicCallSite_signature, "(Ljava/lang/invoke/MethodHandle;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/Object;Ljava/lang/invoke/MemberName;I)Ljava/lang/invoke/CallSite;") \
   NOT_LP64(  do_alias(machine_word_signature,         int_signature)  )                           \
   LP64_ONLY( do_alias(machine_word_signature,         long_signature) )                           \
-                                                                                                  \
+                                                                                                                        \
+  /* support for graal */                                                                                               \
+  template(com_sun_hotspot_graal_VMExits,             "com/oracle/max/graal/runtime/VMExits")                           \
+  template(com_sun_hotspot_graal_HotSpotMethodResolved, "com/oracle/max/graal/runtime/HotSpotMethodResolvedImpl")       \
+  template(com_sun_hotspot_graal_HotSpotTargetMethod, "com/oracle/max/graal/runtime/HotSpotTargetMethod")               \
+  template(com_sun_hotspot_graal_HotSpotField,        "com/oracle/max/graal/runtime/HotSpotField")                      \
+  template(com_sun_graal_graalOptions,                "com/sun/graal/graalOptions")                                     \
+  template(com_sun_hotspot_graal_HotSpotOptions,      "com/oracle/max/graal/runtime/HotSpotOptions")                    \
+  template(com_sun_hotspot_graal_HotSpotTypeResolved, "com/oracle/max/graal/runtime/HotSpotTypeResolvedImpl")           \
+  template(com_sun_hotspot_graal_HotSpotType,         "com/oracle/max/graal/runtime/HotSpotType")                       \
+  template(com_sun_hotspot_graal_HotSpotExceptionHandler,"com/oracle/max/graal/runtime/HotSpotExceptionHandler")        \
+  template(com_sun_hotspot_graal_HotSpotProxy,        "com/oracle/max/graal/runtime/HotSpotProxy")                      \
+  template(com_sun_hotspot_graal_Compiler,            "com/oracle/max/graal/runtime/Compiler")                          \
+  template(com_sun_hotspot_graal_CompilerImpl,        "com/oracle/max/graal/runtime/CompilerImpl")                      \
+  template(com_sun_cri_ri_RiMethod,                   "com/sun/cri/ri/RiMethod")                                        \
+  template(com_sun_cri_ri_RiField,                    "com/sun/cri/ri/RiField")                                         \
+  template(com_sun_cri_ri_RiType,                     "com/sun/cri/ri/RiType")                                          \
+  template(com_sun_cri_ri_RiTypeProfile,              "com/sun/cri/ri/RiTypeProfile")                                   \
+  template(com_sun_cri_ri_RiConstantPool,             "com/sun/cri/ri/RiConstantPool")                                  \
+  template(com_sun_cri_ri_RiExceptionHandler,         "com/sun/cri/ri/RiExceptionHandler")                              \
+  template(com_sun_cri_ci_CiAssumptions,              "com/sun/cri/ci/CiAssumptions")                                   \
+  template(com_sun_cri_ci_CiAssumptions_ConcreteSubtype, "com/sun/cri/ci/CiAssumptions$ConcreteSubtype")                \
+  template(com_sun_cri_ci_CiAssumptions_ConcreteMethod, "com/sun/cri/ci/CiAssumptions$ConcreteMethod")                  \
+  template(com_sun_cri_ci_CiTargetMethod,             "com/sun/cri/ci/CiTargetMethod")                                  \
+  template(com_sun_cri_ci_CiTargetMethod_Site,        "com/sun/cri/ci/CiTargetMethod$Site")                             \
+  template(com_sun_cri_ci_CiTargetMethod_Call,        "com/sun/cri/ci/CiTargetMethod$Call")                             \
+  template(com_sun_cri_ci_CiTargetMethod_DataPatch,   "com/sun/cri/ci/CiTargetMethod$DataPatch")                        \
+  template(com_sun_cri_ci_CiTargetMethod_Safepoint,   "com/sun/cri/ci/CiTargetMethod$Safepoint")                        \
+  template(com_sun_cri_ci_CiTargetMethod_ExceptionHandler, "com/sun/cri/ci/CiTargetMethod$ExceptionHandler")            \
+  template(com_sun_cri_ci_CiTargetMethod_Mark,        "com/sun/cri/ci/CiTargetMethod$Mark")                             \
+  template(com_oracle_max_graal_graph_BitMap,         "com/oracle/max/graal/graph/BitMap")                              \
+  template(com_sun_cri_ci_CiDebugInfo,                "com/sun/cri/ci/CiDebugInfo")                                     \
+  template(com_sun_cri_ci_CiFrame,                    "com/sun/cri/ci/CiFrame")                                         \
+  template(com_sun_cri_ci_CiValue,                    "com/sun/cri/ci/CiValue")                                         \
+  template(com_sun_cri_ci_CiStackSlot,                "com/sun/cri/ci/CiStackSlot")                                     \
+  template(com_sun_cri_ci_CiRegisterValue,            "com/sun/cri/ci/CiRegisterValue")                                 \
+  template(com_sun_cri_ci_CiRegister,                 "com/sun/cri/ci/CiRegister")                                      \
+  template(com_sun_cri_ci_CiCodePos,                  "com/sun/cri/ci/CiCodePos")                                       \
+  template(com_sun_cri_ci_CiConstant,                 "com/sun/cri/ci/CiConstant")                                      \
+  template(com_sun_cri_ci_CiVirtualObject,            "com/sun/cri/ci/CiVirtualObject")                                 \
+  template(com_sun_cri_ci_CiKind,                     "com/sun/cri/ci/CiKind")                                          \
+  template(com_sun_cri_ci_CiRuntimeCall,              "com/sun/cri/ci/CiRuntimeCall")                                   \
+  template(startCompiler_name,                        "startCompiler")                                                  \
+  template(shutdownCompiler_name,                     "shutdownCompiler")                                               \
+  template(compileMethod_name,                        "compileMethod")                                                  \
+  template(compileMethod_signature,                   "(Lcom/oracle/max/graal/runtime/HotSpotMethodResolved;I)V")       \
+  template(setOption_name,                            "setOption")                                                      \
+  template(setDefaultOptions_name,                    "setDefaultOptions")                                              \
+  template(setOption_signature,                       "(Ljava/lang/String;)Z")                                          \
+  template(createRiMethodResolved_name,               "createRiMethodResolved")                                         \
+  template(createRiMethodResolved_signature,          "(JLjava/lang/String;)Lcom/sun/cri/ri/RiMethod;")                 \
+  template(createRiMethodUnresolved_name,             "createRiMethodUnresolved")                                       \
+  template(createRiMethodUnresolved_signature,        "(Ljava/lang/String;Ljava/lang/String;Lcom/sun/cri/ri/RiType;)Lcom/sun/cri/ri/RiMethod;") \
+  template(createRiSignature_name,                    "createRiSignature")                                              \
+  template(createRiSignature_signature,               "(Ljava/lang/String;)Lcom/sun/cri/ri/RiSignature;")               \
+  template(createRiField_name,                        "createRiField")                                                  \
+  template(createRiField_signature,                   "(Lcom/sun/cri/ri/RiType;Ljava/lang/String;Lcom/sun/cri/ri/RiType;II)Lcom/sun/cri/ri/RiField;") \
+  template(createRiType_name,                         "createRiType")                                                   \
+  template(createRiType_signature,                    "(JLjava/lang/String;)Lcom/sun/cri/ri/RiType;")                   \
+  template(createRiTypePrimitive_name,                "createRiTypePrimitive")                                          \
+  template(createRiTypePrimitive_signature,           "(I)Lcom/sun/cri/ri/RiType;")                                     \
+  template(createRiTypeUnresolved_name,               "createRiTypeUnresolved")                                         \
+  template(createRiTypeUnresolved_signature,          "(Ljava/lang/String;)Lcom/sun/cri/ri/RiType;")                    \
+  template(createRiConstantPool_name,                 "createRiConstantPool")                                           \
+  template(createRiConstantPool_signature,            "(J)Lcom/sun/cri/ri/RiConstantPool;")                             \
+  template(createCiConstant_name,                     "createCiConstant")                                               \
+  template(createCiConstant_signature,                "(Lcom/sun/cri/ci/CiKind;J)Lcom/sun/cri/ci/CiConstant;")          \
+  template(createCiConstantFloat_name,                "createCiConstantFloat")                                          \
+  template(createCiConstantFloat_signature,           "(F)Lcom/sun/cri/ci/CiConstant;")                                 \
+  template(createCiConstantDouble_name,               "createCiConstantDouble")                                         \
+  template(createCiConstantDouble_signature,          "(D)Lcom/sun/cri/ci/CiConstant;")                                 \
+  template(createCiConstantObject_name,               "createCiConstantObject")                                         \
+  template(createCiConstantObject_signature,          "(Ljava/lang/Object;)Lcom/sun/cri/ci/CiConstant;")                \
+  template(getVMExits_name,                           "getVMExits")                                                     \
+  template(getVMExits_signature,                      "()Lcom/oracle/max/graal/runtime/VMExits;")                       \
+  template(getInstance_name,                          "getInstance")                                                    \
+  template(initialize_name,                           "initialize")                                                     \
+  template(getInstance_signature,                     "()Lcom/oracle/max/graal/runtime/Compiler;")                      \
+  template(forObject_name,                            "forObject")                                                      \
+                                                                                                                        \
   /* common method and field names */                                                             \
   template(object_initializer_name,                   "<init>")                                   \
   template(class_initializer_name,                    "<clinit>")                                 \

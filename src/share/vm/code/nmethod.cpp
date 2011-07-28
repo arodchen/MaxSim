@@ -818,12 +818,23 @@ nmethod::nmethod(
     // Exception handler and deopt handler are in the stub section
     assert(offsets->value(CodeOffsets::Exceptions) != -1, "must be set");
     assert(offsets->value(CodeOffsets::Deopt     ) != -1, "must be set");
-    _exception_offset        = _stub_offset          + offsets->value(CodeOffsets::Exceptions);
-    _deoptimize_offset       = _stub_offset          + offsets->value(CodeOffsets::Deopt);
-    if (offsets->value(CodeOffsets::DeoptMH) != -1) {
-      _deoptimize_mh_offset  = _stub_offset          + offsets->value(CodeOffsets::DeoptMH);
+    if (UseGraal) {
+      // graal produces no (!) stub section
+      _exception_offset        = code_offset()          + offsets->value(CodeOffsets::Exceptions);
+      _deoptimize_offset       = code_offset()          + offsets->value(CodeOffsets::Deopt);
+      if (offsets->value(CodeOffsets::DeoptMH) != -1) {
+        _deoptimize_mh_offset  = code_offset()          + offsets->value(CodeOffsets::DeoptMH);
+      } else {
+        _deoptimize_mh_offset  = -1;
+      }
     } else {
-      _deoptimize_mh_offset  = -1;
+      _exception_offset        = _stub_offset          + offsets->value(CodeOffsets::Exceptions);
+      _deoptimize_offset       = _stub_offset          + offsets->value(CodeOffsets::Deopt);
+      if (offsets->value(CodeOffsets::DeoptMH) != -1) {
+        _deoptimize_mh_offset  = _stub_offset          + offsets->value(CodeOffsets::DeoptMH);
+      } else {
+        _deoptimize_mh_offset  = -1;
+      }
     }
     if (offsets->value(CodeOffsets::UnwindHandler) != -1) {
       _unwind_handler_offset = code_offset()         + offsets->value(CodeOffsets::UnwindHandler);
@@ -1068,7 +1079,7 @@ ScopeDesc* nmethod::scope_desc_at(address pc) {
   PcDesc* pd = pc_desc_at(pc);
   guarantee(pd != NULL, "scope must be present");
   return new ScopeDesc(this, pd->scope_decode_offset(),
-                       pd->obj_decode_offset(), pd->should_reexecute(),
+                       pd->obj_decode_offset(), pd->should_reexecute(), pd->rethrow_exception(),
                        pd->return_oop());
 }
 
@@ -2258,7 +2269,7 @@ void nmethod::verify_interrupt_point(address call_site) {
   PcDesc* pd = pc_desc_at(ic->end_of_call());
   assert(pd != NULL, "PcDesc must exist");
   for (ScopeDesc* sd = new ScopeDesc(this, pd->scope_decode_offset(),
-                                     pd->obj_decode_offset(), pd->should_reexecute(),
+                                     pd->obj_decode_offset(), pd->should_reexecute(), pd->rethrow_exception(),
                                      pd->return_oop());
        !sd->is_top(); sd = sd->sender()) {
     sd->verify();
@@ -2292,7 +2303,7 @@ void nmethod::verify_scopes() {
         // information in a table.
         break;
     }
-    assert(stub == NULL || stub_contains(stub), "static call stub outside stub section");
+    assert(UseGraal || stub == NULL || stub_contains(stub), "static call stub outside stub section");
   }
 }
 
@@ -2524,7 +2535,7 @@ ScopeDesc* nmethod::scope_desc_in(address begin, address end) {
   PcDesc* p = pc_desc_near(begin+1);
   if (p != NULL && p->real_pc(this) <= end) {
     return new ScopeDesc(this, p->scope_decode_offset(),
-                         p->obj_decode_offset(), p->should_reexecute(),
+                         p->obj_decode_offset(), p->should_reexecute(), p->rethrow_exception(),
                          p->return_oop());
   }
   return NULL;

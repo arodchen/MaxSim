@@ -38,6 +38,7 @@
 #include "runtime/vframeArray.hpp"
 #include "vmreg_x86.inline.hpp"
 
+static void restore_live_registers(StubAssembler* sasm, bool restore_fpu_registers = true);
 
 // Implementation of StubAssembler
 
@@ -96,14 +97,11 @@ int StubAssembler::call_RT(Register oop_result1, Register oop_result2, address e
     if (oop_result2->is_valid()) {
       movptr(Address(thread, JavaThread::vm_result_2_offset()), NULL_WORD);
     }
-    if (frame_size() == no_frame_size) {
-      leave();
-      jump(RuntimeAddress(StubRoutines::forward_exception_entry()));
-    } else if (_stub_id == Runtime1::forward_exception_id) {
-      should_not_reach_here();
-    } else {
-      jump(RuntimeAddress(Runtime1::entry_for(Runtime1::forward_exception_id)));
-    }
+    // (tw) Deoptimize in case of an exception.
+    restore_live_registers(this, false);
+    movptr(Address(thread, Thread::pending_exception_offset()), NULL_WORD);
+    leave();
+    jump(RuntimeAddress(SharedRuntime::deopt_blob()->uncommon_trap()));
     bind(L);
   }
   // get oop results if there are any and reset the values in the thread
@@ -539,7 +537,7 @@ static void restore_fpu(StubAssembler* sasm, bool restore_fpu_registers = true) 
 }
 
 
-static void restore_live_registers(StubAssembler* sasm, bool restore_fpu_registers = true) {
+static void restore_live_registers(StubAssembler* sasm, bool restore_fpu_registers/* = true*/) {
   __ block_comment("restore_live_registers");
 
   restore_fpu(sasm, restore_fpu_registers);
@@ -593,30 +591,50 @@ void Runtime1::initialize_pd() {
 // has_argument: true if the exception needs an argument (passed on stack because registers must be preserved)
 
 OopMapSet* Runtime1::generate_exception_throw(StubAssembler* sasm, address target, bool has_argument) {
-  // preserve all registers
-  int num_rt_args = has_argument ? 2 : 1;
-  OopMap* oop_map = save_live_registers(sasm, num_rt_args);
-
-  // now all registers are saved and can be used freely
-  // verify that no old value is used accidentally
-  __ invalidate_registers(true, true, true, true, true, true);
-
-  // registers used by this stub
-  const Register temp_reg = rbx;
-
-  // load argument for exception that is passed as an argument into the stub
-  if (has_argument) {
-#ifdef _LP64
-    __ movptr(c_rarg1, Address(rbp, 2*BytesPerWord));
-#else
-    __ movptr(temp_reg, Address(rbp, 2*BytesPerWord));
-    __ push(temp_reg);
-#endif // _LP64
-  }
-  int call_offset = __ call_RT(noreg, noreg, target, num_rt_args - 1);
-
   OopMapSet* oop_maps = new OopMapSet();
-  oop_maps->add_gc_map(call_offset, oop_map);
+  if (UseGraal) {
+    // graal passes the argument in r10
+    OopMap* oop_map = save_live_registers(sasm, 1);
+
+    // now all registers are saved and can be used freely
+    // verify that no old value is used accidentally
+    __ invalidate_registers(true, true, true, true, true, true);
+
+    // registers used by this stub
+    const Register temp_reg = rbx;
+
+    // load argument for exception that is passed as an argument into the stub
+    if (has_argument) {
+      __ movptr(c_rarg1, r10);
+    }
+    int call_offset = __ call_RT(noreg, noreg, target, has_argument ? 1 : 0);
+
+    oop_maps->add_gc_map(call_offset, oop_map);
+  } else {
+    // preserve all registers
+    int num_rt_args = has_argument ? 2 : 1;
+    OopMap* oop_map = save_live_registers(sasm, num_rt_args);
+
+    // now all registers are saved and can be used freely
+    // verify that no old value is used accidentally
+    __ invalidate_registers(true, true, true, true, true, true);
+
+    // registers used by this stub
+    const Register temp_reg = rbx;
+
+    // load argument for exception that is passed as an argument into the stub
+    if (has_argument) {
+  #ifdef _LP64
+      __ movptr(c_rarg1, Address(rbp, 2*BytesPerWord));
+  #else
+      __ movptr(temp_reg, Address(rbp, 2*BytesPerWord));
+      __ push(temp_reg);
+  #endif // _LP64
+    }
+    int call_offset = __ call_RT(noreg, noreg, target, num_rt_args - 1);
+
+    oop_maps->add_gc_map(call_offset, oop_map);
+  }
 
   __ stop("should not reach here");
 
@@ -752,6 +770,74 @@ OopMapSet* Runtime1::generate_handle_exception(StubID id, StubAssembler *sasm) {
   }
 
   return oop_maps;
+}
+
+void Runtime1::graal_generate_handle_exception(StubAssembler *sasm, OopMapSet* oop_maps, OopMap* oop_map) {
+  NOT_LP64(fatal("64 bit only"));
+  // incoming parameters
+  const Register exception_oop = j_rarg0;
+  // other registers used in this stub
+  const Register exception_pc = j_rarg1;
+  const Register thread = r15_thread;
+
+  __ block_comment("graal_generate_handle_exception");
+
+  // verify that rax, contains a valid exception
+  __ verify_not_null_oop(exception_oop);
+
+#ifdef ASSERT
+  // check that fields in JavaThread for exception oop and issuing pc are
+  // empty before writing to them
+  Label oop_empty;
+  __ cmpptr(Address(thread, JavaThread::exception_oop_offset()), (int32_t) NULL_WORD);
+  __ jcc(Assembler::equal, oop_empty);
+  __ stop("exception oop already set");
+  __ bind(oop_empty);
+
+  Label pc_empty;
+  __ cmpptr(Address(thread, JavaThread::exception_pc_offset()), 0);
+  __ jcc(Assembler::equal, pc_empty);
+  __ stop("exception pc already set");
+  __ bind(pc_empty);
+#endif
+
+  // save exception oop and issuing pc into JavaThread
+  // (exception handler will load it from here)
+  __ movptr(Address(thread, JavaThread::exception_oop_offset()), exception_oop);
+  __ movptr(exception_pc, Address(rbp, 1*BytesPerWord));
+  __ movptr(Address(thread, JavaThread::exception_pc_offset()), exception_pc);
+
+  // compute the exception handler.
+  // the exception oop and the throwing pc are read from the fields in JavaThread
+  int call_offset = __ call_RT(noreg, noreg, CAST_FROM_FN_PTR(address, exception_handler_for_pc));
+  oop_maps->add_gc_map(call_offset, oop_map);
+
+  // rax,: handler address
+  //      will be the deopt blob if nmethod was deoptimized while we looked up
+  //      handler regardless of whether handler existed in the nmethod.
+
+  // only rax, is valid at this time, all other registers have been destroyed by the runtime call
+  __ invalidate_registers(false, true, true, true, true, true);
+
+#ifdef ASSERT
+  // Do we have an exception handler in the nmethod?
+  Label done;
+  __ testptr(rax, rax);
+  __ jcc(Assembler::notZero, done);
+  __ stop("no handler found");
+  __ bind(done);
+#endif
+
+  // exception handler found
+  // patch the return address -> the stub will directly return to the exception handler
+  __ movptr(Address(rbp, 1*BytesPerWord), rax);
+
+  // restore registers
+  restore_live_registers(sasm, false);
+
+  // return to exception handler
+  __ leave();
+  __ ret(0);
 }
 
 
@@ -960,6 +1046,12 @@ OopMapSet* Runtime1::generate_patching(StubAssembler* sasm, address target) {
 
   return oop_maps;
 }
+
+JRT_ENTRY(void, graal_create_null_exception(JavaThread* thread))
+  thread->set_vm_result(Exceptions::new_exception(thread, vmSymbols::java_lang_NullPointerException(), NULL)());
+JRT_END
+
+
 
 
 OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
@@ -1254,8 +1346,8 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
         // will be place in C abi locations
 
 #ifdef _LP64
-        __ verify_oop(c_rarg0);
-        __ mov(rax, c_rarg0);
+        __ verify_oop((UseGraal) ? j_rarg0 : c_rarg0);
+        __ mov(rax, (UseGraal) ? j_rarg0 : c_rarg0);
 #else
         // The object is passed on the stack and we haven't pushed a
         // frame yet so it's one work away from top of stack.
@@ -1326,7 +1418,8 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
       break;
 
     case unwind_exception_id:
-      { __ set_info("unwind_exception", dont_gc_arguments);
+      {
+        __ set_info("unwind_exception", dont_gc_arguments);
         // note: no stubframe since we are about to leave the current
         //       activation and we are calling a leaf VM function only.
         generate_unwind_exception(sasm);
@@ -1385,10 +1478,17 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
         __ movptr(rsi, Address(rsp, (klass_off) * VMRegImpl::stack_slot_size)); // subclass
         __ movptr(rax, Address(rsp, (sup_k_off) * VMRegImpl::stack_slot_size)); // superclass
 
+        Label success;
         Label miss;
+        if (UseGraal) {
+          // TODO this should really be within the XirSnippets
+          __ check_klass_subtype_fast_path(rsi, rax, rcx, &success, &miss, NULL);
+        };
+
         __ check_klass_subtype_slow_path(rsi, rax, rcx, rdi, NULL, &miss);
 
         // fallthrough on success:
+        __ bind(success);
         __ movptr(Address(rsp, (result_off) * VMRegImpl::stack_slot_size), 1); // result
         __ pop(rax);
         __ pop(rcx);
@@ -1785,6 +1885,181 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
       }
       break;
 #endif // !SERIALGC
+
+    case graal_unwind_exception_call_id: {
+      // remove the frame from the stack
+      __ movptr(rsp, rbp);
+      __ pop(rbp);
+      // exception_oop is passed using ordinary java calling conventions
+      __ movptr(rax, j_rarg0);
+
+      Label nonNullExceptionOop;
+      __ testptr(rax, rax);
+      __ jcc(Assembler::notZero, nonNullExceptionOop);
+      {
+        __ enter();
+        oop_maps = new OopMapSet();
+        OopMap* oop_map = save_live_registers(sasm, 0);
+        int call_offset = __ call_RT(rax, noreg, (address)graal_create_null_exception, 0);
+        oop_maps->add_gc_map(call_offset, oop_map);
+        __ leave();
+      }
+      __ bind(nonNullExceptionOop);
+
+      __ set_info("unwind_exception", dont_gc_arguments);
+      // note: no stubframe since we are about to leave the current
+      //       activation and we are calling a leaf VM function only.
+      generate_unwind_exception(sasm);
+      __ should_not_reach_here();
+      break;
+    }
+
+    case graal_handle_exception_id: {
+      StubFrame f(sasm, "graal_handle_exception", dont_gc_arguments);
+      oop_maps = new OopMapSet();
+      OopMap* oop_map = save_live_registers(sasm, 1, false);
+      graal_generate_handle_exception(sasm, oop_maps, oop_map);
+      break;
+    }
+
+    case graal_slow_subtype_check_id: {
+      Label success;
+      Label miss;
+
+      // TODO this should really be within the XirSnippets
+      __ check_klass_subtype_fast_path(j_rarg0, j_rarg1, j_rarg2, &success, &miss, NULL);
+      __ check_klass_subtype_slow_path(j_rarg0, j_rarg1, j_rarg2, j_rarg3, NULL, &miss);
+
+      // fallthrough on success:
+      __ bind(success);
+      __ movptr(rax, 1);
+      __ ret(0);
+
+      __ bind(miss);
+      __ movptr(rax, NULL_WORD);
+      __ ret(0);
+      break;
+    }
+
+    case graal_verify_pointer_id: {
+      __ verify_oop(r13, "graal verify pointer");
+      __ ret(0);
+      break;
+    }
+
+    case graal_arithmetic_frem_id: {
+      __ subptr(rsp, 8);
+      __ movflt(Address(rsp, 0), xmm1);
+      __ fld_s(Address(rsp, 0));
+      __ movflt(Address(rsp, 0), xmm0);
+      __ fld_s(Address(rsp, 0));
+      Label L;
+      __ bind(L);
+      __ fprem();
+      __ fwait();
+      __ fnstsw_ax();
+      __ testl(rax, 0x400);
+      __ jcc(Assembler::notZero, L);
+      __ fxch(1);
+      __ fpop();
+      __ fstp_s(Address(rsp, 0));
+      __ movflt(xmm0, Address(rsp, 0));
+      __ addptr(rsp, 8);
+      __ ret(0);
+      break;
+    }
+    case graal_arithmetic_drem_id: {
+      __ subptr(rsp, 8);
+      __ movdbl(Address(rsp, 0), xmm1);
+      __ fld_d(Address(rsp, 0));
+      __ movdbl(Address(rsp, 0), xmm0);
+      __ fld_d(Address(rsp, 0));
+      Label L;
+      __ bind(L);
+      __ fprem();
+      __ fwait();
+      __ fnstsw_ax();
+      __ testl(rax, 0x400);
+      __ jcc(Assembler::notZero, L);
+      __ fxch(1);
+      __ fpop();
+      __ fstp_d(Address(rsp, 0));
+      __ movdbl(xmm0, Address(rsp, 0));
+      __ addptr(rsp, 8);
+      __ ret(0);
+      break;
+    }
+    case graal_monitorenter_id: {
+      Label slow_case;
+
+      Register obj = j_rarg0;
+      Register lock = j_rarg1;
+
+      Register scratch1 = rax;
+      Register scratch2 = rbx;
+      assert_different_registers(obj, lock, scratch1, scratch2);
+
+      // copied from LIR_Assembler::emit_lock
+      if (UseFastLocking) {
+        assert(BasicLock::displaced_header_offset_in_bytes() == 0, "lock_reg must point to the displaced header");
+        __ lock_object(scratch1, obj, lock, scratch2, slow_case);
+      __ ret(0);
+      }
+
+      __ bind(slow_case);
+      {
+        StubFrame f(sasm, "graal_monitorenter", dont_gc_arguments);
+        OopMap* map = save_live_registers(sasm, 1, save_fpu_registers);
+
+        // Called with store_parameter and not C abi
+        int call_offset = __ call_RT(noreg, noreg, CAST_FROM_FN_PTR(address, monitorenter), obj, lock);
+
+        oop_maps = new OopMapSet();
+        oop_maps->add_gc_map(call_offset, map);
+        restore_live_registers(sasm, save_fpu_registers);
+      }
+      __ ret(0);
+      break;
+    }
+    case graal_monitorexit_id: {
+      Label slow_case;
+
+      Register obj = j_rarg0;
+      Register lock = j_rarg1;
+
+      // needed in rax later on...
+      Register lock2 = rax;
+      __ mov(lock2, lock);
+      Register scratch1 = rbx;
+      assert_different_registers(obj, lock, scratch1, lock2);
+
+      // copied from LIR_Assembler::emit_lock
+      if (UseFastLocking) {
+        assert(BasicLock::displaced_header_offset_in_bytes() == 0, "lock_reg must point to the displaced header");
+        __ unlock_object(scratch1, obj, lock2, slow_case);
+      __ ret(0);
+      }
+
+      __ bind(slow_case);
+      {
+        StubFrame f(sasm, "graal_monitorexit", dont_gc_arguments);
+        OopMap* map = save_live_registers(sasm, 2, save_fpu_registers);
+
+        // note: really a leaf routine but must setup last java sp
+        //       => use call_RT for now (speed can be improved by
+        //       doing last java sp setup manually)
+        int call_offset = __ call_RT(noreg, noreg, CAST_FROM_FN_PTR(address, monitorexit), lock);
+
+        oop_maps = new OopMapSet();
+        oop_maps->add_gc_map(call_offset, map);
+        restore_live_registers(sasm, save_fpu_registers);
+      }
+      __ ret(0);
+      break;
+    }
+
+
+
 
     default:
       { StubFrame f(sasm, "unimplemented entry", dont_gc_arguments);

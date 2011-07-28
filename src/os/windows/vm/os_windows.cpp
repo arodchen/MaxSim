@@ -408,7 +408,6 @@ static unsigned __stdcall java_start(Thread* thread) {
     }
   }
 
-
   if (UseVectoredExceptions) {
     // If we are using vectored exception we don't need to set a SEH
     thread->run();

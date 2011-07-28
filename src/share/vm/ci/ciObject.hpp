@@ -58,6 +58,7 @@ private:
   jobject  _handle;
   ciKlass* _klass;
   uint     _ident;
+  bool     _temp_global;
 
   enum { FLAG_BITS   = 2 };
   enum {
@@ -70,12 +71,19 @@ protected:
   ciObject(Handle h);
   ciObject(ciKlass* klass);
 
+public:
+  virtual void cleanup() {
+    if (_temp_global && _handle != NULL && JNIHandles::is_global_handle(_handle)) {
+      JNIHandles::destroy_global(_handle);
+    }
+  }
   jobject      handle()  const { return _handle; }
   // Get the VM oop that this object holds.
   oop get_oop() const {
     assert(_handle != NULL, "null oop");
     return JNIHandles::resolve_non_null(_handle);
   }
+protected:
 
   void init_flags_from(oop x) {
     int flags = 0;

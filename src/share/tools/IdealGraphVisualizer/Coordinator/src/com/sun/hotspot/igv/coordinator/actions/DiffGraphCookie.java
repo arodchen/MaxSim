@@ -21,12 +21,16 @@
  * questions.
  *
  */
-
 package com.sun.hotspot.igv.coordinator.actions;
 
 import com.sun.hotspot.igv.data.InputGraph;
 import com.sun.hotspot.igv.data.services.GraphViewer;
+import com.sun.hotspot.igv.data.services.InputGraphProvider;
 import com.sun.hotspot.igv.difference.Difference;
+import com.sun.hotspot.igv.util.LookupHistory;
+import org.openide.DialogDescriptor;
+import org.openide.DialogDisplayer;
+import org.openide.NotifyDescriptor;
 import org.openide.nodes.Node;
 import org.openide.util.Lookup;
 
@@ -36,20 +40,39 @@ import org.openide.util.Lookup;
  */
 public class DiffGraphCookie implements Node.Cookie {
 
-    private InputGraph a;
-    private InputGraph b;
+    private InputGraph graph;
 
-    public DiffGraphCookie(InputGraph a, InputGraph b) {
-        this.a = a;
-        this.b = b;
+    public DiffGraphCookie(InputGraph graph) {
+        this.graph = graph;
+    }
+
+    private InputGraph getCurrentGraph() {
+        InputGraphProvider graphProvider = LookupHistory.getLast(InputGraphProvider.class);
+        if (graphProvider != null) {
+            return graphProvider.getGraph();
+        }
+        return null;
+    }
+
+    public boolean isPossible() {
+        return getCurrentGraph() != null;
     }
 
     public void openDiff() {
+        InputGraph other = getCurrentGraph();
+
+        if (!graph.getGroup().isComplete() || !other.getGroup().isComplete()) {
+            String msg = "One of the graphs or the groups they belong to are still being loaded. Creating a diff now can cause problems. Do you want to continue?";
+            NotifyDescriptor desc = new NotifyDescriptor(msg, "Incomplete data", NotifyDescriptor.YES_NO_OPTION, NotifyDescriptor.QUESTION_MESSAGE, null, NotifyDescriptor.NO_OPTION);
+
+            if (DialogDisplayer.getDefault().notify(desc) == DialogDescriptor.NO_OPTION) {
+                return;
+            }
+        }
 
         final GraphViewer viewer = Lookup.getDefault().lookup(GraphViewer.class);
-
-        if(viewer != null) {
-            InputGraph diffGraph = Difference.createDiffGraph(a, b);
+        if (viewer != null) {
+            InputGraph diffGraph = Difference.createDiffGraph(other, graph);
             viewer.view(diffGraph);
         }
     }

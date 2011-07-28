@@ -30,15 +30,17 @@ import com.sun.hotspot.igv.data.InputEdge;
 import com.sun.hotspot.igv.data.InputGraph;
 import com.sun.hotspot.igv.data.InputMethod;
 import com.sun.hotspot.igv.data.InputNode;
+import com.sun.hotspot.igv.data.Pair;
 import com.sun.hotspot.igv.data.Properties;
-import com.sun.hotspot.igv.data.Property;
 import com.sun.hotspot.igv.data.services.GroupCallback;
 import com.sun.hotspot.igv.data.serialization.XMLParser.ElementHandler;
 import com.sun.hotspot.igv.data.serialization.XMLParser.HandoverElementHandler;
 import com.sun.hotspot.igv.data.serialization.XMLParser.ParseMonitor;
 import com.sun.hotspot.igv.data.serialization.XMLParser.TopElementHandler;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 import org.xml.sax.XMLReader;
@@ -63,6 +65,7 @@ public class Parser {
     public static final String REMOVE_EDGE_ELEMENT = "removeEdge";
     public static final String REMOVE_NODE_ELEMENT = "removeNode";
     public static final String METHOD_NAME_PROPERTY = "name";
+    public static final String GROUP_NAME_PROPERTY = "name";
     public static final String METHOD_IS_PUBLIC_PROPERTY = "public";
     public static final String METHOD_IS_STATIC_PROPERTY = "static";
     public static final String TRUE_VALUE = "true";
@@ -73,7 +76,9 @@ public class Parser {
     public static final String TO_PROPERTY = "to";
     public static final String PROPERTY_NAME_PROPERTY = "name";
     public static final String GRAPH_NAME_PROPERTY = "name";
-    public static final String TO_INDEX_PROPERTY = "index";
+    public static final String FROM_INDEX_PROPERTY = "fromIndex";
+    public static final String TO_INDEX_PROPERTY = "toIndex";
+    public static final String TO_INDEX_ALT_PROPERTY = "index";
     public static final String METHOD_ELEMENT = "method";
     public static final String INLINE_ELEMENT = "inline";
     public static final String BYTECODES_ELEMENT = "bytecodes";
@@ -86,10 +91,11 @@ public class Parser {
     public static final String SUCCESSOR_ELEMENT = "successor";
     public static final String ASSEMBLY_ELEMENT = "assembly";
     public static final String DIFFERENCE_PROPERTY = "difference";
-    private TopElementHandler xmlDocument = new TopElementHandler();
+    private TopElementHandler<GraphDocument> xmlDocument = new TopElementHandler<GraphDocument>();
     private boolean difference;
     private GroupCallback groupCallback;
     private HashMap<String, Integer> idCache = new HashMap<String, Integer>();
+    private ArrayList<Pair<String, String>> blockConnections = new ArrayList<Pair<String, String>>();
     private int maxId = 0;
 
     private int lookupID(String i) {
@@ -115,11 +121,10 @@ public class Parser {
         @Override
         protected Group start() throws SAXException {
             Group group = new Group();
-            Parser.this.difference = false;
+            group.setComplete(false);
+            
             String differenceProperty = this.readAttribute(DIFFERENCE_PROPERTY);
-            if (differenceProperty != null && (differenceProperty.equals("1") || differenceProperty.equals("true"))) {
-                Parser.this.difference = true;
-            }
+            Parser.this.difference = (differenceProperty != null && (differenceProperty.equals("1") || differenceProperty.equals("true")));
 
             ParseMonitor monitor = getMonitor();
             if (monitor != null) {
@@ -131,8 +136,10 @@ public class Parser {
 
         @Override
         protected void end(String text) throws SAXException {
+            Group group = getObject();
+            group.setComplete(true);
             if (groupCallback == null) {
-                getParentObject().addGroup(getObject());
+                getParentObject().addGroup(group);
             }
         }
     };
@@ -195,19 +202,72 @@ public class Parser {
         protected InputGraph start() throws SAXException {
 
             String name = readAttribute(GRAPH_NAME_PROPERTY);
-            InputGraph previous = getParentObject().getLastAdded();
-            if (!difference) {
-                previous = null;
+            InputGraph curGraph = getParentObject().addGraph(name);
+            if (difference) {
+
+                List<InputGraph> list = getParentObject().getGraphs();
+                if (list.size() > 1) {
+                    InputGraph previous = list.get(list.size() - 2);
+                    for (InputNode n : previous.getNodes()) {
+                        curGraph.addNode(n);
+                    }
+                    for (InputEdge e : previous.getEdges()) {
+                        curGraph.addEdge(e);
+                    }
+                }
             }
-            InputGraph curGraph = new InputGraph(getParentObject(), previous, name);
             this.graph = curGraph;
             return curGraph;
         }
 
         @Override
         protected void end(String text) throws SAXException {
-            getParentObject().addGraph(graph);
-            graph.resolveBlockLinks();
+            // NOTE: Some graphs intentionally don't provide blocks. Instead
+            //       they later generate the blocks from other information such
+            //       as node properties (example: ServerCompilerScheduler).
+            //       Thus, we shouldn't assign nodes that don't belong to any
+            //       block to some artificial block below unless blocks are
+            //       defined and nodes are assigned to them.
+
+            if (graph.getBlocks().size() > 0) {
+                boolean blocksContainNodes = false;
+                for (InputBlock b : graph.getBlocks()) {
+                    if (b.getNodes().size() > 0) {
+                        blocksContainNodes = true;
+                        break;
+                    }
+                }
+
+                if (!blocksContainNodes) {
+                    graph.clearBlocks();
+                    blockConnections.clear();
+                } else {
+                    // Blocks and their nodes defined: add other nodes to an
+                    //  artificial "no block" block
+                    InputBlock noBlock = null;
+                    for (InputNode n : graph.getNodes()) {
+                        if (graph.getBlock(n) == null) {
+                            if (noBlock == null) {
+                                noBlock = graph.addBlock("(no block)");
+                            }
+
+                            noBlock.addNode(n.getId());
+                        }
+
+                        assert graph.getBlock(n) != null;
+                    }
+                }
+            }
+
+            // Resolve block successors
+            for (Pair<String, String> p : blockConnections) {
+                final InputBlock left = graph.getBlock(p.getLeft());
+                assert left != null;
+                final InputBlock right = graph.getBlock(p.getRight());
+                assert right != null;
+                graph.addBlockEdge(left, right);
+            }
+            blockConnections.clear();
         }
     };
     // <nodes>
@@ -221,8 +281,10 @@ public class Parser {
         protected InputBlock start() throws SAXException {
             InputGraph graph = getParentObject();
             String name = readRequiredAttribute(BLOCK_NAME_PROPERTY).intern();
-            InputBlock b = new InputBlock(getParentObject(), name);
-            graph.addBlock(b);
+            InputBlock b = graph.addBlock(name);
+            for (InputNode n : b.getNodes()) {
+                assert graph.getBlock(n).equals(b);
+            }
             return b;
         }
     };
@@ -253,7 +315,7 @@ public class Parser {
         @Override
         protected InputBlock start() throws SAXException {
             String name = readRequiredAttribute(BLOCK_NAME_PROPERTY);
-            getParentObject().addSuccessor(name);
+            blockConnections.add(new Pair<String, String>(getParentObject().getName(), name));
             return getParentObject();
         }
     };
@@ -301,12 +363,21 @@ public class Parser {
 
         @Override
         protected InputEdge start() throws SAXException {
+            int fromIndex = 0;
             int toIndex = 0;
             int from = -1;
             int to = -1;
 
             try {
+                String fromIndexString = readAttribute(FROM_INDEX_PROPERTY);
+                if (fromIndexString != null) {
+                    fromIndex = Integer.parseInt(fromIndexString);
+                }
+
                 String toIndexString = readAttribute(TO_INDEX_PROPERTY);
+                if (toIndexString == null) {
+                    toIndexString = readAttribute(TO_INDEX_ALT_PROPERTY);
+                }
                 if (toIndexString != null) {
                     toIndex = Integer.parseInt(toIndexString);
                 }
@@ -317,8 +388,7 @@ public class Parser {
                 throw new SAXException(e);
             }
 
-
-            InputEdge conn = new InputEdge((char) toIndex, from, to);
+            InputEdge conn = new InputEdge((char) fromIndex, (char) toIndex, from, to);
             return start(conn);
         }
 
@@ -362,7 +432,7 @@ public class Parser {
         @Override
         public String start() throws SAXException {
             return readRequiredAttribute(PROPERTY_NAME_PROPERTY).intern();
-        }
+         }
 
         @Override
         public void end(String text) {
@@ -420,7 +490,7 @@ public class Parser {
     }
 
     // Returns a new GraphDocument object deserialized from an XML input source.
-    public GraphDocument parse(XMLReader reader, InputSource source, XMLParser.ParseMonitor monitor) throws SAXException {
+    public synchronized GraphDocument parse(XMLReader reader, InputSource source, XMLParser.ParseMonitor monitor) throws SAXException {
         reader.setContentHandler(new XMLParser(xmlDocument, monitor));
         try {
             reader.parse(source);

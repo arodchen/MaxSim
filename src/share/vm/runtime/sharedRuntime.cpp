@@ -707,8 +707,15 @@ address SharedRuntime::compute_compiled_exc_handler(nmethod* nm, address ret_pc,
 
 #ifdef COMPILER1
   if (t == NULL && nm->is_compiled_by_c1()) {
-    assert(nm->unwind_handler_begin() != NULL, "");
-    return nm->unwind_handler_begin();
+    if (UseGraal) {
+      nm->make_not_entrant();
+      JavaThread::current()->set_exception_pc(ret_pc);
+      JavaThread::current()->set_exception_oop(exception());
+      return SharedRuntime::deopt_blob()->unpack_with_exception_in_tls();
+    } else {
+      assert(nm->unwind_handler_begin() != NULL, "");
+      return nm->unwind_handler_begin();
+    }
   }
 #endif
 
@@ -763,6 +770,15 @@ JRT_ENTRY(void, SharedRuntime::throw_StackOverflowError(JavaThread* thread))
   throw_and_post_jvmti_exception(thread, exception);
 JRT_END
 
+address SharedRuntime::deoptimization_continuation(JavaThread* thread, address pc, nmethod* nm)
+{
+  if (TraceSignals) {
+    tty->print_cr(err_msg("Deoptimizing on implicit exception at relative pc=%d in method %s", pc - nm->entry_point(), nm->method()->name()->as_C_string()));
+  }
+  thread->_ScratchA = (intptr_t)pc;
+  return (SharedRuntime::deopt_blob()->jmp_uncommon_trap());
+}
+
 JRT_ENTRY(void, SharedRuntime::throw_WrongMethodTypeException(JavaThread* thread, oopDesc* required, oopDesc* actual))
   assert(thread == JavaThread::current() && required->is_oop() && actual->is_oop(), "bad args");
   ResourceMark rm;
@@ -775,6 +791,10 @@ address SharedRuntime::continuation_for_implicit_exception(JavaThread* thread,
                                                            SharedRuntime::ImplicitExceptionKind exception_kind)
 {
   address target_pc = NULL;
+
+  if (TraceSignals) {
+    tty->print_cr("Searching for continuation for implicit exception at %d!", pc);
+  }
 
   if (Interpreter::contains(pc)) {
 #ifdef CC_INTERP
@@ -850,7 +870,11 @@ address SharedRuntime::continuation_for_implicit_exception(JavaThread* thread,
 #ifndef PRODUCT
           _implicit_null_throws++;
 #endif
-          target_pc = nm->continuation_for_implicit_exception(pc);
+          if (UseGraal) {
+            target_pc = deoptimization_continuation(thread, pc, nm);
+          } else {
+            target_pc = nm->continuation_for_implicit_exception(pc);
+          }
           // If there's an unexpected fault, target_pc might be NULL,
           // in which case we want to fall through into the normal
           // error handling code.
@@ -866,7 +890,14 @@ address SharedRuntime::continuation_for_implicit_exception(JavaThread* thread,
 #ifndef PRODUCT
         _implicit_div0_throws++;
 #endif
-        target_pc = nm->continuation_for_implicit_exception(pc);
+        if (UseGraal) {
+          if (TraceSignals) {
+            tty->print_cr("graal implicit div0");
+          }
+          target_pc = deoptimization_continuation(thread, pc, nm);
+        } else {
+          target_pc = nm->continuation_for_implicit_exception(pc);
+        }
         // If there's an unexpected fault, target_pc might be NULL,
         // in which case we want to fall through into the normal
         // error handling code.
@@ -2730,7 +2761,7 @@ VMRegPair *SharedRuntime::find_callee_arguments(Symbol* sig, bool has_receiver, 
   // ResourceObject, so do not put any ResourceMarks in here.
   char *s = sig->as_C_string();
   int len = (int)strlen(s);
-  *s++; len--;                  // Skip opening paren
+  s++; len--;                  // Skip opening paren
   char *t = s+len;
   while( *(--t) != ')' ) ;      // Find close paren
 

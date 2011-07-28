@@ -237,6 +237,8 @@ class Klass : public Klass_vtbl {
   klassOop    _primary_supers[_primary_super_limit];
   // java/lang/Class instance mirroring this class
   oop       _java_mirror;
+  // com/oracle/max/graal/runtime/HotSpotTypeResolved mirroring this class
+  oop       _graal_mirror;
   // Superclass
   klassOop  _super;
   // First subclass (NULL if none); _subklass->next_sibling() is next one
@@ -334,6 +336,10 @@ class Klass : public Klass_vtbl {
   oop java_mirror() const              { return _java_mirror; }
   void set_java_mirror(oop m)          { oop_store((oop*) &_java_mirror, m); }
 
+  // graal mirror
+  oop graal_mirror() const               { return _graal_mirror; }
+  void set_graal_mirror(oop m)           { oop_store((oop*) &_graal_mirror, m); }
+
   // modifier flags
   jint modifier_flags() const          { return _modifier_flags; }
   void set_modifier_flags(jint flags)  { _modifier_flags = flags; }
@@ -362,6 +368,7 @@ class Klass : public Klass_vtbl {
   oop* adr_secondary_super_cache() const { return (oop*)&_secondary_super_cache; }
   oop* adr_secondary_supers()const { return (oop*)&_secondary_supers;  }
   oop* adr_java_mirror()     const { return (oop*)&_java_mirror;       }
+  oop* adr_graal_mirror()    const { return (oop*)&_graal_mirror;      }
   oop* adr_subklass()        const { return (oop*)&_subklass;          }
   oop* adr_next_sibling()    const { return (oop*)&_next_sibling;      }
 

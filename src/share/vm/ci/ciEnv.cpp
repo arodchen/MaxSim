@@ -201,6 +201,7 @@ ciEnv::ciEnv(Arena* arena) {
 }
 
 ciEnv::~ciEnv() {
+  _factory->cleanup();
   CompilerThread* current_thread = CompilerThread::current();
   _factory->remove_symbols();
   current_thread->set_env(NULL);

@@ -848,6 +848,9 @@ class CommandLineFlags {
   diagnostic(bool, LogCompilation, false,                                   \
           "Log compilation activity in detail to hotspot.log or LogFile")   \
                                                                             \
+  product(intx, MaxCompilationID, -1,                                       \
+          "All methods with greater compilation ID are skipped")            \
+                                                                            \
   product(bool, PrintCompilation, false,                                    \
           "Print compilations")                                             \
                                                                             \
@@ -1271,7 +1274,7 @@ class CommandLineFlags {
   develop(bool, TraceClassInitialization, false,                            \
           "Trace class initialization")                                     \
                                                                             \
-  develop(bool, TraceExceptions, false,                                     \
+  product(bool, TraceExceptions, false,                                     \
           "Trace exceptions")                                               \
                                                                             \
   develop(bool, TraceICs, false,                                            \
@@ -2878,7 +2881,7 @@ class CommandLineFlags {
           "Prefetch instruction to prefetch ahead")                         \
                                                                             \
   /* deoptimization */                                                      \
-  develop(bool, TraceDeoptimization, false,                                 \
+  product(bool, TraceDeoptimization, false,                                 \
           "Trace deoptimization")                                           \
                                                                             \
   develop(bool, DebugDeoptimization, false,                                 \
@@ -3702,7 +3705,7 @@ class CommandLineFlags {
           "Skip assert() and verify() which page-in unwanted shared "       \
           "objects. ")                                                      \
                                                                             \
-  diagnostic(bool, EnableInvokeDynamic, true,                               \
+  diagnostic(bool, EnableInvokeDynamic, false,                              \
           "support JSR 292 (method handles, invokedynamic, "                \
           "anonymous classes")                                              \
                                                                             \

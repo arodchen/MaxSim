@@ -60,14 +60,6 @@ public class Block implements Cluster {
         return succs;
     }
 
-    public Set<? extends Cluster> getPredecessors() {
-        Set<Block> succs = new HashSet<Block>();
-        for (InputBlock b : inputBlock.getPredecessors()) {
-            succs.add(diagram.getBlock(b));
-        }
-        return succs;
-    }
-
     public void setBounds(Rectangle r) {
         this.bounds = r;
     }
@@ -79,4 +71,10 @@ public class Block implements Cluster {
     public int compareTo(Cluster o) {
         return toString().compareTo(o.toString());
     }
+
+    @Override
+    public String toString() {
+        return inputBlock.getName();
+    }
 }
+    

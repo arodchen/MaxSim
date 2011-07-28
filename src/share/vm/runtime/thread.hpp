@@ -833,6 +833,9 @@ class JavaThread: public Thread {
 
  private:
 
+  // graal needs some place to put the dimensions
+  jint graal_multinewarray_storage[256];
+
   StackGuardState        _stack_guard_state;
 
   // Compiler exception handling (NOTE: The _exception_oop is *NOT* the same as _pending_exception. It is
@@ -1268,6 +1271,7 @@ class JavaThread: public Thread {
   static ByteSize is_method_handle_return_offset() { return byte_offset_of(JavaThread, _is_method_handle_return); }
   static ByteSize stack_guard_state_offset()     { return byte_offset_of(JavaThread, _stack_guard_state   ); }
   static ByteSize suspend_flags_offset()         { return byte_offset_of(JavaThread, _suspend_flags       ); }
+  static ByteSize graal_multinewarray_storage_offset() { return byte_offset_of(JavaThread, graal_multinewarray_storage); }
 
   static ByteSize do_not_unlock_if_synchronized_offset() { return byte_offset_of(JavaThread, _do_not_unlock_if_synchronized); }
   static ByteSize should_post_on_exceptions_flag_offset() {
@@ -1696,6 +1700,7 @@ class CompilerThread : public JavaThread {
   CompileLog*   _log;
   CompileTask*  _task;
   CompileQueue* _queue;
+  bool          _is_compiling;
   BufferBlob*   _buffer_blob;
 
   nmethod*      _scanned_nmethod;  // nmethod being scanned by the sweeper
@@ -1706,6 +1711,8 @@ class CompilerThread : public JavaThread {
 
   CompilerThread(CompileQueue* queue, CompilerCounters* counters);
 
+  bool is_compiling() const                      { return _is_compiling; }
+  void set_compiling(bool b)                     { _is_compiling = b; }
   bool is_Compiler_thread() const                { return true; }
   // Hide this compiler thread from external view.
   bool is_hidden_from_external_view() const      { return true; }

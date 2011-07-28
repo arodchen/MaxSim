@@ -37,10 +37,10 @@ REM Note: Running this batch file from the Windows command shell requires
 REM that "grep" be accessible on the PATH. An MKS install does this.
 REM 
 
-cl 2>NUL >NUL
-if %errorlevel% == 0 goto nexttest
-echo Make sure cl.exe is in your PATH before running this script.
-goto end
+rem cl 2>NUL >NUL
+rem if %errorlevel% == 0 goto nexttest
+rem echo Make sure cl.exe is in your PATH before running this script.
+rem goto end
 
 :nexttest
 grep -V 2>NUL >NUL
@@ -50,6 +50,8 @@ goto end
 
 
 :testit
+cl 2>&1 | grep "x64" >NUL
+if %errorlevel% == 0 goto amd64
 cl 2>&1 | grep "x64" >NUL
 if %errorlevel% == 0 goto amd64
 set ARCH=x86

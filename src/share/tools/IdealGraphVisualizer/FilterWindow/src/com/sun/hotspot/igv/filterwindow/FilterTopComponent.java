@@ -82,9 +82,10 @@ import org.openide.windows.WindowManager;
 import org.openide.filesystems.Repository;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
 
 /**
- *
+ * 
  * @author Thomas Wuerthinger
  */
 public final class FilterTopComponent extends TopComponent implements LookupListener, ExplorerManager.Provider {
@@ -139,7 +140,7 @@ public final class FilterTopComponent extends TopComponent implements LookupList
 
         if (s != customFilterSetting) {
             FilterChain chain = getFilterChain();
-            chain.beginAtomic();
+            chain.getChangedEvent().beginAtomic();
             List<Filter> toRemove = new ArrayList<Filter>();
             for (Filter f : chain.getFilters()) {
                 if (!s.containsFilter(f)) {
@@ -156,7 +157,7 @@ public final class FilterTopComponent extends TopComponent implements LookupList
                 }
             }
 
-            chain.endAtomic();
+            chain.getChangedEvent().endAtomic();
             filterSettingsChangedEvent.fire();
         } else {
             this.updateComboBoxSelection();
@@ -267,22 +268,18 @@ public final class FilterTopComponent extends TopComponent implements LookupList
         }
     }
 
-    private class FilterChildren extends Children.Keys implements ChangedListener<CheckNode> {
+    private class FilterChildren extends Children.Keys<Filter> implements ChangedListener<CheckNode> {
 
-        //private Node[] oldSelection;
-        //private ArrayList<Node> newSelection;
-        private HashMap<Object, Node> nodeHash = new HashMap<Object, Node>();
+        private HashMap<Filter, Node> nodeHash = new HashMap<Filter, Node>();
 
-        protected Node[] createNodes(Object object) {
-            if (nodeHash.containsKey(object)) {
-                return new Node[]{nodeHash.get(object)};
+        protected Node[] createNodes(Filter filter) {
+            if (nodeHash.containsKey(filter)) {
+                return new Node[]{nodeHash.get(filter)};
             }
 
-            assert object instanceof Filter;
-            Filter filter = (Filter) object;
-            com.sun.hotspot.igv.filterwindow.FilterNode node = new com.sun.hotspot.igv.filterwindow.FilterNode(filter);
+            FilterNode node = new FilterNode(filter);
             node.getSelectionChangedEvent().addListener(this);
-            nodeHash.put(object, node);
+            nodeHash.put(filter, node);
             return new Node[]{node};
         }
 
@@ -297,6 +294,7 @@ public final class FilterTopComponent extends TopComponent implements LookupList
             setBefore(false);
         }
 
+        @Override
         protected void addNotify() {
             setKeys(sequence.getFilters());
             updateSelection();
@@ -322,12 +320,7 @@ public final class FilterTopComponent extends TopComponent implements LookupList
     }
 
     public FilterChain getFilterChain() {
-        return filterChain;/*
-    EditorTopComponent tc = EditorTopComponent.getActive();
-    if (tc == null) {
-    return filterChain;
-    }
-    return tc.getFilterChain();*/
+        return filterChain;
     }
 
     private FilterTopComponent() {
@@ -427,9 +420,7 @@ public final class FilterTopComponent extends TopComponent implements LookupList
     }
 
     public void initFilters() {
-
-        FileSystem fs = Repository.getDefault().getDefaultFileSystem();
-        FileObject folder = fs.getRoot().getFileObject(FOLDER_ID);
+        FileObject folder = FileUtil.getConfigRoot().getFileObject(FOLDER_ID);
         FileObject[] children = folder.getChildren();
 
         List<CustomFilter> customFilters = new ArrayList<CustomFilter>();
@@ -447,13 +438,12 @@ public final class FilterTopComponent extends TopComponent implements LookupList
                 is = fo.getInputStream();
                 BufferedReader r = new BufferedReader(new InputStreamReader(is));
                 String s;
-                StringBuffer sb = new StringBuffer();
+                StringBuilder sb = new StringBuilder();
                 while ((s = r.readLine()) != null) {
                     sb.append(s);
                     sb.append("\n");
                 }
                 code = sb.toString();
-
             } catch (FileNotFoundException ex) {
                 Exceptions.printStackTrace(ex);
             } catch (IOException ex) {
@@ -566,7 +556,6 @@ public final class FilterTopComponent extends TopComponent implements LookupList
         return PREFERRED_ID;
     }
 
-    @Override
     public ExplorerManager getExplorerManager() {
         return manager;
     }
@@ -586,11 +575,6 @@ public final class FilterTopComponent extends TopComponent implements LookupList
 
     public void resultChanged(LookupEvent lookupEvent) {
         setChain(Utilities.actionsGlobalContext().lookup(FilterChain.class));
-    /*
-    EditorTopComponent tc = EditorTopComponent.getActive();
-    if (tc != null) {
-    setChain(tc.getFilterChain());
-    }*/
     }
 
     public void setChain(FilterChain chain) {
@@ -598,15 +582,33 @@ public final class FilterTopComponent extends TopComponent implements LookupList
     }
 
     private FileObject getFileObject(CustomFilter cf) {
-        FileObject fo = Repository.getDefault().getDefaultFileSystem().getRoot().getFileObject(FOLDER_ID + "/" + cf.getName());
+        FileObject fo = FileUtil.getConfigRoot().getFileObject(FOLDER_ID + "/" + cf.getName());
         if (fo == null) {
             try {
-                fo = org.openide.filesystems.Repository.getDefault().getDefaultFileSystem().getRoot().getFileObject(FOLDER_ID).createData(cf.getName());
+                fo = FileUtil.getConfigRoot().getFileObject(FOLDER_ID).createData(cf.getName());
             } catch (IOException ex) {
                 Exceptions.printStackTrace(ex);
             }
         }
         return fo;
+    }
+
+    @Override
+    public boolean requestFocus(boolean temporary) {
+        view.requestFocus();
+        return super.requestFocus(temporary);
+    }
+
+    @Override
+    protected boolean requestFocusInWindow(boolean temporary) {
+        view.requestFocus();
+        return super.requestFocusInWindow(temporary);
+    }
+
+    @Override
+    public void requestActive() {
+        super.requestActive();
+        view.requestFocus();
     }
 
     @Override

@@ -101,6 +101,14 @@ ciObjectFactory::ciObjectFactory(Arena* arena,
   _symbols = new (arena) GrowableArray<ciSymbol*>(arena, 100, 0, NULL);
 }
 
+void ciObjectFactory::cleanup() {
+  int start = 0;
+  if (_shared_ci_objects != NULL) start = _shared_ci_objects->length();
+  for (int i = start; i < _ci_objects->length(); ++i) {
+    _ci_objects->at(i)->cleanup();
+  }
+}
+
 // ------------------------------------------------------------------
 // ciObjectFactory::ciObjectFactory
 void ciObjectFactory::initialize() {

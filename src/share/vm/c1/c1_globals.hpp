@@ -53,6 +53,16 @@
 //
 #define C1_FLAGS(develop, develop_pd, product, product_pd, notproduct)      \
                                                                             \
+  product(bool, UseGraal, false,                                              \
+          "Use graal instead of C1")                                          \
+  product(bool, GraalBailoutIsFatal, true,                                    \
+          "Abort the VM on graal bailout")                                    \
+  product(bool, BootstrapGraal, false,                                        \
+          "Bootstrap graal before running Java main method")                  \
+  product(intx, TraceGraal, 0,                                                \
+          "Trace level for graal")                                            \
+  product(bool, TraceSignals, false,                                        \
+          "Trace signals and implicit exception handling")                  \
   /* Printing */                                                            \
   notproduct(bool, PrintC1Statistics, false,                                \
           "Print Compiler1 statistics" )                                    \
@@ -233,7 +243,7 @@
   develop(bool, UseFastNewObjectArray, true,                                \
           "Use fast inlined object array allocation")                       \
                                                                             \
-  develop(bool, UseFastLocking, true,                                       \
+  product(bool, UseFastLocking, true,                                       \
           "Use fast inlined locking code")                                  \
                                                                             \
   develop(bool, UseSlowPath, false,                                         \
@@ -278,7 +288,7 @@
   product(intx, CompilationRepeat, 0,                                       \
           "Number of times to recompile method before returning result")    \
                                                                             \
-  develop(intx, NMethodSizeLimit, (32*K)*wordSize,                          \
+  develop(intx, NMethodSizeLimit, (64*K)*wordSize,                          \
           "Maximum size of a compiled method.")                             \
                                                                             \
   develop(bool, TraceFPUStack, false,                                       \
