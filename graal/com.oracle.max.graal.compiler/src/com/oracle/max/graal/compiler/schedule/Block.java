@@ -26,6 +26,7 @@ import java.util.*;
 
 import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.graph.*;
+import com.oracle.max.graal.graph.collections.*;
 
 
 public class Block {
@@ -112,8 +113,9 @@ public class Block {
                     this.anchor = (Anchor) start.next();
                 } else {
                     Anchor a = new Anchor(firstNode.graph());
-                    a.setNext((FixedNode) firstNode.graph().start().next());
+                    FixedNode oldStart = (FixedNode) firstNode.graph().start().next();
                     firstNode.graph().start().setNext(a);
+                    a.setNext(oldStart);
                     this.anchor = a;
                 }
             } else if (firstNode instanceof Merge || firstNode instanceof ExceptionObject) {
@@ -122,17 +124,17 @@ public class Block {
                     this.anchor = (Anchor) fixedNode.next();
                 } else {
                     Anchor a = new Anchor(firstNode.graph());
-                    a.setNext(fixedNode.next());
+                    FixedNode next = fixedNode.next();
                     fixedNode.setNext(a);
+                    a.setNext(next);
                     this.anchor = a;
                 }
             } else {
                 assert !(firstNode instanceof Anchor);
                 Anchor a = new Anchor(firstNode.graph());
-                assert firstNode.predecessors().size() == 1 : firstNode;
-                Node pred = firstNode.predecessors().get(0);
-                int predIndex = pred.successors().indexOf(firstNode);
-                pred.successors().set(predIndex, a);
+                assert firstNode.predecessor() != null : firstNode;
+                Node pred = firstNode.predecessor();
+                pred.replaceFirstSuccessor(firstNode, a);
                 a.setNext((FixedNode) firstNode);
                 this.anchor = a;
             }

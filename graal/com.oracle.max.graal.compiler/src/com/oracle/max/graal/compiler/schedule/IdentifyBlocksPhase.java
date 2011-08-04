@@ -30,6 +30,8 @@ import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.compiler.phases.*;
 import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
+import com.oracle.max.graal.graph.NodeClass.*;
+import com.oracle.max.graal.graph.collections.*;
 
 
 public class IdentifyBlocksPhase extends Phase {
@@ -162,12 +164,12 @@ public class IdentifyBlocksPhase extends Phase {
                     if (currentNode instanceof FixedNode) {
                         block.setProbability(((FixedNode) currentNode).probability());
                     }
-                    if (currentNode.predecessors().size() == 0) {
+                    if (currentNode.predecessor() == null) {
                         // Either dead code or at a merge node => stop iteration.
                         break;
                     }
                     Node prev = currentNode;
-                    currentNode = currentNode.singlePredecessor();
+                    currentNode = currentNode.predecessor();
                     assert !currentNode.isDeleted() : prev + " " + currentNode;
                 }
             }
@@ -183,9 +185,9 @@ public class IdentifyBlocksPhase extends Phase {
                     predBlock.addSuccessor(block);
                 }
             } else {
-                for (Node pred : n.predecessors()) {
-                    if (isFixed(pred)) {
-                        Block predBlock = nodeToBlock.get(pred);
+                if (n.predecessor() != null) {
+                    if (isFixed(n.predecessor())) {
+                        Block predBlock = nodeToBlock.get(n.predecessor());
                         predBlock.addSuccessor(block);
                     }
                 }
@@ -326,7 +328,7 @@ public class IdentifyBlocksPhase extends Phase {
         // if in CFG, schedule at the latest position possible in the outermost loop possible
         // if floating, use rematerialization to place the node, it tries to compute the value only when it will be used,
         // in the block with the smallest probability (outside of loops), while minimizing live ranges
-        if (!splitMaterialization || noRematerialization(n) || n.predecessors().size() > 0 || nonNullSuccessorCount(n) > 0) {
+        if (!splitMaterialization || noRematerialization(n) || n.predecessor() != null || nonNullSuccessorCount(n) > 0) {
             Block latestBlock = latestBlock(n);
             //TTY.println("Latest for " + n + " : " + latestBlock);
             Block block;
@@ -385,9 +387,10 @@ public class IdentifyBlocksPhase extends Phase {
             if (nodeToBlock.get(node) == null) {
                 n = node;
             } else {
-                n = node.copy();
-                for (int i = 0; i < node.inputs().size(); i++) {
-                    n.inputs().set(i, node.inputs().get(i));
+                n = node.copy(node.graph());
+                for (NodeClassIterator iter = node.inputs().iterator(); iter.hasNext();) {
+                    Position pos = iter.nextPosition();
+                    n.getNodeClass().set(n, pos, node.getNodeClass().get(node, pos));
                 }
                 for (Usage usage : blockUsages) {
                     patch(usage, node, n);
@@ -462,9 +465,13 @@ public class IdentifyBlocksPhase extends Phase {
             return earliest;
         }
         BitMap bits = new BitMap(blocks.size());
-        ArrayList<Node> before = new ArrayList<Node>(n.predecessors().size() + n.inputs().size());
-        before.addAll(n.predecessors());
-        before.addAll(n.inputs());
+        ArrayList<Node> before = new ArrayList<Node>();
+        if (n.predecessor() != null) {
+            before.add(n.predecessor());
+        }
+        for (Node input : n.inputs()) {
+            before.add(input);
+        }
         for (Node pred : before) {
             if (pred == null) {
                 continue;
@@ -517,7 +524,7 @@ public class IdentifyBlocksPhase extends Phase {
                         TTY.println(phi.inputs().toString());
                         TTY.println("value count: " + phi.valueCount());
                     }
-                    closure.apply(mergeBlock.getPredecessors().get(i));
+                closure.apply(mergeBlock.getPredecessors().get(i));
                 }
             }
         } else if (usage instanceof FrameState && ((FrameState) usage).block() != null) {
@@ -565,8 +572,7 @@ public class IdentifyBlocksPhase extends Phase {
 
     private void ensureScheduledUsages(Node node) {
         //  assign block to all usages to ensure that any splitting/rematerialization is done on them
-        List<Node> usages = new ArrayList<Node>(node.usages());
-        for (Node usage : usages) {
+        for (Node usage : node.usages().snapshot()) {
             assignBlockToNode(usage);
         }
         // now true usages are ready
@@ -730,8 +736,8 @@ public class IdentifyBlocksPhase extends Phase {
             }
         }
 
-        for (Node pred : i.predecessors()) {
-            addToSorting(b, pred, sortedInstructions, map);
+        if (i.predecessor() != null) {
+            addToSorting(b, i.predecessor(), sortedInstructions, map);
         }
 
         map.mark(i);

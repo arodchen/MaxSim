@@ -263,7 +263,9 @@ public class HotSpotRuntime implements RiRuntime {
             assert field.kind != CiKind.Illegal;
             ReadNode memoryRead = new ReadNode(field.field().kind().stackKind(), field.object(), LocationNode.create(field.field(), field.field().kind(), displacement, graph), graph);
             memoryRead.setGuard((GuardNode) tool.createGuard(new IsNonNull(field.object(), graph)));
-            memoryRead.setNext(field.next());
+            FixedNode next = field.next();
+            field.setNext(null);
+            memoryRead.setNext(next);
             field.replaceAndDelete(memoryRead);
         } else if (n instanceof StoreField) {
             StoreField field = (StoreField) n;
@@ -275,13 +277,14 @@ public class HotSpotRuntime implements RiRuntime {
             WriteNode memoryWrite = new WriteNode(CiKind.Illegal, field.object(), field.value(), LocationNode.create(field.field(), field.field().kind(), displacement, graph), graph);
             memoryWrite.setGuard((GuardNode) tool.createGuard(new IsNonNull(field.object(), graph)));
             memoryWrite.setStateAfter(field.stateAfter());
-            memoryWrite.setNext(field.next());
+            FixedNode next = field.next();
+            field.setNext(null);
             if (field.field().kind() == CiKind.Object && !field.value().isNullConstant()) {
                 FieldWriteBarrier writeBarrier = new FieldWriteBarrier(field.object(), graph);
                 memoryWrite.setNext(writeBarrier);
-                writeBarrier.setNext(field.next());
+                writeBarrier.setNext(next);
             } else {
-                memoryWrite.setNext(field.next());
+                memoryWrite.setNext(next);
             }
             field.replaceAndDelete(memoryWrite);
         } else if (n instanceof LoadIndexed) {
@@ -294,7 +297,9 @@ public class HotSpotRuntime implements RiRuntime {
             arrayLocation.setIndex(loadIndexed.index());
             ReadNode memoryRead = new ReadNode(elementKind.stackKind(), loadIndexed.array(), arrayLocation, graph);
             memoryRead.setGuard(boundsCheck);
-            memoryRead.setNext(loadIndexed.next());
+            FixedNode next = loadIndexed.next();
+            loadIndexed.setNext(null);
+            memoryRead.setNext(next);
             loadIndexed.replaceAndDelete(memoryRead);
         } else if (n instanceof StoreIndexed) {
             StoreIndexed storeIndexed = (StoreIndexed) n;
@@ -327,13 +332,15 @@ public class HotSpotRuntime implements RiRuntime {
             WriteNode memoryWrite = new WriteNode(elementKind.stackKind(), array, value, arrayLocation, graph);
             memoryWrite.setGuard(boundsCheck);
             memoryWrite.setStateAfter(storeIndexed.stateAfter());
+            FixedNode next = storeIndexed.next();
+            storeIndexed.setNext(null);
             anchor.setNext(memoryWrite);
             if (elementKind == CiKind.Object && !value.isNullConstant()) {
                 ArrayWriteBarrier writeBarrier = new ArrayWriteBarrier(array, arrayLocation, graph);
                 memoryWrite.setNext(writeBarrier);
-                writeBarrier.setNext(storeIndexed.next());
+                writeBarrier.setNext(next);
             } else {
-                memoryWrite.setNext(storeIndexed.next());
+                memoryWrite.setNext(next);
             }
             storeIndexed.replaceAtPredecessors(anchor);
             storeIndexed.delete();
@@ -346,7 +353,9 @@ public class HotSpotRuntime implements RiRuntime {
             location.setIndexScalingEnabled(false);
             ReadNode memoryRead = new ReadNode(load.kind.stackKind(), load.object(), location, graph);
             memoryRead.setGuard((GuardNode) tool.createGuard(new IsNonNull(load.object(), graph)));
-            memoryRead.setNext(load.next());
+            FixedNode next = load.next();
+            load.setNext(null);
+            memoryRead.setNext(next);
             load.replaceAndDelete(memoryRead);
         } else if (n instanceof UnsafeStore) {
             UnsafeStore store = (UnsafeStore) n;
@@ -357,7 +366,9 @@ public class HotSpotRuntime implements RiRuntime {
             location.setIndexScalingEnabled(false);
             WriteNode write = new WriteNode(store.kind.stackKind(), store.object(), store.value(), location, graph);
             FieldWriteBarrier barrier = new FieldWriteBarrier(store.object(), graph);
-            barrier.setNext(store.next());
+            FixedNode next = store.next();
+            store.setNext(null);
+            barrier.setNext(next);
             write.setNext(barrier);
             write.setStateAfter(store.stateAfter());
             store.replaceAtPredecessors(write);
@@ -542,6 +553,7 @@ public class HotSpotRuntime implements RiRuntime {
             } else if (holderName.equals("Lsun/misc/Unsafe;")) {
                 if (fullName.equals("getObject(Ljava/lang/Object;J)Ljava/lang/Object;")) {
                     CompilerGraph graph = new CompilerGraph(this);
+                    Local unsafe = new Local(CiKind.Object, 0, graph);
                     Local object = new Local(CiKind.Object, 1, graph);
                     Local offset = new Local(CiKind.Long, 2, graph);
                     UnsafeLoad load = new UnsafeLoad(object, offset, CiKind.Object, graph);
@@ -552,10 +564,17 @@ public class HotSpotRuntime implements RiRuntime {
                     intrinsicGraphs.put(method, graph);
                 } else if (fullName.equals("putObject(Ljava/lang/Object;JLjava/lang/Object;)V")) {
                     CompilerGraph graph = new CompilerGraph(this);
+                    Local unsafe = new Local(CiKind.Object, 0, graph);
                     Local object = new Local(CiKind.Object, 1, graph);
                     Local offset = new Local(CiKind.Long, 2, graph);
                     Local value = new Local(CiKind.Object, 3, graph);
                     UnsafeStore store = new UnsafeStore(object, offset, value, CiKind.Object, graph);
+                    FrameState frameState = new FrameState(method, 0, parameters.size(), 0, 0, false, graph);
+                    store.setStateAfter(frameState);
+                    frameState.setValueAt(0, unsafe);
+                    frameState.setValueAt(1, object);
+                    frameState.setValueAt(2, offset);
+                    frameState.setValueAt(3, value);
                     Return ret = new Return(null, graph);
                     store.setNext(ret);
                     graph.start().setNext(store);

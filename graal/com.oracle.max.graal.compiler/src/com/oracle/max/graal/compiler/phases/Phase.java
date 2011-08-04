@@ -25,7 +25,7 @@ package com.oracle.max.graal.compiler.phases;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.observer.*;
 import com.oracle.max.graal.compiler.schedule.*;
-import com.oracle.max.graal.graph.Graph;
+import com.oracle.max.graal.graph.*;
 
 public abstract class Phase {
 
@@ -85,7 +85,6 @@ public abstract class Phase {
             }
             throw t;
         }
-        //System.out.println("Finished Phase " + getName());
         if (GraalOptions.Time) {
             GraalTimers.get(getName()).stop();
             if (oldCurrentPhase != null) {
