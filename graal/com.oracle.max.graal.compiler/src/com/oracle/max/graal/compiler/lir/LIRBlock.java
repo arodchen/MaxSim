@@ -31,7 +31,6 @@ import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.graph.collections.*;
 
 /**
  * The {@code LIRBlock} class definition.

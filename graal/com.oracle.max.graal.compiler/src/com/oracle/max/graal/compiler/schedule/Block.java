@@ -26,7 +26,6 @@ import java.util.*;
 
 import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.graph.collections.*;
 
 
 public class Block {

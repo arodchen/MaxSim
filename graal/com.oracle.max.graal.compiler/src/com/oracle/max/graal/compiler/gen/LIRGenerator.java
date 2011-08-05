@@ -581,23 +581,11 @@ public abstract class LIRGenerator extends ValueVisitor {
         LIRItem xin = xitem;
         LIRItem yin = yitem;
 
-        if (kind.isLong()) {
-            // for longs, only conditions "eql", "neq", "lss", "geq" are valid;
-            // mirror for other conditions
-            if (cond == Condition.GT || cond == Condition.LE) {
-                cond = cond.mirror();
-                xin = yitem;
-                yin = xitem;
-            }
-            xin.setDestroysRegister();
+        if (kind.isFloat() || kind.isDouble()) {
+            cond = floatingPointCondition(cond);
         }
+
         xin.loadItem();
-        if (kind.isLong() && yin.result().isConstant() && yin.instruction.asConstant().asLong() == 0 && (cond == Condition.EQ || cond == Condition.NE)) {
-            // dont load item
-        } else if (kind.isLong() || kind.isFloat() || kind.isDouble()) {
-            // longs cannot handle constants at right side
-            yin.loadItem();
-        }
 
         CiValue left = xin.result();
         CiValue right = yin.result();
@@ -616,32 +604,6 @@ public abstract class LIRGenerator extends ValueVisitor {
         if (falseSuccessorBlock != null) {
             lir.jump(falseSuccessorBlock);
         }
-    }
-
-    @Override
-    public void visitIfOp(Conditional i) {
-        Value x = i.x();
-        Value y = i.y();
-        CiKind xtype = x.kind;
-        CiKind ttype = i.trueValue().kind;
-        assert xtype.isInt() || xtype.isObject() : "cannot handle others";
-        assert ttype.isInt() || ttype.isObject() || ttype.isLong() || ttype.isWord() : "cannot handle others";
-        assert ttype.equals(i.falseValue().kind) : "cannot handle others";
-
-        CiValue left = load(x);
-        CiValue right = null;
-        if (!canInlineAsConstant(y)) {
-            right = load(y);
-        } else {
-            right = makeOperand(y);
-        }
-
-        CiValue tVal = makeOperand(i.trueValue());
-        CiValue fVal = makeOperand(i.falseValue());
-        CiValue reg = createResultVariable(i);
-
-        lir.cmp(i.condition(), left, right);
-        lir.cmove(i.condition(), tVal, fVal, reg);
     }
 
     protected FrameState stateBeforeInvokeReturn(Invoke invoke) {
@@ -1787,7 +1749,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         }
     }
 
-    protected abstract boolean canInlineAsConstant(Value i);
+    public abstract boolean canInlineAsConstant(Value i);
 
     protected abstract boolean canStoreAsConstant(Value i, CiKind kind);
 
@@ -1884,4 +1846,6 @@ public abstract class LIRGenerator extends ValueVisitor {
             ((Value) n).accept(generator);
         }
     };
+
+    public abstract Condition floatingPointCondition(Condition cond);
 }

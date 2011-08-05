@@ -24,6 +24,7 @@ package com.oracle.max.graal.compiler.ir;
 
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.CanonicalizerOp;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 
@@ -76,7 +77,7 @@ public final class NegateBooleanNode extends BooleanNode {
 
     private static final CanonicalizerOp CANONICALIZER = new CanonicalizerOp() {
         @Override
-        public Node canonical(Node node) {
+        public Node canonical(Node node, NotifyReProcess reProcess) {
             NegateBooleanNode negateNode = (NegateBooleanNode) node;
             Value value = negateNode.value();
             if (value instanceof NegateBooleanNode) {

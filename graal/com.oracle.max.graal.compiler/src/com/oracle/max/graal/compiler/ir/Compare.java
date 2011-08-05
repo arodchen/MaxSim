@@ -22,6 +22,8 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
+import java.util.*;
+
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.graph.*;
@@ -63,8 +65,8 @@ public final class Compare extends BooleanNode {
         this.y = x;
     }
 
-    Condition condition;
-    boolean unorderedIsTrue;
+    private Condition condition;
+    private boolean unorderedIsTrue;
 
     /**
      * Constructs a new Compare instruction.
@@ -117,6 +119,11 @@ public final class Compare extends BooleanNode {
         setY(t);
     }
 
+    public void negate() {
+        condition = condition.negate();
+        unorderedIsTrue = !unorderedIsTrue;
+    }
+
     @Override
     public void accept(ValueVisitor v) {
     }
@@ -146,6 +153,13 @@ public final class Compare extends BooleanNode {
     }
 
     @Override
+    public Map<Object, Object> getDebugProperties() {
+        Map<Object, Object> properties = super.getDebugProperties();
+        properties.put("unorderedIsTrue", unorderedIsTrue());
+        return properties;
+    }
+
+    @Override
     public Node copy(Graph into) {
         Compare x = new Compare(null, condition, null, into);
         x.unorderedIsTrue = unorderedIsTrue;
@@ -154,17 +168,14 @@ public final class Compare extends BooleanNode {
 
     private static CanonicalizerOp CANONICALIZER = new CanonicalizerOp() {
         @Override
-        public Node canonical(Node node) {
+        public Node canonical(Node node, NotifyReProcess reProcess) {
             Compare compare = (Compare) node;
             if (compare.x().isConstant() && !compare.y().isConstant()) { // move constants to the left (y)
-                Value x = compare.x();
-                compare.setX(compare.y());
-                compare.setY(x);
-                compare.condition = compare.condition.mirror();
+                compare.swapOperands();
             } else if (compare.x().isConstant() && compare.y().isConstant()) {
                 CiConstant constX = compare.x().asConstant();
                 CiConstant constY = compare.y().asConstant();
-                Boolean result = compare.condition().foldCondition(constX, constY, ((CompilerGraph) node.graph()).runtime());
+                Boolean result = compare.condition().foldCondition(constX, constY, ((CompilerGraph) node.graph()).runtime(), compare.unorderedIsTrue());
                 if (result != null) {
                     if (GraalOptions.TraceCanonicalizer) {
                         TTY.println("folded condition " + constX + " " + compare.condition() + " " + constY);
@@ -205,6 +216,19 @@ public final class Compare extends BooleanNode {
                     }
                 }
             }
+            boolean allUsagesNegate = true;
+            for (Node usage : compare.usages()) {
+                if (!(usage instanceof NegateBooleanNode)) {
+                    allUsagesNegate = false;
+                    break;
+                }
+            }
+            if (allUsagesNegate) {
+                compare.negate();
+                for (Node usage : compare.usages().snapshot()) {
+                    usage.replaceAtUsages(compare);
+                }
+            }
             return compare;
         }
 
@@ -215,7 +239,7 @@ public final class Compare extends BooleanNode {
                     if (compare.condition == Condition.NE) {
                         isFalseCheck = !isFalseCheck;
                     }
-                    BooleanNode result = materializeNode.value();
+                    BooleanNode result = materializeNode.condition();
                     if (isFalseCheck) {
                         result = new NegateBooleanNode(result, compare.graph());
                     }

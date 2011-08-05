@@ -25,6 +25,7 @@ package com.oracle.max.graal.compiler.ir;
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.CanonicalizerOp;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 
@@ -132,7 +133,7 @@ public final class If extends ControlSplit {
 
     private static CanonicalizerOp CANONICALIZER = new CanonicalizerOp() {
         @Override
-        public Node canonical(Node node) {
+        public Node canonical(Node node, NotifyReProcess reProcess) {
             If ifNode = (If) node;
             if (ifNode.compare() instanceof Constant) {
                 Constant c = (Constant) ifNode.compare();
@@ -146,6 +147,28 @@ public final class If extends ControlSplit {
                         TTY.println("Replacing if " + ifNode + " with false branch");
                     }
                     return ifNode.falseSuccessor();
+                }
+            }
+            if (ifNode.trueSuccessor() instanceof EndNode && ifNode.falseSuccessor() instanceof EndNode) {
+                EndNode trueEnd = (EndNode) ifNode.trueSuccessor();
+                EndNode falseEnd = (EndNode) ifNode.falseSuccessor();
+                Merge merge = trueEnd.merge();
+                if (merge == falseEnd.merge() && merge.phis().size() == 0) {
+                    FixedNode next = merge.next();
+                    merge.setNext(null); //disconnect to avoid next from having 2 preds
+                    if (ifNode.compare().usages().size() == 1 && /*ifNode.compare().hasSideEffets()*/ true) { // TODO (gd) ifNode.compare().hasSideEffets() ?
+                        if (GraalOptions.TraceCanonicalizer) {
+                            TTY.println("> Useless if with side effects Canon'ed to guard");
+                        }
+                        ValueAnchor anchor = new ValueAnchor(ifNode.compare(), node.graph());
+                        anchor.setNext(next);
+                        return anchor;
+                    } else {
+                        if (GraalOptions.TraceCanonicalizer) {
+                            TTY.println("> Useless if Canon'ed away");
+                        }
+                        return next;
+                    }
                 }
             }
             return ifNode;

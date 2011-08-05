@@ -314,7 +314,7 @@ public class IdentifyBlocksPhase extends Phase {
         }
     }
 
-    private void assignBlockToNode(Node n) {
+    public void assignBlockToNode(Node n) {
         if (n == null) {
             return;
         }
