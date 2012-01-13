@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,18 +22,39 @@
  *
  */
 
-#ifndef OS_CPU_LINUX_X86_VM_OS_LINUX_X86_HPP
-#define OS_CPU_LINUX_X86_VM_OS_LINUX_X86_HPP
+/**
+ * @test
+ * @bug 7123108
+ * @summary C1 crashes with assert(if_state != NULL) failed: states do not match up
+ *
+ * @run main/othervm -Xcomp Test7123108
+ */
 
-  static void setup_fpu();
-  static bool supports_sse();
+public class Test7123108 {
 
-  static jlong rdtsc();
+    static class Test_Class_0 {
+        final static byte var_2 = 67;
+        byte var_3;
+    }
 
-  static bool is_allocatable(size_t bytes);
+    Object var_25 = "kgfpyhcms";
+    static long var_27 = 6899666748616086528L;
 
-  // Used to register dynamic code cache area with the OS
-  // Note: Currently only used in 64 bit Windows implementations
-  static bool register_code_area(char *low, char *high) { return true; }
+    static float func_1()
+    {
+        return 0.0F;
+    }
 
-#endif // OS_CPU_LINUX_X86_VM_OS_LINUX_X86_HPP
+    private void test()
+    {
+        "dlwq".charAt(((short)'x' > var_27 | func_1() <= (((Test_Class_0)var_25).var_3) ? true : true) ? Test_Class_0.var_2 & (short)-1.1173839E38F : 'Y');
+    }
+
+    public static void main(String[] args)
+    {
+        Test7123108 t = new Test7123108();
+        try {
+            t.test();
+        } catch (Throwable e) { }
+    }
+}

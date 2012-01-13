@@ -326,9 +326,9 @@ class CommandLineFlags {
 
   // Returns false if name is not a command line flag.
   static bool wasSetOnCmdline(const char* name, bool* value);
-  static void printSetFlags();
+  static void printSetFlags(outputStream* out);
 
-  static void printFlags(bool withComments = false );
+  static void printFlags(outputStream* out, bool withComments);
 
   static void verify() PRODUCT_RETURN;
 };
@@ -526,6 +526,9 @@ class CommandLineFlags {
                                                                             \
   product(intx, UseSSE, 99,                                                 \
           "Highest supported SSE instructions set on x86/x64")              \
+                                                                            \
+  product(intx, UseAVX, 99,                                                 \
+          "Highest supported AVX instructions set on x86/x64")              \
                                                                             \
   product(intx, UseVIS, 99,                                                 \
           "Highest supported VIS instructions set on Sparc")                \
