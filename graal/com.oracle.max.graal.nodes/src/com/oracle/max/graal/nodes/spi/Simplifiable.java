@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,27 +20,16 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.max.graal.nodes;
-
-import com.oracle.max.graal.nodes.type.*;
+package com.oracle.max.graal.nodes.spi;
 
 /**
- * Base class of all nodes that are fixed within the control flow graph and have an immediate successor.
+ * This interface allows nodes to perform more complicated simplifications, in contrast to {@link Canonicalizable},
+ * which supports only replacing the current node.
+ *
+ * Implementors of this interface need to be aware that they need to call {@link SimplifierTool#addToWorkList(com.oracle.max.graal.graph.Node)} for each node that might
+ * be influenced (in terms of simplification and canonicalization) by the actions performed in simplify.
  */
-public abstract class FixedWithNextNode extends FixedNode {
+public interface Simplifiable {
 
-    @Successor private FixedNode next; // the immediate successor of the current node
-
-    public FixedNode next() {
-        return next;
-    }
-
-    public void setNext(FixedNode x) {
-        updatePredecessors(next, x);
-        next = x;
-    }
-
-    public FixedWithNextNode(Stamp stamp) {
-        super(stamp);
-    }
+    void simplify(SimplifierTool tool);
 }

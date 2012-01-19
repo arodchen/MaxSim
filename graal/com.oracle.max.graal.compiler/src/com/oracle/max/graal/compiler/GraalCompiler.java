@@ -110,8 +110,8 @@ public class GraalCompiler {
                     if (GraalOptions.Meter) {
                         context.metrics.BytecodesCompiled += method.codeSize();
                     }
-                } catch (CiBailout bailout) {
-                    throw bailout;
+                } catch (CiBailout | GraalInternalError exception) {
+                    throw exception;
                 } catch (Throwable t) {
                     throw new GraalInternalError(t);
                 }
@@ -219,6 +219,11 @@ public class GraalCompiler {
 
             if (GraalOptions.Lower) {
                 new FloatingReadPhase().apply(graph, context);
+
+                if (GraalOptions.OptGVN) {
+                    new GlobalValueNumberingPhase().apply(graph, context);
+                }
+
                 if (GraalOptions.OptReadElimination) {
                     new ReadEliminationPhase().apply(graph, context);
                 }
