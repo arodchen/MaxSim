@@ -1,0 +1,3 @@
+colorize("name", "<init>.*", yellow);
+colorize("name", "<clinit>.*", pink);
+colorize("leaf", "1", red);
