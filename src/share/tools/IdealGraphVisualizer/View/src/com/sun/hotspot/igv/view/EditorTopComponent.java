@@ -127,6 +127,7 @@ public final class EditorTopComponent extends TopComponent implements PropertyCh
     private DiagramViewModel rangeSliderModel;
     private ExportCookie exportCookie = new ExportCookie() {
 
+        @Override
         public void export(File f) {
 
             Graphics2D svgGenerator = BatikSVG.createGraphicsObject();
@@ -161,16 +162,18 @@ public final class EditorTopComponent extends TopComponent implements PropertyCh
 
     private DiagramProvider diagramProvider = new DiagramProvider() {
 
+        @Override
         public Diagram getDiagram() {
             return getModel().getDiagramToView();
         }
 
+        @Override
         public ChangedEvent<DiagramProvider> getChangedEvent() {
             return diagramChangedEvent;
         }
     };
 
-    private ChangedEvent<DiagramProvider> diagramChangedEvent = new ChangedEvent<DiagramProvider>(diagramProvider);
+    private ChangedEvent<DiagramProvider> diagramChangedEvent = new ChangedEvent<>(diagramProvider);
     
 
     private void updateDisplayName() {
@@ -309,14 +312,17 @@ public final class EditorTopComponent extends TopComponent implements PropertyCh
 
         scene.getComponent().addHierarchyBoundsListener(new HierarchyBoundsListener() {
 
+            @Override
             public void ancestorMoved(HierarchyEvent e) {
             }
 
+            @Override
             public void ancestorResized(HierarchyEvent e) {
                 if (!notFirstTime && scene.getComponent().getBounds().width > 0) {
                     notFirstTime = true;
                     SwingUtilities.invokeLater(new Runnable() {
 
+                        @Override
                         public void run() {
                             EditorTopComponent.this.scene.initialize();
                         }
@@ -333,9 +339,11 @@ public final class EditorTopComponent extends TopComponent implements PropertyCh
     }
     private KeyListener keyListener = new KeyListener() {
 
+        @Override
         public void keyTyped(KeyEvent e) {
         }
 
+        @Override
         public void keyPressed(KeyEvent e) {
             if (e.getKeyCode() == KeyEvent.VK_S) {
                 EditorTopComponent.this.overviewButton.setSelected(true);
@@ -343,6 +351,7 @@ public final class EditorTopComponent extends TopComponent implements PropertyCh
             }
         }
 
+        @Override
         public void keyReleased(KeyEvent e) {
             if (e.getKeyCode() == KeyEvent.VK_S) {
                 EditorTopComponent.this.overviewButton.setSelected(false);
@@ -443,9 +452,10 @@ public final class EditorTopComponent extends TopComponent implements PropertyCh
 
     private ChangedListener<DiagramViewModel> diagramChangedListener = new ChangedListener<DiagramViewModel>() {
 
+        @Override
         public void changed(DiagramViewModel source) {
             updateDisplayName();
-            Collection<Object> list = new ArrayList<Object>();
+            Collection<Object> list = new ArrayList<>();
             list.add(new EditorInputGraphProvider(EditorTopComponent.this));
             graphContent.set(list, null);
             diagramProvider.getChangedEvent().fire();
@@ -459,7 +469,7 @@ public final class EditorTopComponent extends TopComponent implements PropertyCh
 
     public void setSelection(PropertyMatcher matcher) {
 
-        Properties.PropertySelector<Figure> selector = new Properties.PropertySelector<Figure>(getModel().getDiagramToView().getFigures());
+        Properties.PropertySelector<Figure> selector = new Properties.PropertySelector<>(getModel().getDiagramToView().getFigures());
         List<Figure> list = selector.selectMultiple(matcher);
         setSelectedFigures(list);
     }
@@ -471,8 +481,8 @@ public final class EditorTopComponent extends TopComponent implements PropertyCh
 
     public void setSelectedNodes(Set<InputNode> nodes) {
 
-        List<Figure> list = new ArrayList<Figure>();
-        Set<Integer> ids = new HashSet<Integer>();
+        List<Figure> list = new ArrayList<>();
+        Set<Integer> ids = new HashSet<>();
         for (InputNode n : nodes) {
             ids.add(n.getId());
         }
@@ -489,6 +499,7 @@ public final class EditorTopComponent extends TopComponent implements PropertyCh
         setSelectedFigures(list);
     }
 
+    @Override
     public void propertyChange(PropertyChangeEvent evt) {
         if (evt.getSource() == this.predSuccAction) {
             boolean b = (Boolean) predSuccAction.getValue(PredSuccAction.STATE);
@@ -520,14 +531,14 @@ public final class EditorTopComponent extends TopComponent implements PropertyCh
 
     public void hideNodes() {
         Set<Integer> selectedNodes = this.getModel().getSelectedNodes();
-        HashSet<Integer> nodes = new HashSet<Integer>(getModel().getHiddenNodes());
+        HashSet<Integer> nodes = new HashSet<>(getModel().getHiddenNodes());
         nodes.addAll(selectedNodes);
         this.getModel().showNot(nodes);
     }
 
     public void expandPredecessors() {
         Set<Figure> oldSelection = getModel().getSelectedFigures();
-        Set<Figure> figures = new HashSet<Figure>();
+        Set<Figure> figures = new HashSet<>();
 
         for (Figure f : this.getDiagramModel().getDiagramToView().getFigures()) {
             boolean ok = false;
@@ -552,7 +563,7 @@ public final class EditorTopComponent extends TopComponent implements PropertyCh
 
     public void expandSuccessors() {
         Set<Figure> oldSelection = getModel().getSelectedFigures();
-        Set<Figure> figures = new HashSet<Figure>();
+        Set<Figure> figures = new HashSet<>();
 
         for (Figure f : this.getDiagramModel().getDiagramToView().getFigures()) {
             boolean ok = false;

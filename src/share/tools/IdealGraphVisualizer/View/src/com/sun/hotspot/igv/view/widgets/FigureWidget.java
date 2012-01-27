@@ -122,7 +122,7 @@ public class FigureWidget extends Widget implements Properties.Provider, PopupMe
         middleWidget.getActions().addAction(new DoubleClickAction(this));
 	middleWidget.setCheckClipping(true);
 
-        labelWidgets = new ArrayList<LabelWidget>();
+        labelWidgets = new ArrayList<>();
 
         String[] strings = figure.getLines();
 
@@ -228,6 +228,7 @@ public class FigureWidget extends Widget implements Properties.Provider, PopupMe
         return getProperties().get("name");
     }
 
+    @Override
     public Properties getProperties() {
         return figure.getProperties();
     }
@@ -269,6 +270,7 @@ public class FigureWidget extends Widget implements Properties.Provider, PopupMe
         }
     }
  
+    @Override
     public JPopupMenu getPopupMenu(Widget widget, Point point) {
         JPopupMenu menu = diagramScene.createPopupMenu();
         menu.addSeparator();
@@ -299,6 +301,7 @@ public class FigureWidget extends Widget implements Properties.Provider, PopupMe
             this.successors = successors;
         }
 
+        @Override
         public void menuSelected(MenuEvent e) {
             if (menu.getItemCount() > 0) {
                 // already built before
@@ -339,28 +342,31 @@ public class FigureWidget extends Widget implements Properties.Provider, PopupMe
             }
         }
 
+        @Override
         public void menuDeselected(MenuEvent e) {
             // ignore
         }
 
+        @Override
         public void menuCanceled(MenuEvent e) {
             // ignore
         }
     }
 
+    @Override
     public void handleDoubleClick(Widget w, WidgetAction.WidgetMouseEvent e) {
 
         if (diagramScene.isAllVisible()) {
-            final Set<Integer> hiddenNodes = new HashSet<Integer>(diagramScene.getModel().getGraphToView().getGroup().getAllNodes());
+            final Set<Integer> hiddenNodes = new HashSet<>(diagramScene.getModel().getGraphToView().getGroup().getAllNodes());
             hiddenNodes.removeAll(this.getFigure().getSource().getSourceNodesAsSet());
             this.diagramScene.getModel().showNot(hiddenNodes);
         } else if (isBoundary()) {
 
-            final Set<Integer> hiddenNodes = new HashSet<Integer>(diagramScene.getModel().getHiddenNodes());
+            final Set<Integer> hiddenNodes = new HashSet<>(diagramScene.getModel().getHiddenNodes());
             hiddenNodes.removeAll(this.getFigure().getSource().getSourceNodesAsSet());
             this.diagramScene.getModel().showNot(hiddenNodes);
         } else {
-            final Set<Integer> hiddenNodes = new HashSet<Integer>(diagramScene.getModel().getHiddenNodes());
+            final Set<Integer> hiddenNodes = new HashSet<>(diagramScene.getModel().getHiddenNodes());
             hiddenNodes.addAll(this.getFigure().getSource().getSourceNodesAsSet());
             this.diagramScene.getModel().showNot(hiddenNodes);
         }

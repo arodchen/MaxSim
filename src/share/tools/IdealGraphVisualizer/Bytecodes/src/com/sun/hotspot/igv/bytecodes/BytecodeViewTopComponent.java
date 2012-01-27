@@ -128,7 +128,7 @@ final class BytecodeViewTopComponent extends TopComponent implements ExplorerMan
 
     @Override
     public void componentOpened() {
-        Lookup.Template<InputGraphProvider> tpl = new Lookup.Template<InputGraphProvider>(InputGraphProvider.class);
+        Lookup.Template<InputGraphProvider> tpl = new Lookup.Template<>(InputGraphProvider.class);
         result = Utilities.actionsGlobalContext().lookup(tpl);
         result.addLookupListener(this);
     }
@@ -149,6 +149,7 @@ final class BytecodeViewTopComponent extends TopComponent implements ExplorerMan
         return PREFERRED_ID;
     }
 
+    @Override
     public ExplorerManager getExplorerManager() {
         return manager;
     }
@@ -171,10 +172,12 @@ final class BytecodeViewTopComponent extends TopComponent implements ExplorerMan
         return super.requestFocusInWindow(temporary);
     }
 
+    @Override
     public void resultChanged(LookupEvent lookupEvent) {
         final InputGraphProvider p = LookupHistory.getLast(InputGraphProvider.class);//)Utilities.actionsGlobalContext().lookup(InputGraphProvider.class);
         if (p != null) {
             SwingUtilities.invokeLater(new Runnable() {
+                @Override
                 public void run() {
                     InputGraph graph = p.getGraph();
                     if (graph != null) {

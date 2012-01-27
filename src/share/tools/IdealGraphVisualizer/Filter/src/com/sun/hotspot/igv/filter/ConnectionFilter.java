@@ -44,16 +44,18 @@ public class ConnectionFilter extends AbstractFilter {
 
     public ConnectionFilter(String name) {
         this.name = name;
-        connectionStyleRules = new ArrayList<ConnectionStyleRule>();
+        connectionStyleRules = new ArrayList<>();
     }
 
+    @Override
     public String getName() {
         return name;
     }
 
+    @Override
     public void apply(Diagram diagram) {
 
-        Properties.PropertySelector<Figure> selector = new Properties.PropertySelector<Figure>(diagram.getFigures());
+        Properties.PropertySelector<Figure> selector = new Properties.PropertySelector<>(diagram.getFigures());
         for (ConnectionStyleRule rule : connectionStyleRules) {
             List<Figure> figures = null;
             if (rule.getSelector() != null) {

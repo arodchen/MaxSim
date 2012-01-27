@@ -44,10 +44,12 @@ public class UnconnectedSlotFilter extends AbstractFilter {
         this.removeOutputs = outputs;
     }
 
+    @Override
     public String getName() {
         return "Unconnected Slot Filter";
     }
 
+    @Override
     public void apply(Diagram d) {
         if (!removeInputs && !removeOutputs) {
             return;
@@ -55,7 +57,7 @@ public class UnconnectedSlotFilter extends AbstractFilter {
 
         List<Figure> figures = d.getFigures();
         for (Figure f : figures) {
-            List<Slot> remove = new ArrayList<Slot>();
+            List<Slot> remove = new ArrayList<>();
             if (removeInputs) {
                 for (InputSlot is : f.getInputSlots()) {
                     if (is.getConnections().isEmpty()) {

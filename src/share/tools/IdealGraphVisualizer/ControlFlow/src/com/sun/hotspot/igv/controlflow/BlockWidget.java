@@ -67,17 +67,21 @@ public class BlockWidget extends LabelWidget implements Vertex {
 
         final BlockWidget widget = this;
         inputSlot = new Port() {
+            @Override
             public Point getRelativePosition() {
                 return new Point((int) (getSize().getWidth() / 2), (int) (getSize().getHeight() / 2));
             }
+            @Override
             public Vertex getVertex() {
                 return widget;
             }
         };
         outputSlot = new Port() {
+            @Override
             public Point getRelativePosition() {
                 return new Point((int) (getSize().getWidth() / 2), (int) (getSize().getHeight() / 2));
             }
+            @Override
             public Vertex getVertex() {
                 return widget;
             }
@@ -96,6 +100,7 @@ public class BlockWidget extends LabelWidget implements Vertex {
         return block;
     }
 
+    @Override
     public Dimension getSize() {
         Rectangle bounds = getBounds();
         if (bounds != null) {
@@ -105,6 +110,7 @@ public class BlockWidget extends LabelWidget implements Vertex {
         }
     }
 
+    @Override
     public void setPosition(Point p) {
         this.setPreferredLocation(p);
     }
@@ -114,14 +120,17 @@ public class BlockWidget extends LabelWidget implements Vertex {
         return block.getName();
     }
 
+    @Override
     public Point getPosition() {
         return this.getPreferredLocation();
     }
 
+    @Override
     public Cluster getCluster() {
         return cluster;
     }
 
+    @Override
     public boolean isRoot() {
         return root;
     }
@@ -134,6 +143,7 @@ public class BlockWidget extends LabelWidget implements Vertex {
         root = b;
     }
 
+    @Override
     public int compareTo(Vertex o) {
         return toString().compareTo(o.toString());
     }

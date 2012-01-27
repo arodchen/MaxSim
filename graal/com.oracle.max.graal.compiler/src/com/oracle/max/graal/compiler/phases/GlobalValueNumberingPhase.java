@@ -24,10 +24,13 @@ package com.oracle.max.graal.compiler.phases;
 
 import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
+import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.graph.*;
 import com.oracle.max.graal.nodes.*;
 
 public class GlobalValueNumberingPhase extends Phase {
+
+    public static final DebugMetric metricGlobalValueNumberingHits = Debug.metric("GlobalValueNumberingHits");
 
     @Override
     protected void run(StructuredGraph graph) {
@@ -49,9 +52,7 @@ public class GlobalValueNumberingPhase extends Phase {
                     assert !(n instanceof FixedNode || newNode instanceof FixedNode);
                     n.replaceAtUsages(newNode);
                     n.safeDelete();
-                    if (GraalOptions.Meter) {
-                        currentContext.metrics.GlobalValueNumberingHits++;
-                    }
+                    metricGlobalValueNumberingHits.increment();
                     if (GraalOptions.TraceGVN) {
                         TTY.println("GVN applied and new node is " + newNode);
                     }

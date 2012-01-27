@@ -61,17 +61,19 @@ public class BlockConnectionWidget extends ConnectionWidget implements Link {
         this.to = (BlockWidget) scene.findWidget(edge.getTo());
         inputSlot = to.getInputSlot();
         outputSlot = from.getOutputSlot();
-        points = new ArrayList<Point>();
+        points = new ArrayList<>();
     }
 
     public InputBlockEdge getEdge() {
         return edge;
     }
 
+    @Override
     public Port getTo() {
         return inputSlot;
     }
 
+    @Override
     public Port getFrom() {
         return outputSlot;
     }
@@ -100,6 +102,7 @@ public class BlockConnectionWidget extends ConnectionWidget implements Link {
         setStroke(stroke);
     }
 
+    @Override
     public void setControlPoints(List<Point> p) {
         this.points = p;
     }

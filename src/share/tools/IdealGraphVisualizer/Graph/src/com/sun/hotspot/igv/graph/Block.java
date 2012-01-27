@@ -44,6 +44,7 @@ public class Block implements Cluster {
         this.diagram = diagram;
     }
 
+    @Override
     public Cluster getOuter() {
         return null;
     }
@@ -52,22 +53,26 @@ public class Block implements Cluster {
         return inputBlock;
     }
 
+    @Override
     public Set<? extends Cluster> getSuccessors() {
-        Set<Block> succs = new HashSet<Block>();
+        Set<Block> succs = new HashSet<>();
         for (InputBlock b : inputBlock.getSuccessors()) {
             succs.add(diagram.getBlock(b));
         }
         return succs;
     }
 
+    @Override
     public void setBounds(Rectangle r) {
         this.bounds = r;
     }
 
+    @Override
     public Rectangle getBounds() {
         return bounds;
     }
 
+    @Override
     public int compareTo(Cluster o) {
         return toString().compareTo(o.toString());
     }

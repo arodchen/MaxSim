@@ -98,8 +98,8 @@ public class AMD64LIRGenerator extends LIRGenerator {
         }
     }
 
-    public AMD64LIRGenerator(GraalContext context, Graph graph, RiRuntime runtime, CiTarget target, FrameMap frameMap, RiResolvedMethod method, LIR lir, RiXirGenerator xir) {
-        super(context, graph, runtime, target, frameMap, method, lir, xir);
+    public AMD64LIRGenerator(Graph graph, RiRuntime runtime, CiTarget target, FrameMap frameMap, RiResolvedMethod method, LIR lir, RiXirGenerator xir) {
+        super(graph, runtime, target, frameMap, method, lir, xir);
         lir.methodEndMarker = new AMD64MethodEndStub();
         lir.spillMoveFactory = new AMD64SpillMoveFactory();
     }
