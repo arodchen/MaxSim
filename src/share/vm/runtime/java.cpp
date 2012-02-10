@@ -252,9 +252,12 @@ void print_statistics() {
     Runtime1::print_statistics();
     Deoptimization::print_statistics();
     SharedRuntime::print_statistics();
-    nmethod::print_statistics();
   }
 #endif /* COMPILER1 */
+
+  if(PrintNMethodStatistics) {
+    nmethod::print_statistics();
+  }
 
 #ifdef COMPILER2
   if ((PrintOptoStatistics || LogVMOutput || LogCompilation) && UseCompiler) {
@@ -365,6 +368,9 @@ void print_statistics() {
 
   if (CITime) {
     CompileBroker::print_times();
+  }
+  if(PrintNMethodStatistics) {
+    nmethod::print_statistics();
   }
 #ifdef COMPILER2
   if (PrintPreciseBiasedLockingStatistics) {
