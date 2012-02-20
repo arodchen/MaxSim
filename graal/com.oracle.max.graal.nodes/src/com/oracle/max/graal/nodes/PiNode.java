@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,23 +22,32 @@
  */
 package com.oracle.max.graal.nodes;
 
+import com.oracle.max.graal.nodes.calc.*;
+import com.oracle.max.graal.nodes.spi.*;
 import com.oracle.max.graal.nodes.type.*;
 
-/**
- * Base class of all nodes that are fixed within the control flow graph and have an immediate successor.
- */
-public abstract class FixedWithNextNode extends FixedNode {
 
-    public FixedNode next() {
-        assert scheduledNext() == null || scheduledNext() instanceof FixedNode : "next() cannot be used while the graph is scheduled";
-        return (FixedNode) scheduledNext();
+public class PiNode extends FloatingNode implements LIRLowerable {
+
+    @Input private ValueNode value;
+    @Input private BeginNode anchor;
+
+    public ValueNode value() {
+        return value;
     }
 
-    public void setNext(FixedNode x) {
-        setScheduledNext(x);
+    public BeginNode anchor() {
+        return anchor;
     }
 
-    public FixedWithNextNode(Stamp stamp) {
+    public PiNode(ValueNode value, BeginNode anchor, Stamp stamp) {
         super(stamp);
+        this.value = value;
+        this.anchor = anchor;
+    }
+
+    @Override
+    public void generate(LIRGeneratorTool generator) {
+        generator.setResult(this, generator.operand(value));
     }
 }
