@@ -1333,8 +1333,10 @@ public final class GraphBuilderPhase extends Phase {
                 assert lastInstr.next() == null : "instructions already appended at block " + block.blockID;
 
                 if (block == returnBlock) {
+                    frameState.setRethrowException(false);
                     createReturn();
                 } else if (block == unwindBlock) {
+                    frameState.setRethrowException(false);
                     createUnwind();
                 } else if (block instanceof ExceptionBlock) {
                     createExceptionDispatch((ExceptionBlock) block);
@@ -1394,6 +1396,7 @@ public final class GraphBuilderPhase extends Phase {
         // TODO (gd) remove this when FloatingRead is fixed
         if (Modifier.isSynchronized(method.accessFlags())) {
             append(currentGraph.add(new ValueAnchorNode(x)));
+            assert !frameState.rethrowException();
         }
 
         synchronizedEpilogue(FrameState.AFTER_BCI);
@@ -1405,6 +1408,7 @@ public final class GraphBuilderPhase extends Phase {
         if (Modifier.isSynchronized(method.accessFlags())) {
             MonitorExitNode monitorExit = genMonitorExit(methodSynchronizedObject);
             monitorExit.setStateAfter(frameState.create(bci));
+            assert !frameState.rethrowException();
         }
     }
 
