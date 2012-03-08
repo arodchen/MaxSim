@@ -574,12 +574,12 @@ public class InliningUtil {
         if (callTarget.receiver().declaredType() != null) {
             RiResolvedType declared = callTarget.receiver().declaredType();
             // the invoke target might be more specific than the holder (happens after inlining: locals lose their declared type...)
-            // TODO (ls) fix this
+            // TODO (lstadler) fix this
             if (declared != null && declared.isSubtypeOf(holder)) {
                 holder = declared;
             }
         }
-        // TODO (tw) fix this
+        // TODO (thomaswue) fix this
         if (assumptions != null) {
             RiResolvedMethod concrete = holder.uniqueConcreteMethod(targetMethod);
             if (concrete != null) {
@@ -619,13 +619,13 @@ public class InliningUtil {
                 } else {
                     invoke.setMegamorph(true);
                     if (GraalOptions.InlinePolymorphicCalls && notRecordedTypeProbability == 0 || GraalOptions.InlineMegamorphicCalls && notRecordedTypeProbability > 0) {
-                        // TODO (ch) inlining of multiple methods should work differently
+                        // TODO (chaeubl) inlining of multiple methods should work differently
                         // 1. check which methods can be inlined
                         // 2. for those methods, use weight and probability to compute which of them should be inlined
                         // 3. do the inlining
                         //    a) all seen methods can be inlined -> do so and guard with deopt
                         //    b) some methods can be inlined -> inline them and fall back to invocation if violated
-                        // TODO (ch) sort types by probability
+                        // TODO (chaeubl) sort types by probability
 
                         // determine concrete methods and map type to specific method
                         ArrayList<RiResolvedMethod> concreteMethods = new ArrayList<>();
