@@ -20,43 +20,45 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.lir.cfg;
+package com.oracle.graal.jtt.loop;
 
-import java.util.*;
+import org.junit.*;
 
-import com.oracle.graal.nodes.*;
+public class Loop15 {
 
-public class Loop {
-    public final Loop parent;
-    public final List<Loop> children;
-
-    public final int depth;
-    public final int index;
-    public final Block header;
-    public final List<Block> blocks;
-    public final List<Block> exits;
-
-    protected Loop(Loop parent, int index, Block header) {
-        this.parent = parent;
-        if (parent != null) {
-            this.depth = parent.depth + 1;
-            parent.children.add(this);
-        } else {
-            this.depth = 1;
+    public static int test(int arg) {
+        Object o = null;
+        int result = 10;
+        for (int k = 0; k < arg; ++k) {
+            if (o == null) {
+                o = new Object();
+            }
+            if (k >= 5) {
+                break;
+            }
+            result++;
         }
-        this.index = index;
-        this.header = header;
-        this.blocks = new ArrayList<>();
-        this.children = new ArrayList<>();
-        this.exits = new ArrayList<>();
+        return result + (o == null ? 0 : 1);
     }
 
-    @Override
-    public String toString() {
-        return "loop " + index + " depth " + depth + (parent != null ? " outer " + parent.index : "");
+    @Test
+    public void run0() throws Throwable {
+        Assert.assertEquals(16, test(5));
     }
 
-    public LoopBeginNode loopBegin() {
-        return (LoopBeginNode) header.getBeginNode();
+    @Test
+    public void run1() throws Throwable {
+        Assert.assertEquals(10, test(0));
     }
+
+    @Test
+    public void run2() throws Throwable {
+        Assert.assertEquals(12, test(1));
+    }
+
+    @Test
+    public void run3() throws Throwable {
+        Assert.assertEquals(16, test(10));
+    }
+
 }

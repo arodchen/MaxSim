@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.nodes;
 
+import static com.oracle.graal.graph.iterators.NodePredicates.*;
+
 import java.util.*;
 
 import com.oracle.graal.graph.*;
@@ -59,28 +61,45 @@ public class BeginNode extends AbstractStateSplit implements LIRLowerable, Simpl
             // This begin node is necessary.
         } else {
             // This begin node can be removed and all guards moved up to the preceding begin node.
-            if (!usages().isEmpty()) {
-                Node prevBegin = prev;
-                while (!(prevBegin instanceof BeginNode)) {
-                    prevBegin = prevBegin.predecessor();
-                }
-                for (Node usage : usages()) {
-                    tool.addToWorkList(usage);
-                }
-                replaceAtUsages(prevBegin);
-            }
+            prepareDelete();
             ((StructuredGraph) graph()).removeFixed(this);
         }
     }
 
-    public void evacuateGuards() {
-        if (!usages().isEmpty()) {
-            Node prevBegin = predecessor();
-            assert prevBegin != null;
-            while (!(prevBegin instanceof BeginNode)) {
-                prevBegin = prevBegin.predecessor();
+    public static BeginNode prevBegin(FixedNode from) {
+        Node prevBegin = from;
+        while (prevBegin != null) {
+            if (prevBegin instanceof BeginNode) {
+                return (BeginNode) prevBegin;
             }
-            replaceAtUsages(prevBegin);
+            prevBegin = prevBegin.predecessor();
+        }
+        return null;
+    }
+
+    public void evacuateGuards(FixedNode evacuateFrom) {
+        if (!usages().isEmpty()) {
+            BeginNode prevBegin = prevBegin(evacuateFrom);
+            assert prevBegin != null;
+            for (Node anchored : anchored().snapshot()) {
+                anchored.replaceFirstInput(this, prevBegin);
+            }
+        }
+    }
+
+    public void prepareDelete() {
+        prepareDelete((FixedNode) predecessor());
+    }
+
+    public void prepareDelete(FixedNode evacuateFrom) {
+        removeProxies();
+        evacuateGuards(evacuateFrom);
+    }
+
+    public void removeProxies() {
+        StructuredGraph graph = (StructuredGraph) graph();
+        for (ValueProxyNode vpn : proxies().snapshot()) {
+            graph.replaceFloating(vpn, vpn.value());
         }
     }
 
@@ -97,5 +116,54 @@ public class BeginNode extends AbstractStateSplit implements LIRLowerable, Simpl
 
     public NodeIterable<GuardNode> guards() {
         return usages().filter(GuardNode.class);
+    }
+
+    public NodeIterable<Node> anchored() {
+        return usages().filter(isNotA(ValueProxyNode.class));
+    }
+
+    public NodeIterable<ValueProxyNode> proxies() {
+        return usages().filter(ValueProxyNode.class);
+    }
+
+    public NodeIterable<FixedNode> getBlockNodes() {
+        return new NodeIterable<FixedNode>() {
+            @Override
+            public Iterator<FixedNode> iterator() {
+                return new BlockNodeIterator(BeginNode.this);
+            }
+        };
+    }
+
+    private class BlockNodeIterator implements Iterator<FixedNode> {
+        private FixedNode current;
+
+        public BlockNodeIterator(FixedNode next) {
+            this.current = next;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return current != null;
+        }
+
+        @Override
+        public FixedNode next() {
+            FixedNode ret = current;
+            if (ret == null) {
+                throw new NoSuchElementException();
+            }
+            if (!(current instanceof FixedWithNextNode) || (current instanceof BeginNode && current != BeginNode.this)) {
+                current = null;
+            } else {
+                current = ((FixedWithNextNode) current).next();
+            }
+            return ret;
+        }
+
+        @Override
+        public void remove() {
+            throw new UnsupportedOperationException();
+        }
     }
 }

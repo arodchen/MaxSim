@@ -130,8 +130,12 @@ public class EscapeAnalysisPhase extends Phase {
 
         @Override
         public void loopEnds(LoopBeginNode loopBegin, List<BlockExitState> loopEndStates) {
-            while (!(virtualObjectField instanceof PhiNode)) {
-                virtualObjectField = ((VirtualObjectFieldNode) virtualObjectField).lastState();
+            while (!loopBegin.isPhiAtMerge(virtualObjectField)) {
+                if (virtualObjectField instanceof PhiNode) {
+                    virtualObjectField = ((PhiNode) virtualObjectField).valueAt(0);
+                } else {
+                    virtualObjectField = ((VirtualObjectFieldNode) virtualObjectField).lastState();
+                }
             }
             for (BlockExitState loopEndState : loopEndStates) {
                 ((PhiNode) virtualObjectField).addInput(loopEndState.virtualObjectField);
@@ -184,6 +188,11 @@ public class EscapeAnalysisPhase extends Phase {
             FixedNode next = node.next();
             graph.removeFixed(node);
 
+            for (ValueProxyNode vpn : virtual.usages().filter(ValueProxyNode.class).snapshot()) {
+                assert vpn.value() == virtual;
+                graph.replaceFloating(vpn, virtual);
+            }
+
             if (virtual.fieldsCount() > 0) {
                 final BlockExitState startState = new BlockExitState(escapeFields, virtual);
                 final PostOrderNodeIterator<?> iterator = new PostOrderNodeIterator<BlockExitState>(next, startState) {
@@ -193,9 +202,25 @@ public class EscapeAnalysisPhase extends Phase {
                         if (changedField != -1) {
                             state.updateField(changedField);
                         }
+                        if (curNode instanceof LoopExitNode) {
+                            state.virtualObjectField = graph.unique(new ValueProxyNode(state.virtualObjectField, (LoopExitNode) curNode, PhiType.Virtual));
+                            for (int i = 0; i < state.fieldState.length; i++) {
+                                state.fieldState[i] = graph.unique(new ValueProxyNode(state.fieldState[i], (LoopExitNode) curNode, PhiType.Value));
+                            }
+                        }
                         if (!curNode.isDeleted() && curNode instanceof StateSplit && ((StateSplit) curNode).stateAfter() != null) {
                             if (state.virtualObjectField != null) {
-                                ((StateSplit) curNode).stateAfter().addVirtualObjectMapping(state.virtualObjectField);
+                                ValueNode v = state.virtualObjectField;
+                                if (curNode instanceof LoopBeginNode) {
+                                    while (!((LoopBeginNode) curNode).isPhiAtMerge(v)) {
+                                        if (v instanceof PhiNode) {
+                                            v = ((PhiNode) v).valueAt(0);
+                                        } else {
+                                            v = ((VirtualObjectFieldNode) v).lastState();
+                                        }
+                                    }
+                                }
+                                ((StateSplit) curNode).stateAfter().addVirtualObjectMapping(v);
                             }
                         }
                     }

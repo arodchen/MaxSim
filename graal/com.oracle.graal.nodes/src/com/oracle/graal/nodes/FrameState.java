@@ -161,7 +161,7 @@ public final class FrameState extends Node implements Node.IterableNodeType, LIR
     }
 
     public void addVirtualObjectMapping(Node virtualObject) {
-        assert virtualObject instanceof VirtualObjectFieldNode || virtualObject instanceof PhiNode : virtualObject;
+        assert virtualObject instanceof VirtualObjectFieldNode || virtualObject instanceof PhiNode || virtualObject instanceof ValueProxyNode : virtualObject;
         virtualObjectMappings.add(virtualObject);
     }
 
@@ -182,6 +182,13 @@ public final class FrameState extends Node implements Node.IterableNodeType, LIR
      */
     public FrameState duplicate(int newBci) {
         return duplicate(newBci, false);
+    }
+
+    /**
+     * Gets a copy of this frame state.
+     */
+    public FrameState duplicate() {
+        return duplicate(bci);
     }
 
     public FrameState duplicate(int newBci, boolean duplicateOuter) {

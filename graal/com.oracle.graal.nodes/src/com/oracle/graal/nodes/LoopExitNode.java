@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,40 +22,21 @@
  */
 package com.oracle.graal.nodes;
 
-import java.util.*;
+import com.oracle.graal.nodes.spi.*;
 
-import com.oracle.graal.nodes.type.*;
-
-public abstract class FixedNode extends ValueNode {
-
-    private double probability;
-
-    public FixedNode(Stamp stamp) {
-        super(stamp);
+public class LoopExitNode extends BeginNode {
+    @Input(notDataflow = true) private LoopBeginNode loopBegin;
+    public LoopExitNode(LoopBeginNode loop) {
+        assert loop != null;
+        loopBegin = loop;
     }
 
-    public double probability() {
-        return probability;
-    }
-
-    public void setProbability(double probability) {
-        this.probability = probability;
-    }
-
-    protected void copyInto(FixedNode newNode) {
-        newNode.setProbability(probability);
+    public LoopBeginNode loopBegin() {
+        return loopBegin;
     }
 
     @Override
-    public Map<Object, Object> getDebugProperties() {
-        Map<Object, Object> properties = super.getDebugProperties();
-        properties.put("probability", String.format(Locale.ENGLISH, "%7.5f", probability));
-        return properties;
-    }
-
-    @Override
-    public boolean verify() {
-        assertTrue(this.successors().isNotEmpty() || this.predecessor() != null, "FixedNode should not float");
-        return super.verify();
+    public void simplify(SimplifierTool tool) {
+        //
     }
 }

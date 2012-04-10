@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,40 +22,42 @@
  */
 package com.oracle.graal.nodes;
 
-import java.util.*;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.Node.*;
+import com.oracle.graal.nodes.PhiNode.PhiType;
+import com.oracle.graal.nodes.calc.*;
 
-import com.oracle.graal.nodes.type.*;
 
-public abstract class FixedNode extends ValueNode {
 
-    private double probability;
+public class ValueProxyNode extends FloatingNode implements Node.IterableNodeType, ValueNumberable {
+    @Input(notDataflow = true) private BeginNode proxyPoint;
+    @Input private ValueNode value;
+    @Data private final PhiType type;
 
-    public FixedNode(Stamp stamp) {
-        super(stamp);
+    public ValueProxyNode(ValueNode value, BeginNode exit, PhiType type) {
+        super(value.stamp());
+        this.type = type;
+        assert exit != null;
+        this.proxyPoint = exit;
+        this.value = value;
     }
 
-    public double probability() {
-        return probability;
+    public ValueNode value() {
+        return value;
     }
 
-    public void setProbability(double probability) {
-        this.probability = probability;
+    public BeginNode proxyPoint() {
+        return proxyPoint;
     }
 
-    protected void copyInto(FixedNode newNode) {
-        newNode.setProbability(probability);
-    }
-
-    @Override
-    public Map<Object, Object> getDebugProperties() {
-        Map<Object, Object> properties = super.getDebugProperties();
-        properties.put("probability", String.format(Locale.ENGLISH, "%7.5f", probability));
-        return properties;
+    public PhiType type() {
+        return type;
     }
 
     @Override
     public boolean verify() {
-        assertTrue(this.successors().isNotEmpty() || this.predecessor() != null, "FixedNode should not float");
+        assert value != null;
+        assert proxyPoint != null;
         return super.verify();
     }
 }
