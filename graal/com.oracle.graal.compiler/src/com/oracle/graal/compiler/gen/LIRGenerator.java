@@ -27,6 +27,7 @@ import static com.oracle.max.cri.ci.CiCallingConvention.Type.*;
 import static com.oracle.max.cri.ci.CiValue.*;
 
 import java.util.*;
+import java.util.Map.Entry;
 
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.util.*;
@@ -171,6 +172,15 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             return null;
         }
         return nodeOperands.get(node);
+    }
+
+    public ValueNode valueForOperand(CiValue value) {
+        for (Entry<Node, CiValue> entry : nodeOperands.entries()) {
+            if (entry.getValue() == value) {
+                return (ValueNode) entry.getKey();
+            }
+        }
+        return null;
     }
 
     /**
@@ -480,13 +490,15 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         CiValue[] params = new CiValue[incomingArguments.locations.length];
         for (int i = 0; i < params.length; i++) {
             params[i] = toStackKind(incomingArguments.locations[i]);
+            if (CiValueUtil.isStackSlot(params[i])) {
+                CiStackSlot slot = CiValueUtil.asStackSlot(params[i]);
+                if (slot.inCallerFrame() && !lir.hasArgInCallerFrame()) {
+                    lir.setHasArgInCallerFrame();
+                }
+            }
         }
-        append(new ParametersOp(params));
 
-        XirSnippet prologue = xir.genPrologue(null, method);
-        if (prologue != null) {
-            emitXir(prologue, null, null, false);
-        }
+        append(new ParametersOp(params));
 
         for (LocalNode local : graph.getNodes(LocalNode.class)) {
             CiValue param = params[local.index()];
@@ -580,24 +592,13 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     }
 
     @Override
-    public void visitExceptionObject(ExceptionObjectNode x) {
-        XirSnippet snippet = xir.genExceptionObject(site(x));
-        LIRDebugInfo info = state();
-        emitXir(snippet, x, info, true);
-    }
-
-    @Override
     public void visitReturn(ReturnNode x) {
         CiValue operand = CiValue.IllegalValue;
         if (!x.kind().isVoid()) {
             operand = resultOperandFor(x.kind());
             emitMove(operand(x.result()), operand);
         }
-        XirSnippet epilogue = xir.genEpilogue(site(x), method);
-        if (epilogue != null) {
-            emitXir(epilogue, x, null, false);
-            emitReturn(operand);
-        }
+        emitReturn(operand);
     }
 
     protected abstract void emitReturn(CiValue input);
@@ -611,11 +612,11 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         moveToPhi(end.merge(), end);
     }
 
+    /**
+     * Runtime specific classes can override this to insert a safepoint at the end of a loop.
+     */
     @Override
     public void visitLoopEnd(LoopEndNode x) {
-        if (GraalOptions.GenLoopSafepoints && x.hasSafepointPolling()) {
-            emitSafepointPoll(x);
-        }
     }
 
     private ArrayList<CiValue> phiValues = new ArrayList<>();
@@ -658,14 +659,6 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             return newOperand;
         } else {
             return result;
-        }
-    }
-
-
-    public void emitSafepointPoll(FixedNode x) {
-        if (!lastState.method().noSafepointPolls()) {
-            XirSnippet snippet = xir.genSafepointPoll(site(x));
-            emitXir(snippet, x, state(), false);
         }
     }
 

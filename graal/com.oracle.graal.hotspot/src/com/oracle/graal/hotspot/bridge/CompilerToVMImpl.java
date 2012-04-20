@@ -157,7 +157,13 @@ public class CompilerToVMImpl implements CompilerToVM, Remote {
     public native String disassembleJava(HotSpotMethodResolved method);
 
     @Override
+    public native StackTraceElement RiMethod_toStackTraceElement(HotSpotMethodResolved method, int bci);
+
+    @Override
     public native Object executeCompiledMethod(HotSpotCompiledMethod method, Object arg1, Object arg2, Object arg3);
+
+    @Override
+    public native Object executeCompiledMethodVarargs(HotSpotCompiledMethod method, Object... args);
 
     @Override
     public native int RiMethod_vtableEntryOffset(HotSpotMethodResolved method);

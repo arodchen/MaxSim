@@ -41,7 +41,6 @@ import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.cfg.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.max.asm.*;
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
 import com.oracle.max.cri.xir.*;
@@ -128,45 +127,37 @@ public class GraalCompiler {
 
         new PhiStampPhase().apply(graph);
 
-        if (GraalOptions.OptCanonicalizer) {
-            new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
-        }
-
         if (GraalOptions.ProbabilityAnalysis && graph.start().probability() == 0) {
             new ComputeProbabilityPhase().apply(graph);
+        }
+
+        if (GraalOptions.PropagateTypes) {
+            new PropagateTypeCachePhase(target, runtime, assumptions).apply(graph);
+        }
+
+        if (GraalOptions.OptCanonicalizer) {
+            new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
         }
 
         if (GraalOptions.Intrinsify) {
             new IntrinsificationPhase(runtime).apply(graph);
         }
 
-        if (GraalOptions.PropagateTypes) {
-            if (GraalOptions.OptCanonicalizer) {
-                new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
-            }
-
-            new PropagateTypeCachePhase(target, runtime, assumptions).apply(graph);
-        }
-
         if (GraalOptions.Inline && !plan.isPhaseDisabled(InliningPhase.class)) {
             new InliningPhase(target, runtime, null, assumptions, cache, plan, optimisticOpts).apply(graph);
             new DeadCodeEliminationPhase().apply(graph);
             new PhiStampPhase().apply(graph);
+            if (GraalOptions.PropagateTypes) {
+                new PropagateTypeCachePhase(target, runtime, assumptions).apply(graph);
+            }
+
+            if (GraalOptions.OptCanonicalizer) {
+                new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
+            }
         }
 
-        if (GraalOptions.OptCanonicalizer) {
-            new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
-        }
-
-        if (GraalOptions.PropagateTypes) {
-            new PropagateTypeCachePhase(target, runtime, assumptions).apply(graph);
-        }
 
         plan.runPhases(PhasePosition.HIGH_LEVEL, graph);
-
-        if (GraalOptions.OptLoops) {
-            new SafepointPollingEliminationPhase().apply(graph);
-        }
 
         if (GraalOptions.EscapeAnalysis && !plan.isPhaseDisabled(EscapeAnalysisPhase.class)) {
             new EscapeAnalysisPhase(target, runtime, assumptions, cache, plan, optimisticOpts).apply(graph);
@@ -175,7 +166,18 @@ public class GraalCompiler {
                 new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
             }
         }
-
+        if (GraalOptions.OptLoops) {
+            if (GraalOptions.OptLoopTransform) {
+                new LoopTransformPhase().apply(graph);
+            }
+            if (GraalOptions.OptSafepointElimination) {
+                new SafepointPollingEliminationPhase().apply(graph);
+            }
+        }
+        new RemoveValueProxyPhase().apply(graph);
+        if (GraalOptions.OptCanonicalizer) {
+            new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
+        }
         if (GraalOptions.OptGVN) {
             new GlobalValueNumberingPhase().apply(graph);
         }
@@ -196,6 +198,9 @@ public class GraalCompiler {
 
         if (GraalOptions.PropagateTypes) {
             new PropagateTypeCachePhase(target, runtime, assumptions).apply(graph);
+        }
+        if (GraalOptions.OptCanonicalizer) {
+            new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
         }
         if (GraalOptions.OptGVN) {
             new GlobalValueNumberingPhase().apply(graph);
@@ -228,7 +233,7 @@ public class GraalCompiler {
                     b.linearScanNumber = z++;
                 }
 
-                LIR lir = new LIR(schedule.getCFG(), schedule.getNodesFor(), linearScanOrder, codeEmittingOrder);
+                LIR lir = new LIR(schedule.getCFG(), schedule.getBlockToNodesMap(), linearScanOrder, codeEmittingOrder);
                 Debug.dump(lir, "After linear scan order");
                 return lir;
 
@@ -263,24 +268,14 @@ public class GraalCompiler {
         return frameMap;
     }
 
-    private TargetMethodAssembler createAssembler(FrameMap frameMap, LIR lir) {
-        AbstractAssembler masm = backend.newAssembler(frameMap.registerConfig);
-        TargetMethodAssembler tasm = new TargetMethodAssembler(target, runtime, frameMap, lir.slowPaths, masm);
-        tasm.setFrameSize(frameMap.frameSize());
-        tasm.targetMethod.setCustomStackAreaOffset(frameMap.offsetToCustomArea());
-        return tasm;
-    }
-
     public CiTargetMethod emitCode(CiAssumptions assumptions, RiResolvedMethod method, LIR lir, FrameMap frameMap) {
-        TargetMethodAssembler tasm = createAssembler(frameMap, lir);
-        lir.emitCode(tasm);
-
+        TargetMethodAssembler tasm = backend.newAssembler(frameMap, lir);
+        backend.emitCode(tasm, method, lir);
         CiTargetMethod targetMethod = tasm.finishTargetMethod(method, false);
         if (assumptions != null && !assumptions.isEmpty()) {
             targetMethod.setAssumptions(assumptions);
         }
 
-        Debug.dump(lir, "After code generation");
         Debug.dump(targetMethod, "After code generation");
         return targetMethod;
     }

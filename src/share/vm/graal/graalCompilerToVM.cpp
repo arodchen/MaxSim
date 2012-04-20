@@ -953,6 +953,93 @@ JNIEXPORT jobject JNICALL Java_com_oracle_graal_hotspot_bridge_CompilerToVMImpl_
   return JNIHandles::make_local(result());
 }
 
+// public StackTraceElement RiMethod_toStackTraceElement(HotSpotMethodResolved method, int bci);
+JNIEXPORT jobject JNICALL Java_com_oracle_graal_hotspot_bridge_CompilerToVMImpl_RiMethod_1toStackTraceElement(JNIEnv *env, jobject, jobject hotspot_method, int bci) {
+  TRACE_graal_3("CompilerToVM::RiMethod_toStackTraceElement");
+
+  VM_ENTRY_MARK;
+  ResourceMark rm;
+  HandleMark hm;
+
+  methodHandle method = getMethodFromHotSpotMethod(hotspot_method);
+  oop element = java_lang_StackTraceElement::create(method, bci, CHECK_NULL);
+  return JNIHandles::make_local(element);
+}
+
+class JavaArgumentPusher : public SignatureIterator {
+ protected:
+  JavaCallArguments*  _jca;
+  arrayOop _args;
+  int _index;
+
+  oop next_arg(BasicType expectedType) {
+    assert(_index < _args->length(), "out of bounds");
+    oop arg = ((oop*) _args->base(T_OBJECT))[_index++];
+    assert(expectedType == T_OBJECT || java_lang_boxing_object::is_instance(arg, expectedType), "arg type mismatch");
+    return arg;
+  }
+
+ public:
+  JavaArgumentPusher(Symbol* signature, JavaCallArguments*  jca, arrayOop args, bool is_static) : SignatureIterator(signature) {
+    this->_return_type = T_ILLEGAL;
+    _jca = jca;
+    _index = 0;
+    _args = args;
+    if (!is_static) {
+      _jca->push_oop(next_arg(T_OBJECT));
+    }
+    iterate();
+    assert(_index == args->length(), "arg count mismatch with signature");
+  }
+
+  inline void do_bool()   { if (!is_return_type()) _jca->push_int(next_arg(T_BOOLEAN)->bool_field(java_lang_boxing_object::value_offset_in_bytes(T_BOOLEAN))); }
+  inline void do_char()   { if (!is_return_type()) _jca->push_int(next_arg(T_CHAR)->char_field(java_lang_boxing_object::value_offset_in_bytes(T_CHAR))); }
+  inline void do_short()  { if (!is_return_type()) _jca->push_int(next_arg(T_SHORT)->short_field(java_lang_boxing_object::value_offset_in_bytes(T_SHORT))); }
+  inline void do_byte()   { if (!is_return_type()) _jca->push_int(next_arg(T_BYTE)->byte_field(java_lang_boxing_object::value_offset_in_bytes(T_BYTE))); }
+  inline void do_int()    { if (!is_return_type()) _jca->push_int(next_arg(T_INT)->int_field(java_lang_boxing_object::value_offset_in_bytes(T_INT))); }
+
+  inline void do_long()   { if (!is_return_type()) _jca->push_long(next_arg(T_LONG)->long_field(java_lang_boxing_object::value_offset_in_bytes(T_LONG))); }
+  inline void do_float()  { if (!is_return_type()) _jca->push_float(next_arg(T_FLOAT)->float_field(java_lang_boxing_object::value_offset_in_bytes(T_FLOAT))); }
+  inline void do_double() { if (!is_return_type()) _jca->push_double(next_arg(T_DOUBLE)->double_field(java_lang_boxing_object::value_offset_in_bytes(T_DOUBLE))); }
+
+  inline void do_object() { _jca->push_oop(next_arg(T_OBJECT)); }
+  inline void do_object(int begin, int end) { if (!is_return_type()) _jca->push_oop(next_arg(T_OBJECT)); }
+  inline void do_array(int begin, int end)  { if (!is_return_type()) _jca->push_oop(next_arg(T_OBJECT)); }
+  inline void do_void()                     { }
+};
+
+// public Object executeCompiledMethodVarargs(HotSpotCompiledMethod method, Object... args);
+JNIEXPORT jobject JNICALL Java_com_oracle_graal_hotspot_bridge_CompilerToVMImpl_executeCompiledMethodVarargs(JNIEnv *env, jobject, jobject method, jobject args) {
+  TRACE_graal_3("CompilerToVM::executeCompiledMethod");
+
+  VM_ENTRY_MARK;
+  ResourceMark rm;
+  HandleMark hm;
+
+  assert(method != NULL, "just checking");
+  methodHandle mh = getMethodFromHotSpotMethod(HotSpotCompiledMethod::method(method));
+  Symbol* signature = mh->signature();
+  JavaCallArguments jca;
+
+  JavaArgumentPusher jap(signature, &jca, (arrayOop) JNIHandles::resolve(args), mh->is_static());
+  JavaValue result(jap.get_ret_type());
+
+  nmethod* nm = (nmethod*) HotSpotCompiledMethod::nmethod(method);
+  if (nm == NULL || !nm->is_alive()) {
+    THROW_0(vmSymbols::MethodInvalidatedException());
+  }
+  JavaCalls::call(&result, mh, nm, &jca, CHECK_NULL);
+
+  if (jap.get_ret_type() == T_VOID) {
+    return NULL;
+  } else if (jap.get_ret_type() == T_OBJECT) {
+    return JNIHandles::make_local((oop) result.get_jobject());
+  } else {
+    oop o = java_lang_boxing_object::create(jap.get_ret_type(), (jvalue *) result.get_value_addr(), CHECK_NULL);
+    return JNIHandles::make_local(o);
+  }
+}
+
 // public Object executeCompiledMethod(HotSpotCompiledMethod method, Object arg1, Object arg2, Object arg3);
 JNIEXPORT jobject JNICALL Java_com_oracle_graal_hotspot_bridge_CompilerToVMImpl_executeCompiledMethod(JNIEnv *env, jobject, jobject method, jobject arg1, jobject arg2, jobject arg3) {
   TRACE_graal_3("CompilerToVM::executeCompiledMethod");
@@ -1035,6 +1122,7 @@ JNIEXPORT jobject JNICALL Java_com_oracle_graal_hotspot_bridge_CompilerToVMImpl_
 #define STRING          "Ljava/lang/String;"
 #define OBJECT          "Ljava/lang/Object;"
 #define CLASS           "Ljava/lang/Class;"
+#define STACK_TRACE_ELEMENT "Ljava/lang/StackTraceElement;"
 
 JNINativeMethod CompilerToVM_methods[] = {
   {CC"RiMethod_code",                     CC"("RESOLVED_METHOD")[B",                            FN_PTR(RiMethod_1code)},
@@ -1070,7 +1158,9 @@ JNINativeMethod CompilerToVM_methods[] = {
   {CC"installStub",                       CC"("TARGET_METHOD")"PROXY,                           FN_PTR(installStub)},
   {CC"disassembleNative",                 CC"([BJ)"STRING,                                      FN_PTR(disassembleNative)},
   {CC"disassembleJava",                   CC"("RESOLVED_METHOD")"STRING,                        FN_PTR(disassembleJava)},
+  {CC"RiMethod_toStackTraceElement",      CC"("RESOLVED_METHOD"I)"STACK_TRACE_ELEMENT,          FN_PTR(RiMethod_1toStackTraceElement)},
   {CC"executeCompiledMethod",             CC"("HS_COMP_METHOD OBJECT OBJECT OBJECT")"OBJECT,    FN_PTR(executeCompiledMethod)},
+  {CC"executeCompiledMethodVarargs",      CC"("HS_COMP_METHOD "["OBJECT")"OBJECT,               FN_PTR(executeCompiledMethodVarargs)},
   {CC"RiMethod_vtableEntryOffset",        CC"("RESOLVED_METHOD")I",                             FN_PTR(RiMethod_vtableEntryOffset)},
   {CC"getDeoptedLeafGraphIds",            CC"()[J",                                             FN_PTR(getDeoptedLeafGraphIds)},
 };

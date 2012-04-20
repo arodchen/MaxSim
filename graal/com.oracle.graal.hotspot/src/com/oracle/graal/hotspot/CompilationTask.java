@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.hotspot;
 
-import java.io.*;
 import java.util.concurrent.*;
 
 import com.oracle.graal.compiler.*;
@@ -133,8 +132,12 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
         } catch (CiBailout bailout) {
             Debug.metric("Bailouts").increment();
             if (GraalOptions.ExitVMOnBailout) {
+                TTY.cachedOut.println(CiUtil.format("Bailout in %H.%n(%p)", method));
                 bailout.printStackTrace(TTY.cachedOut);
                 System.exit(-1);
+            } else if (GraalOptions.PrintBailout) {
+                TTY.cachedOut.println(CiUtil.format("Bailout in %H.%n(%p)", method));
+                bailout.printStackTrace(TTY.cachedOut);
             }
         } catch (Throwable t) {
             if (GraalOptions.ExitVMOnException) {

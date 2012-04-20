@@ -115,34 +115,57 @@ public class MergeNode extends BeginNode implements Node.IterableNodeType, LIRLo
     }
 
     public NodeIterable<PhiNode> phis() {
-        return this.usages().filter(new NodePredicate() {
+        return this.usages().filter(PhiNode.class).filter(new NodePredicate() {
             @Override
             public boolean apply(Node n) {
-                return n instanceof PhiNode && ((PhiNode) n).merge() == MergeNode.this;
+                return ((PhiNode) n).merge() == MergeNode.this;
             }
-        }).filter(PhiNode.class);
+        });
+    }
+
+    @Override
+    public NodeIterable<Node> anchored() {
+        return super.anchored().filter(isNotA(PhiNode.class).or(new NodePredicate() {
+            @Override
+            public boolean apply(Node n) {
+                return ((PhiNode) n).merge() != MergeNode.this;
+            }
+        }));
     }
 
     @Override
     public void simplify(SimplifierTool tool) {
         FixedNode next = next();
-        if (next instanceof LoopEndNode) {
-            LoopEndNode origLoopEnd = (LoopEndNode) next;
-            LoopBeginNode begin = origLoopEnd.loopBegin();
+        if (next instanceof EndNode) {
+            EndNode origLoopEnd = (EndNode) next;
+            MergeNode merge = origLoopEnd.merge();
+            if (merge instanceof LoopBeginNode && !(origLoopEnd instanceof LoopEndNode)) {
+                return;
+            }
+            // in order to move anchored values to the other merge we would need to check if the anchors are used by phis of the other merge
+            if (this.anchored().isNotEmpty()) {
+                return;
+            }
             for (PhiNode phi : phis()) {
                 for (Node usage : phi.usages().filter(isNotA(FrameState.class))) {
-                    if (!begin.isPhiAtMerge(usage)) {
+                    if (!merge.isPhiAtMerge(usage)) {
                         return;
                     }
                 }
             }
-            Debug.log("Split %s into loop ends for %s", this, begin);
+            Debug.log("Split %s into ends for %s.", this, merge);
             int numEnds = this.forwardEndCount();
             StructuredGraph graph = (StructuredGraph) graph();
             for (int i = 0; i < numEnds - 1; i++) {
                 EndNode end = forwardEndAt(numEnds - 1 - i);
-                LoopEndNode loopEnd = graph.add(new LoopEndNode(begin));
-                for (PhiNode phi : begin.phis()) {
+                EndNode newEnd;
+                if (merge instanceof LoopBeginNode) {
+                    newEnd = graph.add(new LoopEndNode((LoopBeginNode) merge));
+                } else {
+                    newEnd = graph.add(new EndNode());
+                    merge.addForwardEnd(newEnd);
+                }
+                for (PhiNode phi : merge.phis()) {
                     ValueNode v = phi.valueAt(origLoopEnd);
                     ValueNode newInput;
                     if (isPhiAtMerge(v)) {
@@ -154,9 +177,9 @@ public class MergeNode extends BeginNode implements Node.IterableNodeType, LIRLo
                     phi.addInput(newInput);
                 }
                 this.removeEnd(end);
-                end.replaceAtPredecessors(loopEnd);
+                end.replaceAtPredecessors(newEnd);
                 end.safeDelete();
-                tool.addToWorkList(loopEnd.predecessor());
+                tool.addToWorkList(newEnd.predecessor()); // ?
             }
             graph.reduceTrivialMerge(this);
         }

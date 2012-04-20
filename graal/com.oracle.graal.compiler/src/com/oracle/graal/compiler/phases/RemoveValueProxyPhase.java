@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,34 +20,25 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.snippets.nodes;
+package com.oracle.graal.compiler.phases;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.graal.cri.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.*;
 
-public class ArrayHeaderSizeNode extends FloatingNode implements Lowerable {
-    @Data private final CiKind elementKind;
-
-    public ArrayHeaderSizeNode(CiKind elementKind) {
-        super(StampFactory.forKind(CiKind.Long));
-        this.elementKind = elementKind;
-    }
+public class RemoveValueProxyPhase extends Phase {
 
     @Override
-    public void lower(CiLoweringTool tool) {
-        tool.getRuntime().lower(this, tool);
-    }
-
-    public CiKind elementKind() {
-        return elementKind;
-    }
-
-    @SuppressWarnings("unused")
-    @NodeIntrinsic
-    public static long sizeFor(@ConstantNodeParameter CiKind kind) {
-        throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
+    protected void run(StructuredGraph graph) {
+        for (ValueProxyNode vpn : graph.getNodes(ValueProxyNode.class)) {
+            graph.replaceFloating(vpn, vpn.value());
+        }
+        for (LoopExitNode exit : graph.getNodes(LoopExitNode.class)) {
+            FrameState stateAfter = exit.stateAfter();
+            if (stateAfter != null) {
+                exit.setStateAfter(null);
+                if (stateAfter.usages().count() == 0) {
+                    stateAfter.safeDelete();
+                }
+            }
+        }
     }
 }

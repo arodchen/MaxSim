@@ -49,6 +49,8 @@ _vmbuild = 'product'
 
 _jacoco = 'off'
 
+_make_eclipse_launch = False
+
 _jacocoExcludes = ['com.oracle.graal.hotspot.snippets.ArrayCopySnippets',
                    'com.oracle.graal.snippets.DoubleSnippets',
                    'com.oracle.graal.snippets.FloatSnippets',
@@ -89,6 +91,9 @@ def clean(args):
     if opts.native:
         os.environ.update(ARCH_DATA_MODEL='64', LANG='C', HOTSPOT_BUILD_JOBS='16')
         mx.run([mx.gmake_cmd(), 'clean'], cwd=join(_graal_home, 'make'))
+        jdks = join(_graal_home, 'jdk' + mx.java().version)
+        if exists(jdks):
+            shutil.rmtree(jdks)
 
 def export(args):
     """create a GraalVM zip file for distribution"""
@@ -183,7 +188,6 @@ def dacapo(args):
     DaCapo harness."""
 
     numTests = {}
-    
     if len(args) > 0:
         level = getattr(sanitycheck.SanityCheckLevel, args[0], None)
         if level is not None:
@@ -216,17 +220,18 @@ def dacapo(args):
     
     # The remainder are VM options 
     vmOpts = [arg for arg in args if not arg.startswith('@')]
+    vm = _vm
     
     failed = []
     for (test, n) in numTests.items():
-        if not sanitycheck.getDacapo(test, n, dacapoArgs).test('graal', opts=vmOpts):
+        if not sanitycheck.getDacapo(test, n, dacapoArgs).test(vm, opts=vmOpts):
             failed.append(test)
     
     if len(failed) != 0:
         mx.abort('DaCapo failures: ' + str(failed))
     
 def intro(args):
-    """"run a simple program and visualize its compilation in the Graal Visualizer"""
+    """run a simple program and visualize its compilation in the Graal Visualizer"""
     # Start the visualizer in a separate thread
     t = Thread(target=gv, args=([[]]))
     t.start()
@@ -235,7 +240,7 @@ def intro(args):
     mx.log('Waiting 5 seconds for visualizer to start')
     time.sleep(5)
     
-    vm(['-G:Dump=HelloWorld', '-G:MethodFilter=main', '-Xcomp', '-XX:CompileOnly=HelloWorld::main', '-cp', mx.classpath('com.oracle.graal.examples')] + args + ['examples.HelloWorld'])
+    vm(['-G:Dump=', '-G:MethodFilter=greet', '-Xcomp', '-XX:CompileOnly=HelloWorld::greet', '-cp', mx.classpath('com.oracle.graal.examples')] + args + ['examples.HelloWorld'])
 
 def scaladacapo(args):
     """run one or all Scala DaCapo benchmarks
@@ -278,10 +283,11 @@ def scaladacapo(args):
     
     # The remainder are VM options 
     vmOpts = [arg for arg in args if not arg.startswith('@')]
+    vm = _vm;
     
     failed = []
     for (test, n) in numTests.items():
-        if not sanitycheck.getScalaDacapo(test, n, dacapoArgs).test('graal', opts=vmOpts):
+        if not sanitycheck.getScalaDacapo(test, n, dacapoArgs).test(vm, opts=vmOpts):
             failed.append(test)
     
     if len(failed) != 0:
@@ -455,7 +461,30 @@ def build(args, vm=None):
                 mx.abort(fp.name + ':' + str(source[:start].count('\n') + 1) + ': add missing projects to declaration:\n    ' + '\n    '.join(missing))
             if len(extra) != 0:
                 mx.abort(fp.name + ':' + str(source[:start].count('\n') + 1) + ': remove projects from declaration:\n    ' + '\n    '.join(extra))
-                
+
+        # Check if a build really needs to be done
+        timestampFile = join(vmDir, '.build-timestamp')
+        if opts2.force or not exists(timestampFile):
+            mustBuild = True 
+        else:
+            mustBuild = False 
+            timestamp = os.path.getmtime(timestampFile)
+            sources = []
+            for d in ['src', 'make']:
+                for root, dirnames, files in os.walk(join(_graal_home, d)):
+                    # ignore <graal>/src/share/tools
+                    if root == join(_graal_home, 'src', 'share'):
+                        dirnames.remove('tools')
+                    sources += [join(root, name) for name in files]
+            for f in sources:
+                if len(f) != 0 and os.path.getmtime(f) > timestamp:
+                    mustBuild = True
+                    break
+                    
+        if not mustBuild:
+            mx.log('[all files in src and make directories are older than ' + timestampFile[len(_graal_home) + 1:] + ' - skipping native build]')
+            continue
+
         if platform.system() == 'Windows':
             compilelogfile = _graal_home + '/graalCompile.log'
             mksHome = mx.get_env('MKS_HOME', 'C:\\cygwin\\bin')
@@ -512,7 +541,12 @@ def build(args, vm=None):
             with open(jvmCfg, 'w') as f:
                 for line in lines:
                     f.write(line)
-    
+
+        if exists(timestampFile):
+            os.utime(timestampFile, None)
+        else:
+            file(timestampFile, 'a')
+
 def vm(args, vm=None, nonZeroIsFatal=True, out=None, err=None, cwd=None, timeout=None, vmbuild=None):
     """run the VM selected by the '--vm' option"""
 
@@ -520,7 +554,11 @@ def vm(args, vm=None, nonZeroIsFatal=True, out=None, err=None, cwd=None, timeout
         vm = _vm
         
     build = vmbuild if vmbuild is not None else _vmbuild if _vmSourcesAvailable else 'product'
-    mx.expand_project_in_args(args)  
+    mx.expand_project_in_args(args)
+    if _make_eclipse_launch:
+        mx.make_eclipse_launch(args, 'graal-' + build, name=None, deps=mx.project('com.oracle.graal.hotspot').all_deps([], True))
+    if len([a for a in args if 'PrintAssembly' in a]) != 0:
+        hsdis([])
     if mx.java().debug_port is not None:
         args = ['-Xdebug', '-Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=' + str(mx.java().debug_port)] + args
     if _jacoco == 'on' or _jacoco == 'append':
@@ -681,6 +719,7 @@ def gate(args):
             return self
              
     parser = ArgumentParser(prog='mx gate');
+    parser.add_argument('-j', '--omit-java-clean', action='store_false', dest='cleanJava', help='omit cleaning Java native code')
     parser.add_argument('-n', '--omit-native-build', action='store_false', dest='buildNative', help='omit cleaning and building native code')
     parser.add_argument('-g', '--only-build-graalvm', action='store_false', dest='buildNonGraal', help='only build the Graal VM')
     parser.add_argument('--jacocout', help='specify the output directory for jacoco report')
@@ -692,7 +731,12 @@ def gate(args):
     try:
         
         t = Task('Clean')
-        clean([] if args.buildNative else ['--no-native'])
+        cleanArgs = []
+        if not args.buildNative:
+            cleanArgs.append('--no-native')
+        if not args.cleanJava:
+            cleanArgs.append('--no-java')
+        clean(cleanArgs)
         tasks.append(t.stop())
         
         t = Task('BuildJava')
@@ -732,7 +776,7 @@ def gate(args):
             for test in sanitycheck.getDacapos(level=sanitycheck.SanityCheckLevel.Gate, gateBuildLevel=vmbuild):
                 t = Task(str(test) + ':' + vmbuild)
                 if not test.test('graal'):
-                    t.abort(test.group + ' ' + test.name + ' Failed')
+                    t.abort(test.name + ' Failed')
                 tasks.append(t.stop())
         
         if args.jacocout is not None:
@@ -845,9 +889,10 @@ def bench(args):
             benchmarks += [sanitycheck.getSPECjvm2008([specjvm], True, 120, 120)]
     
     for test in benchmarks:
-        if not results.has_key(test.group):
-            results[test.group] = {}
-        results[test.group].update(test.bench(vm))
+        for (group, res) in test.bench(vm).items():
+            if not results.has_key(group):
+                results[group] = {};
+            results[group].update(res)
     mx.log(json.dumps(results))
     if resultFile:
         with open(resultFile, 'w') as f:
@@ -882,7 +927,8 @@ def specjvm2008(args):
             mx.abort('-it (Iteration time) needs a numeric value (seconds)')
         vmArgs.remove('-it')
         benchArgs.remove(args[itIdx+1])
-    sanitycheck.getSPECjvm2008(benchArgs, skipValid, wt, it).bench('graal', opts=vmArgs)
+    vm = _vm;
+    sanitycheck.getSPECjvm2008(benchArgs, skipValid, wt, it).bench(vm, opts=vmArgs)
     
 def hsdis(args):
     """install the hsdis library
@@ -895,8 +941,19 @@ def hsdis(args):
     build = _vmbuild if _vmSourcesAvailable else 'product'
     lib = mx.lib_suffix('hsdis-amd64')
     path = join(_vmLibDirInJdk(_jdk(build)), lib)
-    mx.download(path, ['http://lafo.ssw.uni-linz.ac.at/hsdis/' + flavor + "/" + lib])
+    if not exists(path):
+        mx.download(path, ['http://lafo.ssw.uni-linz.ac.at/hsdis/' + flavor + "/" + lib])
     
+def hcfdis(args):
+    """disassembles HexCodeFiles embedded in text files
+
+    Run a tool over the input files to convert all embedded HexCodeFiles
+    to a disassembled format."""
+    path = join(_graal_home, 'lib', 'hcfdis.jar')
+    if not exists(path):
+        mx.download(path, ['http://lafo.ssw.uni-linz.ac.at/hcfdis.jar'])
+    mx.run_java(['-jar', path] + args)
+
 def jacocoreport(args):
     """creates a JaCoCo coverage report
 
@@ -917,6 +974,7 @@ def mx_init():
         'buildvms': [buildvms, '[-options]'],
         'clean': [clean, ''],
         'hsdis': [hsdis, '[att]'],
+        'hcfdis': [hcfdis, ''],
         'igv' : [igv, ''],
         'intro': [intro, ''],
         'jdkhome': [jdkhome, ''],
@@ -940,6 +998,7 @@ def mx_init():
         mx.add_argument('--product', action='store_const', dest='vmbuild', const='product', help='select the product build of the VM')
         mx.add_argument('--debug', action='store_const', dest='vmbuild', const='debug', help='select the debug build of the VM')
         mx.add_argument('--fastdebug', action='store_const', dest='vmbuild', const='fastdebug', help='select the fast debug build of the VM')
+        mx.add_argument('--ecl', action='store_true', dest='make_eclipse_launch', help='create launch configuration for running VM execution(s) in Eclipse')
         
         commands.update({
             'export': [export, '[-options] [zipfile]'],
@@ -964,5 +1023,7 @@ def mx_post_parse_cmd_line(opts):
         if hasattr(opts, 'vmbuild') and opts.vmbuild is not None:
             global _vmbuild
             _vmbuild = opts.vmbuild
+        global _make_eclipse_launch
+        _make_eclipse_launch = getattr(opts, 'make_eclipse_launch', False)
     global _jacoco
     _jacoco = opts.jacoco

@@ -42,7 +42,7 @@ public class LIR {
      * The nodes for the blocks.
      * TODO: This should go away, we want all nodes connected with a next-pointer.
      */
-    private final BlockMap<List<Node>> nodesFor;
+    private final BlockMap<List<Node>> blockToNodesMap;
 
     /**
      * The linear-scan ordered list of blocks.
@@ -54,15 +54,9 @@ public class LIR {
      */
     private final List<Block> codeEmittingOrder;
 
+    public final List<Code> slowPaths;
 
-    public final List<SlowPath> slowPaths;
-
-    public final List<SlowPath> deoptimizationStubs;
-
-    /**
-     * The last slow path emitted, which can be used emit marker bytes.
-     */
-    public SlowPath methodEndMarker;
+    public final List<Code> deoptimizationStubs;
 
     private int numVariables;
 
@@ -73,7 +67,12 @@ public class LIR {
         LIRInstruction createExchange(CiValue input1, CiValue input2);
     }
 
-    public interface SlowPath {
+    private boolean hasArgInCallerFrame;
+
+    /**
+     * An opaque chunk of machine code.
+     */
+    public interface Code {
         void emitCode(TargetMethodAssembler tasm);
     }
 
@@ -82,9 +81,9 @@ public class LIR {
      * @param numLoops number of loops
      * @param compilation the compilation
      */
-    public LIR(ControlFlowGraph cfg, BlockMap<List<Node>> nodesFor, List<Block> linearScanOrder, List<Block> codeEmittingOrder) {
+    public LIR(ControlFlowGraph cfg, BlockMap<List<Node>> blockToNodesMap, List<Block> linearScanOrder, List<Block> codeEmittingOrder) {
         this.cfg = cfg;
-        this.nodesFor = nodesFor;
+        this.blockToNodesMap = blockToNodesMap;
         this.codeEmittingOrder = codeEmittingOrder;
         this.linearScanOrder = linearScanOrder;
 
@@ -92,8 +91,25 @@ public class LIR {
         deoptimizationStubs = new ArrayList<>();
     }
 
+    /**
+     * Gets the nodes in a given block.
+     */
     public List<Node> nodesFor(Block block) {
-        return nodesFor.get(block);
+        return blockToNodesMap.get(block);
+    }
+
+    /**
+     * Determines if any instruction in the LIR has any debug info associated with it.
+     */
+    public boolean hasDebugInfo() {
+        for (Block b : linearScanOrder()) {
+            for (LIRInstruction op : b.lir) {
+                if (op.info != null) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**
@@ -117,20 +133,25 @@ public class LIR {
     }
 
     public void emitCode(TargetMethodAssembler tasm) {
+        if (tasm.frameContext != null) {
+            tasm.frameContext.enter(tasm);
+        }
+
         for (Block b : codeEmittingOrder()) {
             emitBlock(tasm, b);
         }
 
         // generate code for slow cases
-        for (SlowPath sp : slowPaths) {
+        for (Code sp : slowPaths) {
+            emitSlowPath(tasm, sp);
+        }
+        for (Code sp : tasm.slowPaths) {
             emitSlowPath(tasm, sp);
         }
         // generate deoptimization stubs
-        for (SlowPath sp : deoptimizationStubs) {
+        for (Code sp : deoptimizationStubs) {
             emitSlowPath(tasm, sp);
         }
-        // generate traps at the end of the method
-        emitSlowPath(tasm, methodEndMarker);
     }
 
     private static void emitBlock(TargetMethodAssembler tasm, Block block) {
@@ -161,11 +182,23 @@ public class LIR {
         }
     }
 
-    private static void emitSlowPath(TargetMethodAssembler tasm, SlowPath sp) {
+    private static void emitSlowPath(TargetMethodAssembler tasm, Code sp) {
         if (Debug.isDumpEnabled()) {
             tasm.blockComment(String.format("slow case %s", sp.getClass().getName()));
         }
         sp.emitCode(tasm);
+    }
+
+    public void setHasArgInCallerFrame() {
+        hasArgInCallerFrame = true;
+    }
+
+    /**
+     * Determines if any of the parameters to the method are passed via the stack
+     * where the parameters are located in the caller's frame.
+     */
+    public boolean hasArgInCallerFrame() {
+        return hasArgInCallerFrame;
     }
 
 /*

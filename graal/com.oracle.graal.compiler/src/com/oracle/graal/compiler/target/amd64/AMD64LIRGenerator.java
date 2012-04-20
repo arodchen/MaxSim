@@ -74,7 +74,7 @@ import com.oracle.graal.nodes.java.*;
 /**
  * This class implements the X86-specific portion of the LIR generator.
  */
-public class AMD64LIRGenerator extends LIRGenerator {
+public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     private static final CiRegisterValue RAX_I = AMD64.rax.asValue(CiKind.Int);
     private static final CiRegisterValue RAX_L = AMD64.rax.asValue(CiKind.Long);
@@ -97,7 +97,6 @@ public class AMD64LIRGenerator extends LIRGenerator {
 
     public AMD64LIRGenerator(Graph graph, RiRuntime runtime, CiTarget target, FrameMap frameMap, RiResolvedMethod method, LIR lir, RiXirGenerator xir) {
         super(graph, runtime, target, frameMap, method, lir, xir);
-        lir.methodEndMarker = new AMD64MethodEndStub();
         lir.spillMoveFactory = new AMD64SpillMoveFactory();
     }
 
@@ -575,11 +574,13 @@ public class AMD64LIRGenerator extends LIRGenerator {
         Variable newValue = load(operand(node.newValue()));
 
         CiAddress address;
+        int displacement = node.displacement();
         CiValue index = operand(node.offset());
         if (isConstant(index) && NumUtil.isInt(asConstant(index).asLong())) {
-            address = new CiAddress(kind, load(operand(node.object())), (int) asConstant(index).asLong());
+            displacement += (int) asConstant(index).asLong();
+            address = new CiAddress(kind, load(operand(node.object())), displacement);
         } else {
-            address = new CiAddress(kind, load(operand(node.object())), load(index), CiAddress.Scale.Times1, 0);
+            address = new CiAddress(kind, load(operand(node.object())), load(index), CiAddress.Scale.Times1, displacement);
         }
 
         CiRegisterValue rax = AMD64.rax.asValue(kind);

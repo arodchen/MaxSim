@@ -98,6 +98,9 @@ public final class GraalOptions {
     //rematerialize settings
     public static float   MinimumUsageProbability            = 0.95f;
 
+    //loop transform settings
+    public static float   MinimumPeelProbability             = 0.25f;
+
     // debugging settings
     public static int     MethodEndBreakpointGuards          = 0;
     public static boolean ZapStackOnMethodEntry              = ____;
@@ -143,6 +146,7 @@ public final class GraalOptions {
     public static boolean PrintAssembly                      = ____;
     public static boolean PrintCodeBytes                     = ____;
     public static int     PrintAssemblyBytesPerLine          = 16;
+    public static boolean PrintBailout                       = ____;
     public static int     TraceLinearScanLevel               = 0;
     public static boolean TraceRegisterAllocation            = false;
     public static int     TraceLIRGeneratorLevel             = 0;
@@ -192,12 +196,14 @@ public final class GraalOptions {
     public static boolean OptReadElimination                 = true;
     public static boolean OptGVN                             = true;
     public static boolean OptCanonicalizer                   = true;
-    public static boolean OptLoops                           = ____;
+    public static boolean OptLoops                           = true;
     public static boolean ScheduleOutOfLoops                 = true;
     public static boolean OptReorderLoops                    = true;
     public static boolean OptEliminateGuards                 = true;
     public static boolean OptImplicitNullChecks              = true;
     public static boolean OptLivenessAnalysis                = true;
+    public static boolean OptLoopTransform                   = true;
+    public static boolean OptSafepointElimination            = true;
 
     /**
      * Flag to turn on SSA-based register allocation, which is currently under development.
