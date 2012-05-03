@@ -207,6 +207,15 @@ public final class GraalOptions {
     public static boolean OptSafepointElimination            = true;
 
     /**
+     * Insert a counter in the method prologue to track the most frequently called methods that were compiled by Graal.
+     */
+    public static boolean MethodEntryCounters               = false;
+    /**
+     * Number of caller program counters to distinguish when counting methods.
+     */
+    public static int     MethodEntryCountersCallers        = 20;
+
+    /**
      * Flag to turn on SSA-based register allocation, which is currently under development.
      */
     public static boolean AllocSSA                           = false;
@@ -215,6 +224,26 @@ public final class GraalOptions {
      * Prints all the available GraalOptions.
      */
     public static boolean PrintFlags                           = false;
+
+    /**
+     * Counts the various paths taken through a compiled checkcast.
+     */
+    public static boolean CheckcastCounters = false;
+
+    /**
+     * If the probability that a checkcast will hit one the profiled types (up to {@link #CheckcastMaxHints})
+     * is below this value, the checkcast will be compiled without hints.
+     */
+    public static double CheckcastMinHintHitProbability = 0.5;
+
+    /**
+     * The maximum number of hint types that will be used when compiling a checkcast for which
+     * profiling information is available. Note that {@link #CheckcastMinHintHitProbability}
+     * also influences whether hints are used.
+     */
+    public static int CheckcastMaxHints = 2;
+
+    public static int InstanceOfMaxHints = 1;
 
     static {
         // turn detailed assertions on when the general assertions are on (misusing the assert keyword for this)

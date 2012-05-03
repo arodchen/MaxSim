@@ -22,14 +22,13 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
-import com.oracle.graal.graph.Node.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.spi.types.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 
 /**
  * The {@code InstanceOfNode} represents an instanceof test.
@@ -66,17 +65,44 @@ public final class InstanceOfNode extends TypeCheckNode implements Canonicalizab
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
         assert object() != null : this;
+
         RiResolvedType exact = object().exactType();
         if (exact != null) {
-            boolean result = exact.isSubtypeOf(targetClass());
-            if (result != negated) {
-                // The instanceof check reduces to a null check.
-                return graph().unique(new NullCheckNode(object(), false));
+            boolean subType = exact.isSubtypeOf(targetClass());
+
+            if (subType) {
+                if (object().stamp().nonNull()) {
+                    // the instanceOf matches, so return true (or false, for the negated case)
+                    return ConstantNode.forBoolean(!negated, graph());
+                } else {
+                    // the instanceof matches if the object is non-null, so return true (or false, for the negated case) depending on the null-ness.
+                    return graph().unique(new NullCheckNode(object(), negated));
+                }
             } else {
-                // The instanceof check can never succeed.
-                return ConstantNode.forBoolean(false, graph());
+                // since this type check failed for an exact type we know that it can never succeed at run time.
+                // we also don't care about null values, since they will also make the check fail.
+                // so return false (or true, for the negated case)
+                return ConstantNode.forBoolean(negated, graph());
+            }
+        } else {
+            RiResolvedType declared = object().declaredType();
+            if (declared != null) {
+                boolean subType = declared.isSubtypeOf(targetClass());
+
+                if (subType) {
+                    if (object().stamp().nonNull()) {
+                        // the instanceOf matches, so return true (or false, for the negated case)
+                        return ConstantNode.forBoolean(!negated, graph());
+                    } else {
+                        // the instanceof matches if the object is non-null, so return true (or false, for the negated case) depending on the null-ness.
+                        return graph().unique(new NullCheckNode(object(), negated));
+                    }
+                } else {
+                    // since the subtype comparison was only performed on a declared type we don't really know if it might be true at run time...
+                }
             }
         }
+
         CiConstant constant = object().asConstant();
         if (constant != null) {
             assert constant.kind == CiKind.Object;

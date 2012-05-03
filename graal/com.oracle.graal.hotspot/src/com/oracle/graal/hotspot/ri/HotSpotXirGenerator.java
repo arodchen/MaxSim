@@ -25,8 +25,11 @@ package com.oracle.graal.hotspot.ri;
 import static com.oracle.graal.hotspot.ri.TemplateFlag.*;
 import static com.oracle.max.cri.ci.CiValueUtil.*;
 
+import java.io.*;
 import java.util.*;
 import java.util.concurrent.*;
+
+import sun.misc.*;
 
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.hotspot.*;
@@ -288,7 +291,7 @@ public class HotSpotXirGenerator implements RiXirGenerator {
         @Override
         protected XirTemplate create(CiXirAssembler asm, long flags, int size) {
             XirOperand result = asm.restart(target.wordKind);
-            XirOperand type = asm.createInputParameter("type", CiKind.Object);
+            XirOperand hub = asm.createInputParameter("hub", CiKind.Object);
 
             XirOperand temp1 = asm.createRegisterTemp("temp1", target.wordKind, AMD64.rcx);
             XirOperand temp1o = asm.createRegister("temp1o", CiKind.Object, AMD64.rcx);
@@ -299,7 +302,7 @@ public class HotSpotXirGenerator implements RiXirGenerator {
             XirLabel resume = asm.createInlineLabel("resume");
 
             // check if the class is already initialized
-            asm.pload(CiKind.Int, temp2i, type, asm.i(config.klassStateOffset), false);
+            asm.pload(CiKind.Int, temp2i, hub, asm.i(config.klassStateOffset), false);
             asm.jneq(tlabFull, temp2i, asm.i(config.klassStateFullyInitialized));
 
             XirOperand thread = asm.createRegisterTemp("thread", target.wordKind, AMD64.r15);
@@ -312,9 +315,9 @@ public class HotSpotXirGenerator implements RiXirGenerator {
 
             asm.bindInline(resume);
 
-            asm.pload(target.wordKind, temp1, type, asm.i(config.instanceHeaderPrototypeOffset), false);
+            asm.pload(target.wordKind, temp1, hub, asm.i(config.instanceHeaderPrototypeOffset), false);
             asm.pstore(target.wordKind, result, temp1, false);
-            asm.mov(temp1o, type); // need a temporary register since Intel cannot store 64-bit constants to memory
+            asm.mov(temp1o, hub); // need a temporary register since Intel cannot store 64-bit constants to memory
             asm.pstore(CiKind.Object, result, asm.i(config.hubOffset), temp1o, false);
 
             if (size > 2 * target.wordSize) {
@@ -327,7 +330,7 @@ public class HotSpotXirGenerator implements RiXirGenerator {
             // -- out of line -------------------------------------------------------
             asm.bindOutOfLine(tlabFull);
             XirOperand arg = asm.createRegisterTemp("runtime call argument", CiKind.Object, AMD64.rdx);
-            asm.mov(arg, type);
+            asm.mov(arg, hub);
             useRegisters(asm, AMD64.rax);
             asm.callRuntime(config.newInstanceStub, result);
             asm.jmp(resume);
@@ -460,56 +463,115 @@ public class HotSpotXirGenerator implements RiXirGenerator {
         }
     };
 
+    enum CheckcastCounter {
+        hintsHit("hit a hint type"),
+        hintsMissed("missed the hint types"),
+        exact("tested type is (statically) final"),
+        noHints_class("profile information is not used (test type is a class)"),
+        noHints_iface("profile information is not used (test type is an interface)"),
+        noHints_unknown("test type is not a compile-time constant"),
+        isNull("object tested is null"),
+        exception("type test failed with a ClassCastException");
+
+        public final String desc;
+
+        private CheckcastCounter(String desc) {
+            this.desc = desc;
+        }
+
+        static final CheckcastCounter[] VALUES = values();
+    }
+
+    private static final long[] checkcastCounters = new long[CheckcastCounter.VALUES.length];
+
     private IndexTemplates checkCastTemplates = new IndexTemplates(NULL_CHECK, EXACT_HINTS) {
+
+        private void incCounter(CiXirAssembler asm, XirOperand counter, XirParameter counters, CheckcastCounter offset) {
+            int disp = Unsafe.getUnsafe().arrayBaseOffset(long[].class);
+            Scale scale = Scale.fromInt(Unsafe.getUnsafe().arrayIndexScale(long[].class));
+            XirConstant index = asm.i(offset.ordinal());
+            asm.pload(CiKind.Long, counter, counters, index, disp, scale, false);
+            asm.add(counter, counter, asm.i(1));
+            asm.pstore(CiKind.Long, counters, index, counter, disp, scale, false);
+        }
 
         @Override
         protected XirTemplate create(CiXirAssembler asm, long flags, int hintCount) {
             asm.restart(CiKind.Void);
+            boolean exact = is(EXACT_HINTS, flags);
+            XirParameter counters = GraalOptions.CheckcastCounters ? asm.createConstantInputParameter("counters", CiKind.Object) : null;
             XirParameter object = asm.createInputParameter("object", CiKind.Object);
-            final XirOperand hub = is(EXACT_HINTS, flags) ? null : asm.createConstantInputParameter("hub", CiKind.Object);
+            final XirOperand hub = exact ? null : asm.createConstantInputParameter("hub", CiKind.Object);
 
             XirOperand objHub = asm.createTemp("objHub", CiKind.Object);
+            XirOperand counter = counters != null ? asm.createTemp("counter", CiKind.Long) : null;
 
-            XirLabel end = asm.createInlineLabel("end");
+            XirLabel success = asm.createInlineLabel("success");
             XirLabel slowPath = asm.createOutOfLineLabel("slow path");
 
             if (is(NULL_CHECK, flags)) {
                 // null can be cast to anything
-                asm.jeq(end, object, asm.o(null));
+                if (counters != null) {
+                    XirLabel isNotNull = asm.createInlineLabel("isNull");
+                    asm.jneq(isNotNull, object, asm.o(null));
+                    incCounter(asm, counter, counters, CheckcastCounter.isNull);
+                    asm.jmp(success);
+                    asm.bindInline(isNotNull);
+                } else {
+                    asm.jeq(success, object, asm.o(null));
+                }
+
             }
 
             asm.pload(CiKind.Object, objHub, object, asm.i(config.hubOffset), false);
             if (hintCount == 0) {
-                assert !is(EXACT_HINTS, flags);
+                assert !exact;
+                if (counters != null) {
+                    incCounter(asm, counter, counters, is(NULL_TYPE, flags) ? CheckcastCounter.noHints_unknown : is(INTERFACE_TYPE, flags) ? CheckcastCounter.noHints_iface : CheckcastCounter.noHints_class);
+                }
+
                 checkSubtype(asm, objHub, objHub, hub);
                 asm.jeq(slowPath, objHub, asm.o(null));
-                asm.bindInline(end);
+                asm.bindInline(success);
 
                 // -- out of line -------------------------------------------------------
                 asm.bindOutOfLine(slowPath);
             } else {
+                XirLabel hintsSuccess = counters == null ? success : asm.createInlineLabel("hintsSuccess");
+                XirOperand scratchObject = asm.createRegisterTemp("scratch", CiKind.Object, AMD64.r10);
                 // if we get an exact match: succeed immediately
-                XirOperand hintHub = asm.createTemp("hintHub", CiKind.Object);
                 for (int i = 0; i < hintCount; i++) {
-                    XirParameter hintMirror = asm.createConstantInputParameter("hintMirror" + i, CiKind.Object);
-                    asm.pload(CiKind.Object, hintHub, hintMirror, asm.i(config.klassOopOffset), false);
+                    XirParameter hintHub = asm.createConstantInputParameter("hintHub" + i, CiKind.Object);
+                    asm.mov(scratchObject, hintHub);
                     if (i < hintCount - 1) {
-                        asm.jeq(end, objHub, hintHub);
+                        asm.jeq(hintsSuccess, objHub, scratchObject);
                     } else {
-                        asm.jneq(slowPath, objHub, hintHub);
+                        asm.jneq(slowPath, objHub, scratchObject);
                     }
                 }
-                asm.bindInline(end);
+
+                if (counters != null) {
+                    asm.bindInline(hintsSuccess);
+                    incCounter(asm, counter, counters, exact ? CheckcastCounter.exact : CheckcastCounter.hintsHit);
+                }
+
+                asm.bindInline(success);
 
                 // -- out of line -------------------------------------------------------
                 asm.bindOutOfLine(slowPath);
-                if (!is(EXACT_HINTS, flags)) {
+                if (!exact) {
+                    if (counters != null) {
+                        incCounter(asm, counter, counters, CheckcastCounter.hintsMissed);
+                    }
                     checkSubtype(asm, objHub, objHub, hub);
-                    asm.jneq(end, objHub, asm.o(null));
+                    asm.jneq(success, objHub, asm.o(null));
                 }
             }
 
-            RiDeoptReason deoptReason = is(EXACT_HINTS, flags) ? RiDeoptReason.OptimizedTypeCheckViolated : RiDeoptReason.ClassCastException;
+            if (counters != null) {
+                incCounter(asm, counter, counters, CheckcastCounter.exception);
+            }
+            RiDeoptReason deoptReason = exact ? RiDeoptReason.OptimizedTypeCheckViolated : RiDeoptReason.ClassCastException;
             XirOperand scratch = asm.createRegisterTemp("scratch", target.wordKind, AMD64.r10);
             asm.mov(scratch, wordConst(asm, compiler.getRuntime().encodeDeoptActionAndReason(RiDeoptAction.InvalidateReprofile, deoptReason)));
             asm.callRuntime(CiRuntimeCall.Deoptimize, null);
@@ -545,21 +607,21 @@ public class HotSpotXirGenerator implements RiXirGenerator {
                 asm.jmp(trueSucc);
             } else {
                 XirLabel slowPath = null;
-                XirOperand hintHub = asm.createTemp("hintHub", CiKind.Object);
+                XirOperand scratchObject = asm.createRegisterTemp("scratch", CiKind.Object, AMD64.r10);
 
                 // if we get an exact match: succeed immediately
                 for (int i = 0; i < hintCount; i++) {
-                    XirParameter hintMirror = asm.createConstantInputParameter("hintMirror" + i, CiKind.Object);
-                    asm.pload(CiKind.Object, hintHub, hintMirror, asm.i(config.klassOopOffset), false);
+                    XirParameter hintHub = asm.createConstantInputParameter("hintHub" + i, CiKind.Object);
+                    asm.mov(scratchObject, hintHub);
                     if (i < hintCount - 1) {
-                        asm.jeq(trueSucc, objHub, hintHub);
+                        asm.jeq(trueSucc, objHub, scratchObject);
                     } else {
                         if (is(EXACT_HINTS, flags)) {
-                            asm.jneq(falseSucc, objHub, hintHub);
+                            asm.jneq(falseSucc, objHub, scratchObject);
                             asm.jmp(trueSucc);
                         } else {
                             slowPath = asm.createOutOfLineLabel("slow path");
-                            asm.jneq(slowPath, objHub, hintHub);
+                            asm.jneq(slowPath, objHub, scratchObject);
                             asm.jmp(trueSucc);
                         }
                     }
@@ -610,20 +672,20 @@ public class HotSpotXirGenerator implements RiXirGenerator {
                 asm.bindInline(end);
             } else {
                 XirLabel slowPath = null;
-                XirOperand hintHub = asm.createRegisterTemp("scratch", CiKind.Object, AMD64.r10);
+                XirOperand scratchObject = asm.createRegisterTemp("scratch", CiKind.Object, AMD64.r10);
 
                 // if we get an exact match: succeed immediately
                 for (int i = 0; i < hintCount; i++) {
-                    XirParameter hintMirror = asm.createConstantInputParameter("hintMirror" + i, CiKind.Object);
-                    asm.pload(CiKind.Object, hintHub, hintMirror, asm.i(config.klassOopOffset), false);
+                    XirParameter hintHub = asm.createConstantInputParameter("hintHub" + i, CiKind.Object);
+                    asm.mov(scratchObject, hintHub);
                     if (i < hintCount - 1) {
-                        asm.jeq(end, objHub, hintHub);
+                        asm.jeq(end, objHub, scratchObject);
                     } else {
                         if (is(EXACT_HINTS, flags)) {
-                            asm.jeq(end, objHub, hintHub);
+                            asm.jeq(end, objHub, scratchObject);
                         } else {
                             slowPath = asm.createOutOfLineLabel("slow path");
-                            asm.jeq(end, objHub, hintHub);
+                            asm.jeq(end, objHub, scratchObject);
                             asm.jmp(slowPath);
                         }
                     }
@@ -642,166 +704,6 @@ public class HotSpotXirGenerator implements RiXirGenerator {
             }
 
             return asm.finishTemplate("instanceof");
-        }
-    };
-
-    private KindTemplates arrayCopyTemplates = new KindTemplates() {
-
-        @Override
-        protected XirTemplate create(CiXirAssembler asm, long flags, CiKind kind) {
-            asm.restart(CiKind.Void);
-            XirParameter src = asm.createInputParameter("src", CiKind.Object);
-            XirParameter srcPos = asm.createInputParameter("srcPos", CiKind.Int, true);
-            XirParameter dest = asm.createInputParameter("dest", CiKind.Object);
-            XirParameter destPos = asm.createInputParameter("destPos", CiKind.Int, true);
-            XirParameter length = asm.createInputParameter("length", CiKind.Int, true);
-
-            XirOperand tempSrc = asm.createTemp("tempSrc", target.wordKind);
-            XirOperand tempDest = asm.createTemp("tempDest", target.wordKind);
-            XirOperand lengthOperand = asm.createRegisterTemp("lengthOperand", CiKind.Int, AMD64.rax);
-
-            XirOperand compHub = null;
-            XirOperand valueHub = null;
-            XirOperand temp = null;
-            XirLabel store = null;
-            XirLabel slowStoreCheck = null;
-
-            if (is(STORE_CHECK, flags) && kind == CiKind.Object) {
-                valueHub = asm.createRegisterTemp("valueHub", target.wordKind, AMD64.rdi);
-                compHub = asm.createRegisterTemp("compHub", target.wordKind, AMD64.rsi);
-                temp = asm.createRegisterTemp("temp", target.wordKind, AMD64.r10);
-            }
-
-            // Calculate the factor for the repeat move instruction.
-            int elementSize = target.sizeInBytes(kind);
-            int factor;
-            boolean wordSize;
-            if (elementSize >= target.wordSize) {
-                assert elementSize % target.wordSize == 0;
-                wordSize = true;
-                factor = elementSize / target.wordSize;
-            } else {
-                factor = elementSize;
-                wordSize = false;
-            }
-
-            // Adjust the length if the factor is not 1.
-            if (factor != 1) {
-                asm.shl(lengthOperand, length, asm.i(CiUtil.log2(factor)));
-            } else {
-                asm.mov(lengthOperand, length);
-            }
-
-            // Set the start and the end pointer.
-            asm.lea(tempSrc, src, srcPos, config.getArrayOffset(kind), Scale.fromInt(elementSize));
-            asm.lea(tempDest, dest, destPos, config.getArrayOffset(kind), Scale.fromInt(elementSize));
-
-            XirLabel reverse = null;
-            XirLabel normal = null;
-
-            if (is(STORE_CHECK, flags)) {
-                reverse = asm.createInlineLabel("reverse");
-                asm.jneq(reverse, src, dest);
-            }
-
-            if (!is(STORE_CHECK, flags) && !is(INPUTS_DIFFERENT, flags) && !is(INPUTS_SAME, flags)) {
-                normal = asm.createInlineLabel("normal");
-                asm.jneq(normal, src, dest);
-            }
-
-            if (!is(INPUTS_DIFFERENT, flags)) {
-                if (reverse == null) {
-                    reverse = asm.createInlineLabel("reverse");
-                }
-                asm.jlt(reverse, srcPos, destPos);
-            }
-
-            if (!is(STORE_CHECK, flags) && !is(INPUTS_DIFFERENT, flags) && !is(INPUTS_SAME, flags)) {
-                asm.bindInline(normal);
-            }
-
-            // Everything set up => repeat mov.
-            if (wordSize) {
-                asm.repmov(tempSrc, tempDest, lengthOperand);
-            } else {
-                asm.repmovb(tempSrc, tempDest, lengthOperand);
-            }
-
-            if (!is(INPUTS_DIFFERENT, flags) || is(STORE_CHECK, flags)) {
-
-                XirLabel end = asm.createInlineLabel("end");
-                asm.jmp(end);
-
-                // Implement reverse copy, because srcPos < destPos and src == dest.
-                asm.bindInline(reverse);
-
-                if (is(STORE_CHECK, flags)) {
-                    asm.pload(CiKind.Object, compHub, dest, asm.i(config.hubOffset), false);
-                    asm.pload(CiKind.Object, compHub, compHub, asm.i(config.arrayClassElementOffset), false);
-                }
-
-                CiKind copyKind = wordSize ? CiKind.Object : CiKind.Byte;
-                XirOperand tempValue = asm.createTemp("tempValue", copyKind);
-                XirLabel start = asm.createInlineLabel("start");
-                asm.bindInline(start);
-                asm.sub(lengthOperand, lengthOperand, asm.i(1));
-                asm.jlt(end, lengthOperand, asm.i(0));
-
-                Scale scale = wordSize ? Scale.fromInt(target.wordSize) : Scale.Times1;
-                asm.pload(copyKind, tempValue, tempSrc, lengthOperand, 0, scale, false);
-
-                if (is(STORE_CHECK, flags)) {
-                    slowStoreCheck = asm.createOutOfLineLabel("slowStoreCheck");
-                    store = asm.createInlineLabel("store");
-                    asm.jeq(store, tempValue, asm.o(null)); // first check if value is null
-                    asm.pload(CiKind.Object, valueHub, tempValue, asm.i(config.hubOffset), false);
-                    asm.jneq(slowStoreCheck, compHub, valueHub); // then check component hub matches value hub
-                    asm.bindInline(store);
-                }
-
-                asm.pstore(copyKind, tempDest, lengthOperand, tempValue, 0, scale, false);
-
-                asm.jmp(start);
-                asm.bindInline(end);
-            }
-
-            if (kind == CiKind.Object) {
-                // Do write barriers
-                asm.lea(tempDest, dest, destPos, config.getArrayOffset(kind), Scale.fromInt(elementSize));
-                asm.shr(tempDest, tempDest, asm.i(config.cardtableShift));
-                asm.pstore(CiKind.Boolean, wordConst(asm, config.cardtableStartAddress), tempDest, asm.b(false), false);
-
-                XirOperand tempDestEnd = tempSrc; // Reuse src temp
-                asm.lea(tempDestEnd, dest, destPos, config.getArrayOffset(kind), Scale.fromInt(elementSize));
-                asm.add(tempDestEnd, tempDestEnd, length);
-                asm.shr(tempDestEnd, tempDestEnd, asm.i(config.cardtableShift));
-
-                // Jump to out-of-line write barrier loop if the array is big.
-                XirLabel writeBarrierLoop = asm.createOutOfLineLabel("writeBarrierLoop");
-                asm.jneq(writeBarrierLoop, tempDest, tempSrc);
-                XirLabel back = asm.createInlineLabel("back");
-                asm.bindInline(back);
-
-                asm.bindOutOfLine(writeBarrierLoop);
-                asm.pstore(CiKind.Boolean, wordConst(asm, config.cardtableStartAddress), tempDestEnd, asm.b(false), false);
-                asm.sub(tempDestEnd, tempDestEnd, asm.i(1));
-                asm.jneq(writeBarrierLoop, tempDestEnd, tempDest);
-                asm.jmp(back);
-            }
-
-            if (is(STORE_CHECK, flags)) {
-                assert kind == CiKind.Object;
-                useRegisters(asm, AMD64.rax);
-                asm.bindOutOfLine(slowStoreCheck);
-                checkSubtype(asm, temp, valueHub, compHub);
-                asm.jneq(store, temp, wordConst(asm, 0));
-                XirOperand scratch = asm.createRegisterTemp("scratch", target.wordKind, AMD64.r10);
-                asm.mov(scratch, wordConst(asm, compiler.getRuntime().encodeDeoptActionAndReason(RiDeoptAction.None, RiDeoptReason.ClassCastException)));
-                asm.callRuntime(CiRuntimeCall.Deoptimize, null);
-                asm.jmp(store);
-            }
-
-            return asm.finishTemplate("arraycopy<" + kind + ">");
         }
     };
 
@@ -871,43 +773,57 @@ public class HotSpotXirGenerator implements RiXirGenerator {
 
     @Override
     public XirSnippet genNewInstance(XirSite site, RiType type) {
-        int instanceSize = ((HotSpotTypeResolved) type).instanceSize();
-        return new XirSnippet(newInstanceTemplates.get(site, instanceSize), XirArgument.forObject(type));
+        HotSpotTypeResolved resolvedType = (HotSpotTypeResolved) type;
+        int instanceSize = resolvedType.instanceSize();
+        return new XirSnippet(newInstanceTemplates.get(site, instanceSize), XirArgument.forObject(resolvedType.klassOop()));
     }
 
     @Override
     public XirSnippet genNewArray(XirSite site, XirArgument length, CiKind elementKind, RiType componentType, RiType arrayType) {
         if (elementKind == CiKind.Object) {
             assert arrayType instanceof RiResolvedType;
-            return new XirSnippet(newObjectArrayTemplates.get(site), length, XirArgument.forObject(arrayType));
+            return new XirSnippet(newObjectArrayTemplates.get(site), length, XirArgument.forObject(((HotSpotType) arrayType).klassOop()));
         } else {
             assert arrayType == null;
             RiType primitiveArrayType = compiler.getCompilerToVM().getPrimitiveArrayType(elementKind);
-            return new XirSnippet(newTypeArrayTemplates.get(site, elementKind), length, XirArgument.forObject(primitiveArrayType));
+            return new XirSnippet(newTypeArrayTemplates.get(site, elementKind), length, XirArgument.forObject(((HotSpotType) primitiveArrayType).klassOop()));
         }
     }
 
     @Override
     public XirSnippet genNewMultiArray(XirSite site, XirArgument[] lengths, RiType type) {
         XirArgument[] params = Arrays.copyOf(lengths, lengths.length + 1);
-        params[lengths.length] = XirArgument.forObject(type);
+        params[lengths.length] = XirArgument.forObject(((HotSpotType) type).klassOop());
         return new XirSnippet(multiNewArrayTemplate.get(site, lengths.length), params);
     }
 
     @Override
-    public XirSnippet genCheckCast(XirSite site, XirArgument receiver, XirArgument hub, RiType type, RiResolvedType[] hints, boolean hintsExact) {
+    public XirSnippet genCheckCast(XirSite site, XirArgument receiver, XirArgument hub, RiResolvedType type, RiResolvedType[] hints, boolean hintsExact) {
+        final boolean useCounters = GraalOptions.CheckcastCounters;
         if (hints == null || hints.length == 0) {
-            return new XirSnippet(checkCastTemplates.get(site, 0), receiver, hub);
+            if (useCounters) {
+                if (type == null) {
+                    return new XirSnippet(checkCastTemplates.get(site, 0, NULL_TYPE), XirArgument.forObject(checkcastCounters), receiver, hub);
+                } else if (type.isInterface()) {
+                    return new XirSnippet(checkCastTemplates.get(site, 0, INTERFACE_TYPE), XirArgument.forObject(checkcastCounters), receiver, hub);
+                } else {
+                    return new XirSnippet(checkCastTemplates.get(site, 0), XirArgument.forObject(checkcastCounters), receiver, hub);
+                }
+            } else {
+                return new XirSnippet(checkCastTemplates.get(site, 0), receiver, hub);
+            }
         } else {
-            XirArgument[] params = new XirArgument[hints.length + (hintsExact ? 1 : 2)];
+            XirArgument[] params = new XirArgument[(useCounters ? 1 : 0) + hints.length + (hintsExact ? 1 : 2)];
             int i = 0;
+            if (useCounters) {
+                params[i++] = XirArgument.forObject(checkcastCounters);
+            }
             params[i++] = receiver;
             if (!hintsExact) {
                 params[i++] = hub;
             }
             for (RiResolvedType hint : hints) {
-                Object hintMirror = hint.toJava();
-                params[i++] = XirArgument.forObject(hintMirror);
+                params[i++] = XirArgument.forObject(((HotSpotType) hint).klassOop());
             }
             XirTemplate template = hintsExact ? checkCastTemplates.get(site, hints.length, EXACT_HINTS) : checkCastTemplates.get(site, hints.length);
             return new XirSnippet(template, params);
@@ -926,8 +842,7 @@ public class HotSpotXirGenerator implements RiXirGenerator {
                 params[i++] = hub;
             }
             for (RiResolvedType hint : hints) {
-                Object hintMirror = hint.toJava();
-                params[i++] = XirArgument.forObject(hintMirror);
+                params[i++] = XirArgument.forObject(((HotSpotType) hint).klassOop());
             }
             XirTemplate template = hintsExact ? instanceOfTemplates.get(site, hints.length, EXACT_HINTS) : instanceOfTemplates.get(site, hints.length);
             return new XirSnippet(template, params);
@@ -948,29 +863,11 @@ public class HotSpotXirGenerator implements RiXirGenerator {
             params[i++] = trueValue;
             params[i++] = falseValue;
             for (RiResolvedType hint : hints) {
-                Object hintMirror = hint.toJava();
-                params[i++] = XirArgument.forObject(hintMirror);
+                params[i++] = XirArgument.forObject(((HotSpotType) hint).klassOop());
             }
             XirTemplate template = hintsExact ? materializeInstanceOfTemplates.get(site, hints.length, EXACT_HINTS) : materializeInstanceOfTemplates.get(site, hints.length);
             return new XirSnippet(template, params);
         }
-    }
-
-    @Override
-    public XirSnippet genArrayCopy(XirSite site, XirArgument src, XirArgument srcPos, XirArgument dest, XirArgument destPos, XirArgument length, RiType elementType, boolean inputsSame, boolean inputsDifferent) {
-        if (elementType == null) {
-            return null;
-        }
-        assert !inputsDifferent || !inputsSame;
-        XirTemplate template = null;
-        if (inputsDifferent) {
-            template = arrayCopyTemplates.get(site, elementType.kind(true), INPUTS_DIFFERENT);
-        } else if (inputsSame) {
-            template = arrayCopyTemplates.get(site, elementType.kind(true), INPUTS_SAME);
-        } else {
-            template = arrayCopyTemplates.get(site, elementType.kind(true));
-        }
-        return new XirSnippet(template, src, srcPos, dest, destPos, length);
     }
 
     @Override
@@ -1094,6 +991,45 @@ public class HotSpotXirGenerator implements RiXirGenerator {
 
         public XirTemplate get(XirSite site, CiKind kind, TemplateFlag... flags) {
             return getInternal(getBits(kind.ordinal(), site, flags));
+        }
+    }
+
+    private static void printCounter(PrintStream out, CheckcastCounter name, long count, long total) {
+        double percent = ((double) (count * 100)) / total;
+        out.println(String.format("%16s: %5.2f%%%10d  // %s", name, percent, count, name.desc));
+    }
+
+    public static  void printCheckcastCounters(PrintStream out) {
+        class Count implements Comparable<Count> {
+            long c;
+            CheckcastCounter name;
+            Count(long c, CheckcastCounter name) {
+                this.c = c;
+                this.name = name;
+            }
+            public int compareTo(Count o) {
+                return (int) (o.c - c);
+            }
+        }
+
+        long total = 0;
+        Count[] counters = new Count[checkcastCounters.length];
+        for (int i = 0; i < counters.length; i++) {
+            counters[i] = new Count(checkcastCounters[i], CheckcastCounter.VALUES[i]);
+            total += checkcastCounters[i];
+        }
+        Arrays.sort(counters);
+
+        out.println();
+        out.println("** Checkcast counters **");
+        for (Count c : counters) {
+            printCounter(out, c.name, c.c, total);
+        }
+    }
+
+    public static void printCounters(PrintStream out) {
+        if (GraalOptions.CheckcastCounters) {
+            printCheckcastCounters(out);
         }
     }
 }

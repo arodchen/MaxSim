@@ -27,12 +27,13 @@ import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.*;
 
+import com.oracle.graal.compiler.*;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.counters.*;
+import com.oracle.graal.java.bytecode.*;
 import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
 import com.oracle.max.criutils.*;
-import com.oracle.graal.compiler.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.java.bytecode.*;
 
 /**
  * Implementation of RiMethod for resolved HotSpot methods.
@@ -186,7 +187,12 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
     }
 
     public int compiledCodeSize() {
-        return compiler.getCompilerToVM().RiMethod_getCompiledCodeSize(this);
+        int result = compiler.getCompilerToVM().RiMethod_getCompiledCodeSize(this);
+        if (result > 0) {
+            assert result > MethodEntryCounters.getCodeSize();
+            result =  result - MethodEntryCounters.getCodeSize();
+        }
+        return result;
     }
 
     @Override
@@ -245,62 +251,6 @@ public final class HotSpotMethodResolvedImpl extends HotSpotMethod implements Ho
     @Override
     public RiConstantPool getConstantPool() {
         return ((HotSpotTypeResolvedImpl) holder()).constantPool();
-    }
-
-    @Override
-    public void dumpProfile() {
-        TTY.println("profile info for %s", this);
-        TTY.println("canBeStaticallyBound: " + canBeStaticallyBound());
-        TTY.println("invocationCount: " + invocationCount());
-        RiProfilingInfo profilingInfo = this.profilingInfo();
-        for (int i = 0; i < codeSize(); i++) {
-            if (profilingInfo.getExecutionCount(i) != -1) {
-                TTY.println("  executionCount@%d: %d", i, profilingInfo.getExecutionCount(i));
-            }
-
-            if (profilingInfo.getBranchTakenProbability(i) != -1) {
-                TTY.println("  branchProbability@%d: %f", i, profilingInfo.getBranchTakenProbability(i));
-            }
-
-            double[] switchProbabilities = profilingInfo.getSwitchProbabilities(i);
-            if (switchProbabilities != null) {
-                TTY.print("  switchProbabilities@%d:", i);
-                for (int j = 0; j < switchProbabilities.length; j++) {
-                    TTY.print(" %f", switchProbabilities[j]);
-                }
-                TTY.println();
-            }
-
-            if (profilingInfo.getExceptionSeen(i) != RiExceptionSeen.FALSE) {
-                TTY.println("  exceptionSeen@%d: %s", i, profilingInfo.getExceptionSeen(i).name());
-            }
-
-            RiTypeProfile typeProfile = profilingInfo.getTypeProfile(i);
-            if (typeProfile != null) {
-                RiResolvedType[] types = typeProfile.getTypes();
-                double[] probabilities = typeProfile.getProbabilities();
-                if (types != null && probabilities != null) {
-                    assert types.length == probabilities.length : "length must match";
-                    TTY.print("  types@%d:", i);
-                    for (int j = 0; j < types.length; j++) {
-                        TTY.print(" %s (%f)", types[j], probabilities[j]);
-                    }
-                    TTY.println(" not recorded (%f)", typeProfile.getNotRecordedProbability());
-                }
-            }
-        }
-
-        boolean firstDeoptReason = true;
-        for (RiDeoptReason reason: RiDeoptReason.values()) {
-            int count = profilingInfo.getDeoptimizationCount(reason);
-            if (count > 0) {
-                if (firstDeoptReason) {
-                    TTY.println("Deopt History");
-                    firstDeoptReason = false;
-                }
-                TTY.println("  %s: %d", reason.name(), count);
-            }
-        }
     }
 
     @Override

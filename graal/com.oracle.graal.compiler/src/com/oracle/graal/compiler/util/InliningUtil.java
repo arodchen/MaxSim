@@ -26,9 +26,6 @@ import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
-import com.oracle.max.cri.ri.RiType.Representation;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.cri.*;
@@ -40,7 +37,11 @@ import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
+import com.oracle.max.cri.ri.RiTypeProfile.ProfiledType;
 
 public class InliningUtil {
 
@@ -51,21 +52,35 @@ public class InliningUtil {
         void recordConcreteMethodAssumption(RiResolvedMethod method, RiResolvedType context, RiResolvedMethod impl);
     }
 
-    private static String methodName(RiResolvedMethod method, Invoke invoke) {
-        if (Debug.isLogEnabled()) {
-            if (invoke != null && invoke.stateAfter() != null) {
-                RiMethod parent = invoke.stateAfter().method();
-                return parent.name() + "@" + invoke.bci() + ": " + methodNameAndCodeSize(method);
-            } else {
-                return methodNameAndCodeSize(method);
-            }
-        } else {
+    public static String methodName(RiResolvedMethod method, Invoke invoke) {
+        if (!Debug.isLogEnabled()) {
             return null;
+        } else if (invoke != null && invoke.stateAfter() != null) {
+            return methodName(invoke.stateAfter(), invoke.bci()) + ": " + CiUtil.format("%H.%n(%p):%r", method) + " (" + method.codeSize() + " bytes)";
+        } else {
+            return CiUtil.format("%H.%n(%p):%r", method) + " (" + method.codeSize() + " bytes)";
         }
     }
 
-    private static String methodNameAndCodeSize(RiResolvedMethod method) {
-        return CiUtil.format("%H.%n(%p):%r", method) + " (" + method.codeSize() + " bytes)";
+    public static String methodName(InlineInfo info) {
+        if (!Debug.isLogEnabled()) {
+            return null;
+        } else if (info.invoke != null && info.invoke.stateAfter() != null) {
+            return methodName(info.invoke.stateAfter(), info.invoke.bci()) + ": " + info.toString();
+        } else {
+            return info.toString();
+        }
+    }
+
+    private static String methodName(FrameState frameState, int bci) {
+        StringBuilder sb = new StringBuilder();
+        if (frameState.outerFrameState() != null) {
+            sb.append(methodName(frameState.outerFrameState(), frameState.outerFrameState().bci));
+            sb.append("->");
+        }
+        sb.append(CiUtil.format("%h.%n", frameState.method()));
+        sb.append("@").append(bci);
+        return sb.toString();
     }
 
     /**
@@ -179,8 +194,8 @@ public class InliningUtil {
             AnchorNode anchor = graph.add(new AnchorNode());
             assert invoke.predecessor() != null;
 
-            CheckCastNode checkCast = createAnchoredReceiver(graph, runtime, anchor, type, receiver);
-            invoke.callTarget().replaceFirstInput(receiver, checkCast);
+            ValueNode anchoredReceiver = createAnchoredReceiver(graph, anchor, type, receiver);
+            invoke.callTarget().replaceFirstInput(receiver, anchoredReceiver);
 
             graph.addBeforeFixed(invoke.node(), objectClass);
             graph.addBeforeFixed(invoke.node(), guard);
@@ -209,21 +224,19 @@ public class InliningUtil {
      */
     private static class MultiTypeGuardInlineInfo extends InlineInfo {
         public final List<RiResolvedMethod> concretes;
-        public final RiResolvedType[] types;
+        public final ProfiledType[] ptypes;
         public final int[] typesToConcretes;
-        public final double[] typeProbabilities;
         public final double notRecordedTypeProbability;
 
-        public MultiTypeGuardInlineInfo(Invoke invoke, double weight, int level, List<RiResolvedMethod> concretes, RiResolvedType[] types,
-                        int[] typesToConcretes, double[] typeProbabilities, double notRecordedTypeProbability) {
+        public MultiTypeGuardInlineInfo(Invoke invoke, double weight, int level, List<RiResolvedMethod> concretes, ProfiledType[] ptypes,
+                        int[] typesToConcretes, double notRecordedTypeProbability) {
             super(invoke, weight, level);
-            assert concretes.size() > 0 && concretes.size() <= types.length : "must have at least one method but no more than types methods";
-            assert types.length == typesToConcretes.length && types.length == typeProbabilities.length : "array length must match";
+            assert concretes.size() > 0 && concretes.size() <= ptypes.length : "must have at least one method but no more than types methods";
+            assert ptypes.length == typesToConcretes.length : "array lengths must match";
 
             this.concretes = concretes;
-            this.types = types;
+            this.ptypes = ptypes;
             this.typesToConcretes = typesToConcretes;
-            this.typeProbabilities = typeProbabilities;
             this.notRecordedTypeProbability = notRecordedTypeProbability;
         }
 
@@ -291,7 +304,7 @@ public class InliningUtil {
                 for (int j = 0; j < typesToConcretes.length; j++) {
                     if (typesToConcretes[j] == i) {
                         predecessors++;
-                        probability += typeProbabilities[j];
+                        probability += ptypes[j].probability;
                     }
                 }
 
@@ -334,8 +347,8 @@ public class InliningUtil {
 
                 RiResolvedType commonType = getLeastCommonType(i);
                 ValueNode receiver = invokeForInlining.callTarget().receiver();
-                CheckCastNode checkCast = createAnchoredReceiver(graph, runtime, node, commonType, receiver);
-                invokeForInlining.callTarget().replaceFirstInput(receiver, checkCast);
+                ValueNode anchoredReceiver = createAnchoredReceiver(graph, node, commonType, receiver);
+                invokeForInlining.callTarget().replaceFirstInput(receiver, anchoredReceiver);
 
                 RiResolvedMethod concrete = concretes.get(i);
                 StructuredGraph calleeGraph = getGraph(concrete, callback);
@@ -350,9 +363,9 @@ public class InliningUtil {
             for (int i = 0; i < typesToConcretes.length; i++) {
                 if (typesToConcretes[i] == concreteMethodIndex) {
                     if (commonType == null) {
-                        commonType = types[i];
+                        commonType = ptypes[i].type;
                     } else {
-                        commonType = commonType.leastCommonAncestor(types[i]);
+                        commonType = commonType.leastCommonAncestor(ptypes[i].type);
                     }
                 }
             }
@@ -361,7 +374,7 @@ public class InliningUtil {
         }
 
         private void inlineSingleMethod(StructuredGraph graph, GraalRuntime runtime, InliningCallback callback) {
-            assert concretes.size() == 1 && types.length > 1 && !shouldFallbackToInvoke() && notRecordedTypeProbability == 0;
+            assert concretes.size() == 1 && ptypes.length > 1 && !shouldFallbackToInvoke() && notRecordedTypeProbability == 0;
 
             MergeNode calleeEntryNode = graph.add(new MergeNode());
             calleeEntryNode.setProbability(invoke.probability());
@@ -383,15 +396,15 @@ public class InliningUtil {
         }
 
         private FixedNode createDispatchOnType(StructuredGraph graph, ReadHubNode objectClassNode, BeginNode[] calleeEntryNodes, FixedNode unknownTypeSux) {
-            assert types.length > 1;
+            assert ptypes.length > 1;
 
-            int lastIndex = types.length - 1;
-            double[] branchProbabilities = convertTypeToBranchProbabilities(typeProbabilities, notRecordedTypeProbability);
-            double nodeProbability = typeProbabilities[lastIndex];
-            IfNode nextNode = createTypeCheck(graph, objectClassNode, types[lastIndex], calleeEntryNodes[typesToConcretes[lastIndex]], unknownTypeSux, branchProbabilities[lastIndex], invoke.probability() * nodeProbability);
+            int lastIndex = ptypes.length - 1;
+            double[] branchProbabilities = convertTypeToBranchProbabilities(ptypes, notRecordedTypeProbability);
+            double nodeProbability = ptypes[lastIndex].probability;
+            IfNode nextNode = createTypeCheck(graph, objectClassNode, ptypes[lastIndex].type, calleeEntryNodes[typesToConcretes[lastIndex]], unknownTypeSux, branchProbabilities[lastIndex], invoke.probability() * nodeProbability);
             for (int i = lastIndex - 1; i >= 0; i--) {
-                nodeProbability += typeProbabilities[i];
-                nextNode = createTypeCheck(graph, objectClassNode, types[i], calleeEntryNodes[typesToConcretes[i]], nextNode, branchProbabilities[i], invoke.probability() * nodeProbability);
+                nodeProbability += ptypes[i].probability;
+                nextNode = createTypeCheck(graph, objectClassNode, ptypes[i].type, calleeEntryNodes[typesToConcretes[i]], nextNode, branchProbabilities[i], invoke.probability() * nodeProbability);
             }
 
             return nextNode;
@@ -411,12 +424,12 @@ public class InliningUtil {
             return result;
         }
 
-        private static double[] convertTypeToBranchProbabilities(double[] typeProbabilities, double notRecordedTypeProbability) {
-            double[] result = new double[typeProbabilities.length];
+        private static double[] convertTypeToBranchProbabilities(ProfiledType[] ptypes, double notRecordedTypeProbability) {
+            double[] result = new double[ptypes.length];
             double total = notRecordedTypeProbability;
-            for (int i = typeProbabilities.length - 1; i >= 0; i--) {
-                total += typeProbabilities[i];
-                result[i] = typeProbabilities[i] / total;
+            for (int i = ptypes.length - 1; i >= 0; i--) {
+                total += ptypes[i].probability;
+                result[i] = ptypes[i].probability / total;
             }
             assert total > 0.99 && total < 1.01;
             return result;
@@ -483,7 +496,7 @@ public class InliningUtil {
         @Override
         public String toString() {
             StringBuilder builder = new StringBuilder(shouldFallbackToInvoke() ? "megamorphic" : "polymorphic");
-            builder.append(String.format(", %d methods with %d type checks:", concretes.size(), types.length));
+            builder.append(String.format(", %d methods with %d type checks:", concretes.size(), ptypes.length));
             for (int i = 0; i < concretes.size(); i++) {
                 builder.append(CiUtil.format("  %H.%n(%p):%r", concretes.get(i)));
             }
@@ -598,15 +611,13 @@ public class InliningUtil {
         RiProfilingInfo profilingInfo = parent.profilingInfo();
         RiTypeProfile typeProfile = profilingInfo.getTypeProfile(invoke.bci());
         if (typeProfile != null) {
-            RiResolvedType[] types = typeProfile.getTypes();
-            double[] probabilities = typeProfile.getProbabilities();
+            ProfiledType[] ptypes = typeProfile.getTypes();
 
-            if (types != null && probabilities != null && types.length > 0) {
-                assert types.length == probabilities.length : "length must match";
+            if (ptypes != null && ptypes.length > 0) {
                 double notRecordedTypeProbability = typeProfile.getNotRecordedProbability();
-                if (types.length == 1 && notRecordedTypeProbability == 0) {
+                if (ptypes.length == 1 && notRecordedTypeProbability == 0) {
                     if (optimisticOpts.inlineMonomorphicCalls()) {
-                        RiResolvedType type = types[0];
+                        RiResolvedType type = ptypes[0].type;
                         RiResolvedMethod concrete = type.resolveMethodImpl(targetMethod);
                         if (checkTargetConditions(invoke, concrete, optimisticOpts)) {
                             double weight = callback == null ? 0 : callback.inliningWeight(parent, concrete, invoke);
@@ -632,9 +643,9 @@ public class InliningUtil {
 
                         // determine concrete methods and map type to specific method
                         ArrayList<RiResolvedMethod> concreteMethods = new ArrayList<>();
-                        int[] typesToConcretes = new int[types.length];
-                        for (int i = 0; i < types.length; i++) {
-                            RiResolvedMethod concrete = types[i].resolveMethodImpl(targetMethod);
+                        int[] typesToConcretes = new int[ptypes.length];
+                        for (int i = 0; i < ptypes.length; i++) {
+                            RiResolvedMethod concrete = ptypes[i].type.resolveMethodImpl(targetMethod);
 
                             int index = concreteMethods.indexOf(concrete);
                             if (index < 0) {
@@ -655,7 +666,7 @@ public class InliningUtil {
                         }
 
                         if (canInline) {
-                            return new MultiTypeGuardInlineInfo(invoke, totalWeight, level, concreteMethods, types, typesToConcretes, probabilities, notRecordedTypeProbability);
+                            return new MultiTypeGuardInlineInfo(invoke, totalWeight, level, concreteMethods, ptypes, typesToConcretes, notRecordedTypeProbability);
                         } else {
                             Debug.log("not inlining %s because it is a polymorphic method call and at least one invoked method cannot be inlined", methodName(targetMethod, invoke));
                             return null;
@@ -679,11 +690,9 @@ public class InliningUtil {
         }
     }
 
-    private static CheckCastNode createAnchoredReceiver(StructuredGraph graph, GraalRuntime runtime, FixedNode anchor, RiResolvedType commonType, ValueNode receiver) {
+    private static ValueNode createAnchoredReceiver(StructuredGraph graph, FixedNode anchor, RiResolvedType commonType, ValueNode receiver) {
         // to avoid that floating reads on receiver fields float above the type check
-        ConstantNode typeConst = graph.unique(ConstantNode.forCiConstant(commonType.getEncoding(Representation.ObjectHub), runtime, graph));
-        CheckCastNode checkCast = graph.unique(new CheckCastNode(anchor, typeConst, commonType, receiver, false));
-        return checkCast;
+        return graph.unique(new PiNode(receiver, anchor, StampFactory.declaredNonNull(commonType)));
     }
 
     private static boolean checkInvokeConditions(Invoke invoke) {

@@ -37,6 +37,7 @@ import com.oracle.max.cri.ri.*;
 import com.oracle.max.cri.xir.CiXirAssembler.XirMark;
 import com.oracle.max.cri.xir.*;
 import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.compiler.util.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
@@ -102,8 +103,8 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     protected void emitNode(ValueNode node) {
-        if (node instanceof AMD64LIRLowerable) {
-            ((AMD64LIRLowerable) node).generateAmd64(this);
+        if (node instanceof LIRGenLowerable) {
+            ((LIRGenLowerable) node).generate(this);
         } else {
             super.emitNode(node);
         }
@@ -338,7 +339,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitRem(CiValue a, CiValue b) {
+    public CiValue emitRem(CiValue a, CiValue b) {
         switch(a.kind) {
             case Int:
                 emitMove(a, RAX_I);
@@ -349,9 +350,9 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
                 append(new DivOp(LREM, RDX_L, RAX_L, load(b), state()));
                 return emitMove(RDX_L);
             case Float:
-                return emitCallToRuntime(CiRuntimeCall.ArithmeticFrem, false, a, b);
+                return emitCall(CiRuntimeCall.ArithmeticFrem, false, a, b);
             case Double:
-                return emitCallToRuntime(CiRuntimeCall.ArithmeticDrem, false, a, b);
+                return emitCall(CiRuntimeCall.ArithmeticDrem, false, a, b);
             default:
                 throw GraalInternalError.shouldNotReachHere();
         }

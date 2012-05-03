@@ -35,4 +35,5 @@ public interface HotSpotTypeResolved extends RiResolvedType, Remote {
 
     RiField createRiField(String name, RiType type, int offset, int flags);
 
+    HotSpotKlassOop klassOop();
 }

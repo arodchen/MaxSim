@@ -35,17 +35,15 @@ import com.oracle.graal.hotspot.Compiler;
  */
 public final class HotSpotTypePrimitive extends HotSpotType implements RiResolvedType {
 
-    /**
-     *
-     */
     private static final long serialVersionUID = -6208552348908071473L;
     private CiKind kind;
-
+    private final HotSpotKlassOop klassOop;
 
     public HotSpotTypePrimitive(Compiler compiler, CiKind kind) {
         super(compiler);
         this.kind = kind;
         this.name = String.valueOf(Character.toUpperCase(kind.typeChar));
+        this.klassOop = new HotSpotKlassOop(compiler, kind.toJavaClass());
     }
 
     @Override
@@ -177,5 +175,10 @@ public final class HotSpotTypePrimitive extends HotSpotType implements RiResolve
     @Override
     public RiResolvedType resolve(RiResolvedType accessingClass) {
         return this;
+    }
+
+    @Override
+    public HotSpotKlassOop klassOop() {
+        return klassOop;
     }
 }
