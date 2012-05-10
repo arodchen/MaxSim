@@ -255,7 +255,7 @@ public final class GraphBuilderPhase extends Phase {
         FrameStateBuilder dispatchState = frameState.copy();
         dispatchState.clearStack();
 
-        BeginNode dispatchBegin = currentGraph.add(new BeginStateSplitNode());
+        BeginNode dispatchBegin = currentGraph.add(new DispatchBeginNode());
         dispatchBegin.setStateAfter(dispatchState.create(bci));
 
         if (exceptionObject == null) {
@@ -590,40 +590,15 @@ public final class GraphBuilderPhase extends Phase {
         }
     }
 
-    private static final RiResolvedType[] EMPTY_TYPE_ARRAY = new RiResolvedType[0];
-
-    private RiResolvedType[] getTypeCheckHints(RiResolvedType type, int maxHints) {
-        if (!optimisticOpts.useTypeCheckHints() || Util.isFinalClass(type)) {
-            return new RiResolvedType[] {type};
+    private RiTypeProfile getProfileForTypeCheck(RiResolvedType type) {
+        if (!optimisticOpts.useTypeCheckHints() || TypeCheckHints.isFinalClass(type)) {
+            return null;
         } else {
             RiResolvedType uniqueSubtype = type.uniqueConcreteSubtype();
             if (uniqueSubtype != null) {
-                return new RiResolvedType[] {uniqueSubtype};
+                return new RiTypeProfile(0.0D, new ProfiledType(uniqueSubtype, 1.0D));
             } else {
-                RiTypeProfile typeProfile = profilingInfo.getTypeProfile(bci());
-                if (typeProfile != null) {
-                    double notRecordedTypes = typeProfile.getNotRecordedProbability();
-                    ProfiledType[] ptypes = typeProfile.getTypes();
-                    if (notRecordedTypes < (1D - GraalOptions.CheckcastMinHintHitProbability) && ptypes != null && ptypes.length > 0) {
-                        RiResolvedType[] hints = new RiResolvedType[ptypes.length];
-                        int hintCount = 0;
-                        double totalHintProbability = 0.0d;
-                        for (ProfiledType ptype : ptypes) {
-                            RiResolvedType hint = ptype.type;
-                            if (hint.isSubtypeOf(type)) {
-                                hints[hintCount++] = hint;
-                                totalHintProbability += ptype.probability;
-                            }
-                        }
-                        if (totalHintProbability >= GraalOptions.CheckcastMinHintHitProbability) {
-                            if (hints.length == hintCount && hintCount <= maxHints) {
-                                return hints;
-                            }
-                            return Arrays.copyOf(hints, Math.min(maxHints, hintCount));
-                        }
-                    }
-                }
-                return EMPTY_TYPE_ARRAY;
+                return profilingInfo.getTypeProfile(bci());
             }
         }
     }
@@ -635,13 +610,8 @@ public final class GraphBuilderPhase extends Phase {
         if (initialized) {
             ConstantNode typeInstruction = genTypeOrDeopt(RiType.Representation.ObjectHub, type, true);
             ValueNode object = frameState.apop();
-            AnchorNode anchor = currentGraph.add(new AnchorNode());
-            append(anchor);
-            CheckCastNode checkCast;
-            RiResolvedType[] hints = getTypeCheckHints((RiResolvedType) type, GraalOptions.CheckcastMaxHints);
-            boolean hintsExact = Util.isFinalClass((RiResolvedType) type);
-            checkCast = currentGraph.unique(new CheckCastNode(anchor, typeInstruction, (RiResolvedType) type, object, hints, hintsExact));
-            append(currentGraph.add(new ValueAnchorNode(checkCast)));
+            CheckCastNode checkCast = currentGraph.add(new CheckCastNode(typeInstruction, (RiResolvedType) type, object, getProfileForTypeCheck((RiResolvedType) type)));
+            append(checkCast);
             frameState.apush(checkCast);
         } else {
             ValueNode object = frameState.apop();
@@ -657,9 +627,7 @@ public final class GraphBuilderPhase extends Phase {
         if (type instanceof RiResolvedType) {
             RiResolvedType resolvedType = (RiResolvedType) type;
             ConstantNode hub = appendConstant(resolvedType.getEncoding(RiType.Representation.ObjectHub));
-
-            RiResolvedType[] hints = getTypeCheckHints(resolvedType, GraalOptions.InstanceOfMaxHints);
-            InstanceOfNode instanceOfNode = new InstanceOfNode(hub, (RiResolvedType) type, object, hints, Util.isFinalClass(resolvedType), false);
+            InstanceOfNode instanceOfNode = new InstanceOfNode(hub, (RiResolvedType) type, object, getProfileForTypeCheck(resolvedType), false);
             frameState.ipush(append(MaterializeNode.create(currentGraph.unique(instanceOfNode), currentGraph)));
         } else {
             BlockPlaceholderNode trueSucc = currentGraph.add(new BlockPlaceholderNode());

@@ -246,6 +246,14 @@ public final class GraalOptions {
      */
     public static int CheckcastMaxHints = 2;
 
+    /**
+     * @see #CheckcastMinHintHitProbability
+     */
+    public static double InstanceOfMinHintHitProbability = 0.5;
+
+    /**
+     * @see #CheckcastMaxHints
+     */
     public static int InstanceOfMaxHints = 1;
 
     /**

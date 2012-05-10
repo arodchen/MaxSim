@@ -25,7 +25,6 @@ package com.oracle.graal.nodes.java;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.spi.types.*;
 import com.oracle.graal.nodes.type.*;
@@ -33,32 +32,31 @@ import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
 
 /**
- * The {@code CheckCastNode} represents a {@link Bytecodes#CHECKCAST}.
- *
- * The {@link #targetClass()} of a CheckCastNode can be null for array store checks!
+ * Implements a type check that results in a {@link ClassCastException} if it fails.
  */
-public final class CheckCastNode extends TypeCheckNode implements Canonicalizable, LIRLowerable, Node.IterableNodeType, TypeFeedbackProvider, TypeCanonicalizable {
+public final class CheckCastNode extends FixedWithNextNode implements Canonicalizable, LIRLowerable, Node.IterableNodeType, TypeFeedbackProvider, TypeCanonicalizable {
 
-    @Input(notDataflow = true) protected final FixedNode anchor;
-
-    public FixedNode anchor() {
-        return anchor;
-    }
+    @Input private ValueNode object;
+    @Input private ValueNode targetClassInstruction;
+    private final RiResolvedType targetClass;
+    private final RiTypeProfile profile;
 
     /**
      * Creates a new CheckCast instruction.
-     *
      * @param targetClassInstruction the instruction which produces the class which is being cast to
      * @param targetClass the class being cast to
      * @param object the instruction producing the object
      */
-    public CheckCastNode(FixedNode anchor, ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object) {
-        this(anchor, targetClassInstruction, targetClass, object, EMPTY_HINTS, false);
+    public CheckCastNode(ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object) {
+        this(targetClassInstruction, targetClass, object, null);
     }
 
-    public CheckCastNode(FixedNode anchor, ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object, RiResolvedType[] hints, boolean hintsExact) {
-        super(targetClassInstruction, targetClass, object, hints, hintsExact, targetClass == null ? StampFactory.forKind(CiKind.Object) : StampFactory.declared(targetClass));
-        this.anchor = anchor;
+    public CheckCastNode(ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object, RiTypeProfile profile) {
+        super(targetClass == null ? StampFactory.forKind(CiKind.Object) : StampFactory.declared(targetClass));
+        this.targetClassInstruction = targetClassInstruction;
+        this.targetClass = targetClass;
+        this.object = object;
+        this.profile = profile;
     }
 
     @Override
@@ -71,10 +69,8 @@ public final class CheckCastNode extends TypeCheckNode implements Canonicalizabl
         assert object() != null : this;
 
         RiResolvedType objectDeclaredType = object().declaredType();
-        RiResolvedType targetClass = targetClass();
         if (objectDeclaredType != null && targetClass != null && objectDeclaredType.isSubtypeOf(targetClass)) {
             // we don't have to check for null types here because they will also pass the checkcast.
-            freeAnchor();
             return object();
         }
 
@@ -82,31 +78,10 @@ public final class CheckCastNode extends TypeCheckNode implements Canonicalizabl
         if (constant != null) {
             assert constant.kind == CiKind.Object;
             if (constant.isNull()) {
-                freeAnchor();
                 return object();
             }
         }
-
-        if (tool.assumptions() != null && hints() != null && targetClass() != null) {
-            if (!hintsExact() && hints().length == 1 && hints()[0] == targetClass().uniqueConcreteSubtype()) {
-                tool.assumptions().recordConcreteSubtype(targetClass(), hints()[0]);
-                return graph().unique(new CheckCastNode(anchor, targetClassInstruction(), targetClass(), object(), hints(), true));
-            }
-        }
         return this;
-    }
-
-    // TODO (thomaswue): Find a better way to handle anchors.
-    private void freeAnchor() {
-        ValueAnchorNode anchorUsage = usages().filter(ValueAnchorNode.class).first();
-        if (anchorUsage != null) {
-            anchorUsage.replaceFirstInput(this, null);
-        }
-    }
-
-    @Override
-    public BooleanNode negate() {
-        throw new Error("A CheckCast does not produce a boolean value, so it should actually not be a subclass of BooleanNode");
     }
 
     @Override
@@ -127,5 +102,28 @@ public final class CheckCastNode extends TypeCheckNode implements Canonicalizabl
             }
         }
         return null;
+    }
+
+    public ValueNode object() {
+        return object;
+    }
+
+    public ValueNode targetClassInstruction() {
+        return targetClassInstruction;
+    }
+
+    /**
+     * Gets the target class, i.e. the class being cast to, or the class being tested against.
+     * This may be null in the case where the type being tested is dynamically loaded such as
+     * when checking an object array store.
+     *
+     * @return the target class or null if not known
+     */
+    public RiResolvedType targetClass() {
+        return targetClass;
+    }
+
+    public RiTypeProfile profile() {
+        return profile;
     }
 }

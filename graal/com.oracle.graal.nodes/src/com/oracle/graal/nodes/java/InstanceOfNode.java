@@ -33,9 +33,13 @@ import com.oracle.max.cri.ri.*;
 /**
  * The {@code InstanceOfNode} represents an instanceof test.
  */
-public final class InstanceOfNode extends TypeCheckNode implements Canonicalizable, LIRLowerable, ConditionalTypeFeedbackProvider, TypeCanonicalizable {
+public final class InstanceOfNode extends BooleanNode implements Canonicalizable, LIRLowerable, ConditionalTypeFeedbackProvider, TypeCanonicalizable {
 
     private final boolean negated;
+    @Input private ValueNode object;
+    @Input private ValueNode targetClassInstruction;
+    private final RiResolvedType targetClass;
+    private final RiTypeProfile profile;
 
     public boolean negated() {
         return negated;
@@ -49,11 +53,15 @@ public final class InstanceOfNode extends TypeCheckNode implements Canonicalizab
      * @param object the instruction producing the object input to this instruction
      */
     public InstanceOfNode(ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object, boolean negated) {
-        this(targetClassInstruction, targetClass, object, EMPTY_HINTS, false, negated);
+        this(targetClassInstruction, targetClass, object, null, negated);
     }
 
-    public InstanceOfNode(ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object, RiResolvedType[] hints, boolean hintsExact, boolean negated) {
-        super(targetClassInstruction, targetClass, object, hints, hintsExact, StampFactory.illegal());
+    public InstanceOfNode(ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object, RiTypeProfile profile, boolean negated) {
+        super(StampFactory.illegal());
+        this.targetClassInstruction = targetClassInstruction;
+        this.targetClass = targetClass;
+        this.object = object;
+        this.profile = profile;
         this.negated = negated;
         assert targetClass != null;
     }
@@ -112,18 +120,12 @@ public final class InstanceOfNode extends TypeCheckNode implements Canonicalizab
                 assert false : "non-null constants are always expected to provide an exactType";
             }
         }
-        if (tool.assumptions() != null && hints() != null && targetClass() != null) {
-            if (!hintsExact() && hints().length == 1 && hints()[0] == targetClass().uniqueConcreteSubtype()) {
-                tool.assumptions().recordConcreteSubtype(targetClass(), hints()[0]);
-                return graph().unique(new InstanceOfNode(targetClassInstruction(), targetClass(), object(), hints(), true, negated));
-            }
-        }
         return this;
     }
 
     @Override
     public BooleanNode negate() {
-        return graph().unique(new InstanceOfNode(targetClassInstruction(), targetClass(), object(), hints(), hintsExact(), !negated));
+        return graph().unique(new InstanceOfNode(targetClassInstruction(), targetClass(), object(), profile(), !negated));
     }
 
     @Override
@@ -160,5 +162,25 @@ public final class InstanceOfNode extends TypeCheckNode implements Canonicalizab
             }
         }
         return null;
+    }
+
+    public ValueNode object() {
+        return object;
+    }
+
+    public ValueNode targetClassInstruction() {
+        return targetClassInstruction;
+    }
+
+    /**
+     * Gets the target class, i.e. the class being cast to, or the class being tested against.
+     * @return the target class
+     */
+    public RiResolvedType targetClass() {
+        return targetClass;
+    }
+
+    public RiTypeProfile profile() {
+        return profile;
     }
 }
