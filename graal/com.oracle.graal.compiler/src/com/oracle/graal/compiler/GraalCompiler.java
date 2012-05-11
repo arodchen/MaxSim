@@ -136,8 +136,13 @@ public class GraalCompiler {
             new InliningPhase(target, runtime, null, assumptions, cache, plan, optimisticOpts).apply(graph);
             new DeadCodeEliminationPhase().apply(graph);
             new PhiStampPhase().apply(graph);
+
             if (GraalOptions.PropagateTypes) {
                 new PropagateTypeCachePhase(target, runtime, assumptions).apply(graph);
+            }
+
+            if (GraalOptions.CheckCastElimination) {
+                new CheckCastEliminationPhase().apply(graph);
             }
 
             if (GraalOptions.OptCanonicalizer) {
@@ -172,6 +177,9 @@ public class GraalCompiler {
         new LoweringPhase(runtime, assumptions).apply(graph);
         new CanonicalizerPhase(target, runtime, assumptions, mark, null).apply(graph);
 
+        if (GraalOptions.CullFrameStates) {
+            new CullFrameStatesPhase().apply(graph);
+        }
         if (GraalOptions.Lower) {
             new FloatingReadPhase().apply(graph);
             if (GraalOptions.OptGVN) {
@@ -185,6 +193,11 @@ public class GraalCompiler {
         if (GraalOptions.PropagateTypes) {
             new PropagateTypeCachePhase(target, runtime, assumptions).apply(graph);
         }
+
+        if (GraalOptions.CheckCastElimination) {
+            new CheckCastEliminationPhase().apply(graph);
+        }
+
         if (GraalOptions.OptCanonicalizer) {
             new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
         }
