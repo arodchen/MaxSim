@@ -164,6 +164,8 @@ public final class GraalOptions {
 
     // Code generator settings
     public static boolean PropagateTypes                     = ____;
+    public static boolean CheckCastElimination               = true;
+    public static boolean CullFrameStates                    = ____;
     public static boolean UseProfilingInformation            = true;
            static boolean RemoveNeverExecutedCode            = true;
            static boolean UseExceptionProbability            = true;
@@ -254,6 +256,13 @@ public final class GraalOptions {
      * @see #CheckcastMaxHints
      */
     public static int InstanceOfMaxHints = 1;
+
+    /**
+     * Use HIR lowering instead of LIR lowering for checkcast instructions.
+     * Only checkcasts in methods in a class whose name contains this option will be HIR lowered.
+     * TDOD (dnsimon) remove once HIR checkcast lowering works reliably
+     */
+    public static String HIRLowerCheckcast;
 
     /**
      * The profiling info cache directory.
