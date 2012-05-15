@@ -28,8 +28,8 @@ import java.lang.reflect.*;
 import java.util.*;
 
 import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.compiler.phases.CanonicalizerPhase.IsImmutablePredicate;
+import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.compiler.util.*;
 import com.oracle.graal.cri.*;
@@ -39,6 +39,7 @@ import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.Compiler;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.snippets.*;
+import com.oracle.graal.hotspot.snippets.CheckCastSnippets.Counter;
 import com.oracle.graal.hotspot.target.amd64.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -81,7 +82,11 @@ public class HotSpotRuntime implements GraalRuntime {
         Snippets.install(this, compiler.getTarget(), new ArrayCopySnippets());
         Snippets.install(this, compiler.getTarget(), new CheckCastSnippets());
         try {
-            checkcastSnippet = getRiMethod(CheckCastSnippets.class.getDeclaredMethod("checkcast", Object.class, Object.class, Object[].class, boolean.class));
+            if (GraalOptions.CheckcastCounters) {
+                checkcastSnippet = getRiMethod(CheckCastSnippets.class.getDeclaredMethod("checkcastWithCounters", Object.class, Object.class, Object[].class, boolean.class, Counter.class));
+            } else {
+                checkcastSnippet = getRiMethod(CheckCastSnippets.class.getDeclaredMethod("checkcast", Object.class, Object.class, Object[].class, boolean.class));
+            }
         } catch (NoSuchMethodException e) {
             throw new GraalInternalError(e);
         }
@@ -282,7 +287,7 @@ public class HotSpotRuntime implements GraalRuntime {
 
         if (n instanceof ArrayLengthNode) {
             ArrayLengthNode arrayLengthNode = (ArrayLengthNode) n;
-            SafeReadNode safeReadArrayLength = safeReadArrayLength(arrayLengthNode.graph(), arrayLengthNode.array(), arrayLengthNode.stamp(), StructuredGraph.INVALID_GRAPH_ID);
+            SafeReadNode safeReadArrayLength = safeReadArrayLength(arrayLengthNode.array(), StructuredGraph.INVALID_GRAPH_ID);
             graph.replaceFixedWithFixed(arrayLengthNode, safeReadArrayLength);
             safeReadArrayLength.lower(tool);
         } else if (n instanceof LoadFieldNode) {
@@ -336,7 +341,8 @@ public class HotSpotRuntime implements GraalRuntime {
             }
         } else if (n instanceof LoadIndexedNode) {
             LoadIndexedNode loadIndexed = (LoadIndexedNode) n;
-            Node boundsCheck = createBoundsCheck(loadIndexed, tool, loadIndexed.leafGraphId());
+
+            Node boundsCheck = createBoundsCheck(loadIndexed, tool);
 
             CiKind elementKind = loadIndexed.elementKind();
             LocationNode arrayLocation = createArrayLocation(graph, elementKind, loadIndexed.index());
@@ -345,7 +351,7 @@ public class HotSpotRuntime implements GraalRuntime {
             graph.replaceFixedWithFixed(loadIndexed, memoryRead);
         } else if (n instanceof StoreIndexedNode) {
             StoreIndexedNode storeIndexed = (StoreIndexedNode) n;
-            Node boundsCheck = createBoundsCheck(storeIndexed, tool, storeIndexed.leafGraphId());
+            Node boundsCheck = createBoundsCheck(storeIndexed, tool);
 
             CiKind elementKind = storeIndexed.elementKind();
             LocationNode arrayLocation = createArrayLocation(graph, elementKind, storeIndexed.index());
@@ -412,7 +418,7 @@ public class HotSpotRuntime implements GraalRuntime {
             memoryRead.dependencies().add(tool.createGuard(graph.unique(new NullCheckNode(objectClassNode.object(), false)), RiDeoptReason.NullCheckException, RiDeoptAction.InvalidateReprofile, StructuredGraph.INVALID_GRAPH_ID));
             graph.replaceFixed(objectClassNode, memoryRead);
         } else if (n instanceof CheckCastNode) {
-            if (GraalOptions.HIRLowerCheckcast != null && graph.method() != null && graph.method().holder().name().contains(GraalOptions.HIRLowerCheckcast)) {
+            if (shouldLowerCheckcast(graph)) {
                 final Map<CiConstant, CiConstant> hintHubsSet = new IdentityHashMap<>();
                 IsImmutablePredicate immutabilityPredicate = new IsImmutablePredicate() {
                     public boolean apply(CiConstant constant) {
@@ -432,8 +438,12 @@ public class HotSpotRuntime implements GraalRuntime {
                 final CiConstant hintHubsConst = CiConstant.forObject(hintHubs);
                 hintHubsSet.put(hintHubsConst, hintHubsConst);
                 Debug.log("Lowering checkcast in %s: node=%s, hintsHubs=%s, exact=%b", graph, checkcast, Arrays.toString(hints.types), hints.exact);
-
-                InliningUtil.inlineSnippet(this, checkcast, checkcast, snippetGraph, true, immutabilityPredicate, tool, hub, object, hintHubsConst, CiConstant.forBoolean(hints.exact));
+                if (GraalOptions.CheckcastCounters) {
+                    Counter noHintsCounter = checkcast.targetClass() == null ? Counter.noHints_unknown : checkcast.targetClass().isInterface() ? Counter.noHints_iface : Counter.noHints_class;
+                    InliningUtil.inlineSnippet(this, checkcast, checkcast, snippetGraph, true, immutabilityPredicate, hub, object, hintHubsConst, CiConstant.forBoolean(hints.exact), CiConstant.forObject(noHintsCounter));
+                } else {
+                    InliningUtil.inlineSnippet(this, checkcast, checkcast, snippetGraph, true, immutabilityPredicate, hub, object, hintHubsConst, CiConstant.forBoolean(hints.exact));
+                }
                 new DeadCodeEliminationPhase().apply(graph);
             }
         } else {
@@ -441,12 +451,33 @@ public class HotSpotRuntime implements GraalRuntime {
         }
     }
 
+    private static boolean shouldLowerCheckcast(StructuredGraph graph) {
+        String option = GraalOptions.HIRLowerCheckcast;
+        if (option != null) {
+            if (option.length() == 0) {
+                return true;
+            }
+            RiResolvedMethod method = graph.method();
+            return method != null && CiUtil.format("%H.%n", method).contains(option);
+        }
+        return false;
+    }
+
     private IndexedLocationNode createArrayLocation(Graph graph, CiKind elementKind, ValueNode index) {
         return IndexedLocationNode.create(LocationNode.getArrayLocation(elementKind), elementKind, config.getArrayOffset(elementKind), index, graph);
     }
 
-    private static Node createBoundsCheck(AccessIndexedNode n, CiLoweringTool tool, long leafGraphId) {
-        return tool.createGuard(n.graph().unique(new CompareNode(n.index(), Condition.BT, n.length())), RiDeoptReason.BoundsCheckException, RiDeoptAction.InvalidateReprofile, leafGraphId);
+    private SafeReadNode safeReadArrayLength(ValueNode array, long leafGraphId) {
+        return safeRead(array.graph(), CiKind.Int, array, config.arrayLengthOffset, StampFactory.positiveInt(), leafGraphId);
+    }
+
+    private Node createBoundsCheck(AccessIndexedNode n, CiLoweringTool tool) {
+        SafeReadNode arrayLength = safeReadArrayLength(n.array(), n.leafGraphId());
+        Node guard = tool.createGuard(n.graph().unique(new CompareNode(n.index(), Condition.BT, arrayLength)), RiDeoptReason.BoundsCheckException, RiDeoptAction.InvalidateReprofile, n.leafGraphId());
+
+        ((StructuredGraph) n.graph()).addBeforeFixed(n, arrayLength);
+        arrayLength.lower(tool);
+        return guard;
     }
 
     @Override
@@ -498,10 +529,6 @@ public class HotSpotRuntime implements GraalRuntime {
 
     private SafeReadNode safeReadHub(Graph graph, ValueNode value, long leafGraphId) {
         return safeRead(graph, CiKind.Object, value, config.hubOffset, StampFactory.objectNonNull(), leafGraphId);
-    }
-
-    private SafeReadNode safeReadArrayLength(Graph graph, ValueNode value, Stamp stamp, long leafGraphId) {
-        return safeRead(graph, CiKind.Int, value, config.arrayLengthOffset, stamp, leafGraphId);
     }
 
     private static SafeReadNode safeRead(Graph graph, CiKind kind, ValueNode value, int offset, Stamp stamp, long leafGraphId) {

@@ -33,6 +33,7 @@ import com.oracle.graal.compiler.phases.CanonicalizerPhase.IsImmutablePredicate;
 import com.oracle.graal.cri.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.Node.*;
 import com.oracle.graal.lir.cfg.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.PhiNode.PhiType;
@@ -40,7 +41,6 @@ import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
-import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.max.cri.ci.*;
@@ -909,7 +909,6 @@ public class InliningUtil {
 
     /**
      * Performs replacement of a node with a snippet graph.
-     *
      * @param replacee the node that will be replaced
      * @param anchor the control flow replacee
      * @param snippetGraph the graph that the replacee will be replaced with
@@ -922,12 +921,11 @@ public class InliningUtil {
                     final StructuredGraph snippetGraph,
                     final boolean explodeLoops,
                     final IsImmutablePredicate immutabilityPredicate,
-                    final CiLoweringTool tool,
                     final Object... args) {
         Debug.scope("InliningSnippet", snippetGraph.method(), new Runnable() {
             @Override
             public void run() {
-                inlineSnippet0(runtime, replacee, anchor, snippetGraph, explodeLoops, immutabilityPredicate, tool, args);
+                inlineSnippet0(runtime, replacee, anchor, snippetGraph, explodeLoops, immutabilityPredicate, args);
             }
         });
     }
@@ -937,7 +935,7 @@ public class InliningUtil {
                     StructuredGraph snippetGraph,
                     boolean explodeLoops,
                     IsImmutablePredicate immutabilityPredicate,
-                    CiLoweringTool tool, Object... args) {
+                    Object... args) {
 
         Debug.dump(replacee.graph(), "Before lowering %s", replacee);
 
@@ -1018,25 +1016,11 @@ public class InliningUtil {
 
         // Remove all frame states from the inlined snippet graph. Snippets must be atomic (i.e. free
         // of side-effects that prevent deoptimizing to a point before the snippet).
-        if (tool != null) {
-            boolean innerLowering = false;
-            for (Node node : duplicates.values()) {
-                if (node instanceof Lowerable) {
-                    innerLowering = true;
-                    ((Lowerable) node).lower(tool);
-
-                }
-            }
-            if (innerLowering) {
-                Debug.dump(graph, "After inner lowering");
-            }
-        }
-
         for (Node node : graph.getNewNodes(mark)) {
             if (node instanceof StateSplit) {
                 StateSplit stateSplit = (StateSplit) node;
                 FrameState frameState = stateSplit.stateAfter();
-                assert !stateSplit.hasSideEffect() : "snippets cannot contain side-effecting node " + node + "\n    " + replacee.graph();
+                assert !stateSplit.hasSideEffect() : "snippets cannot contain side-effecting node " + node + "\n    " + frameState.toString(Verbosity.Debugger);
                 if (frameState != null) {
                     stateSplit.setStateAfter(null);
                 }
