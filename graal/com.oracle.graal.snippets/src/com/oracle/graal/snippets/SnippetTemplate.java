@@ -234,40 +234,21 @@ public class SnippetTemplate {
         boolean exploded = false;
         do {
             exploded = false;
-            for (Node node : snippetCopy.getNodes()) {
-                if (node instanceof ExplodeLoopNode) {
-                    final ExplodeLoopNode explodeLoop = (ExplodeLoopNode) node;
-                    LoopBeginNode loopBegin = explodeLoop.findLoopBegin();
-                    if (loopBegin != null) {
-                        ControlFlowGraph cfg = ControlFlowGraph.compute(snippetCopy, true, true, false, false);
-                        for (Loop loop : cfg.getLoops()) {
-                            if (loop.loopBegin() == loopBegin) {
-                                SuperBlock wholeLoop = LoopTransformUtil.wholeLoop(loop);
-                                Debug.dump(snippetCopy, "Before exploding loop %s", loopBegin);
-                                int peel = 0;
-                                while (!loopBegin.isDeleted()) {
-                                    int mark = snippetCopy.getMark();
-                                    LoopTransformUtil.peel(loop, wholeLoop);
-                                    Debug.dump(snippetCopy, "After peel %d", peel);
-                                    new CanonicalizerPhase(null, runtime, null, mark, null).apply(snippetCopy);
-                                    peel++;
-                                }
-                                Debug.dump(snippetCopy, "After exploding loop %s", loopBegin);
-                                exploded = true;
-                                break;
-                            }
-                        }
-                    } else {
-                        // Earlier canonicalization removed the loop altogether
-                    }
-
-                    FixedNode explodeLoopNext = explodeLoop.next();
-                    explodeLoop.clearSuccessors();
-                    explodeLoop.replaceAtPredecessors(explodeLoopNext);
-                    explodeLoop.replaceAtUsages(null);
-                    GraphUtil.killCFG(explodeLoop);
-                    break;
+            ExplodeLoopNode explodeLoop = snippetCopy.getNodes().filter(ExplodeLoopNode.class).first();
+            if (explodeLoop != null) { // Earlier canonicalization may have removed the loop altogether
+                LoopBeginNode loopBegin = explodeLoop.findLoopBegin();
+                if (loopBegin != null) {
+                    LoopEx loop = new LoopsData(snippetCopy).loop(loopBegin);
+                    int mark = snippetCopy.getMark();
+                    LoopTransformations.fullUnroll(loop);
+                    new CanonicalizerPhase(null, runtime, null, mark, null).apply(snippetCopy);
                 }
+                FixedNode explodeLoopNext = explodeLoop.next();
+                explodeLoop.clearSuccessors();
+                explodeLoop.replaceAtPredecessor(explodeLoopNext);
+                explodeLoop.replaceAtUsages(null);
+                GraphUtil.killCFG(explodeLoop);
+                exploded = true;
             }
         } while (exploded);
 
@@ -421,7 +402,7 @@ public class SnippetTemplate {
 
         // Re-wire the control flow graph around the replacee
         FixedNode firstCFGNodeDuplicate = (FixedNode) duplicates.get(firstCFGNode);
-        anchor.replaceAtPredecessors(firstCFGNodeDuplicate);
+        anchor.replaceAtPredecessor(firstCFGNodeDuplicate);
         FixedNode next = anchor.next();
         anchor.setNext(null);
 
