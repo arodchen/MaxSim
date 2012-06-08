@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,22 +20,23 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.hotspot;
+package com.oracle.graal.api;
 
-import java.io.*;
+import static org.junit.Assert.*;
 
-import com.oracle.graal.api.meta.RiKind.*;
+import org.junit.*;
 
 
-/**
- * Parent class for all HotSpot Ri... types.
- */
-public abstract class CompilerObject implements Serializable, FormatWithToString {
-    private static final long serialVersionUID = -4551670987101214877L;
-    protected final HotSpotCompilerImpl compiler;
+public class GraalTest {
 
-    protected CompilerObject(HotSpotCompilerImpl compiler) {
-        this.compiler = compiler;
+    @Test
+    public void testRuntimeAvailable() {
+        assertNotNull(Graal.getRuntime());
+        System.out.println(Graal.getRuntime().getClass());
     }
 
+    @Test
+    public void testRuntimeNamed() {
+        assertNotNull(Graal.getRuntime().getName());
+    }
 }

@@ -28,6 +28,13 @@ project@com.oracle.graal.api@sourceDirs=src
 project@com.oracle.graal.api@checkstyle=com.oracle.graal.graph
 project@com.oracle.graal.api@javaCompliance=1.7
 
+# graal.api.test
+project@com.oracle.graal.api.test@subDir=graal
+project@com.oracle.graal.api.test@sourceDirs=src
+project@com.oracle.graal.api.test@dependencies=JUNIT,com.oracle.graal.api
+project@com.oracle.graal.api.test@checkstyle=com.oracle.graal.graph
+project@com.oracle.graal.api.test@javaCompliance=1.7
+
 # graal.api.meta
 project@com.oracle.graal.api.meta@subDir=graal
 project@com.oracle.graal.api.meta@sourceDirs=src
@@ -57,9 +64,16 @@ project@com.oracle.graal.hotspot@javaCompliance=1.7
 
 # graal.graph
 project@com.oracle.graal.graph@subDir=graal
-project@com.oracle.graal.graph@sourceDirs=src,test
-project@com.oracle.graal.graph@dependencies=com.oracle.graal.debug,JUNIT
+project@com.oracle.graal.graph@sourceDirs=src
+project@com.oracle.graal.graph@dependencies=com.oracle.graal.debug
 project@com.oracle.graal.graph@javaCompliance=1.7
+
+# graal.graph.test
+project@com.oracle.graal.graph.test@subDir=graal
+project@com.oracle.graal.graph.test@sourceDirs=src
+project@com.oracle.graal.graph.test@checkstyle=com.oracle.graal.graph
+project@com.oracle.graal.graph.test@dependencies=JUNIT,com.oracle.graal.graph
+project@com.oracle.graal.graph.test@javaCompliance=1.7
 
 # graal.debug
 project@com.oracle.graal.debug@subDir=graal
@@ -126,7 +140,7 @@ project@com.oracle.graal.printer@javaCompliance=1.7
 # graal.test
 project@com.oracle.graal.tests@subDir=graal
 project@com.oracle.graal.tests@sourceDirs=src
-project@com.oracle.graal.tests@dependencies=com.oracle.graal.printer
+project@com.oracle.graal.tests@dependencies=JUNIT,com.oracle.graal.printer
 project@com.oracle.graal.tests@checkstyle=com.oracle.graal.graph
 project@com.oracle.graal.tests@javaCompliance=1.7
 

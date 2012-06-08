@@ -20,22 +20,18 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.hotspot;
-
-import java.io.*;
-
-import com.oracle.graal.api.meta.RiKind.*;
+package com.oracle.graal.graph;
 
 
-/**
- * Parent class for all HotSpot Ri... types.
- */
-public abstract class CompilerObject implements Serializable, FormatWithToString {
-    private static final long serialVersionUID = -4551670987101214877L;
-    protected final HotSpotCompilerImpl compiler;
+public class TestNode extends Node implements Node.IterableNodeType {
+    private String name;
 
-    protected CompilerObject(HotSpotCompilerImpl compiler) {
-        this.compiler = compiler;
+    public TestNode(String name) {
+        this.name = name;
     }
 
+
+    public String getName() {
+        return name;
+    }
 }
