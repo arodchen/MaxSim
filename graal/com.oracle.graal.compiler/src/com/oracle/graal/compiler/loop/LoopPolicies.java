@@ -20,22 +20,30 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.nodes;
+package com.oracle.graal.compiler.loop;
 
-import com.oracle.graal.graph.*;
+import com.oracle.graal.compiler.*;
+import com.oracle.graal.nodes.*;
 
-/**
- * Base class for nodes that contain "virtual" state, like FrameState and VirtualObjectState.
- * Subclasses of this class will be treated in a special way by the scheduler.
- */
-public abstract class VirtualState extends Node {
 
-    public interface NodeClosure<T extends Node> {
-        void apply(Node usage, T node);
+public abstract class LoopPolicies {
+    private LoopPolicies() {
+        // does not need to be instantiated
     }
 
-    public abstract VirtualState duplicateWithVirtualState();
+    // TODO (gd) change when inversion is available
+    public static boolean shouldPeel(LoopEx loop) {
+        LoopBeginNode loopBegin = loop.loopBegin();
+        double entryProbability = loopBegin.forwardEnd().probability();
+        return entryProbability > GraalOptions.MinimumPeelProbability && loop.size() + loopBegin.graph().getNodeCount() < GraalOptions.MaximumDesiredSize;
+    }
 
-    public abstract void applyToNonVirtual(NodeClosure<? super ValueNode> closure);
-
+    public static boolean shouldFullUnroll(LoopEx loop) {
+        if (!loop.isCounted() || !loop.counted().isConstantMaxTripCount()) {
+            return false;
+        }
+        long exactTrips = loop.counted().constantMaxTripCount();
+        int maxNodes = Math.min(GraalOptions.FullUnrollMaxNodes, GraalOptions.MaximumDesiredSize - loop.loopBegin().graph().getNodeCount());
+        return loop.size() * exactTrips <= maxNodes;
+    }
 }

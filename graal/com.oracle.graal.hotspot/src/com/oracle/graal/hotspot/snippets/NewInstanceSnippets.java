@@ -31,7 +31,6 @@ import static com.oracle.max.asm.target.amd64.AMD64.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.cri.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
@@ -204,7 +203,6 @@ public class NewInstanceSnippets implements SnippetsInterface {
             SnippetTemplate template = cache.get(key);
             Debug.log("Lowering fastAllocate in %s: node=%s, template=%s, arguments=%s", graph, tlabAllocateNode, template, arguments);
             template.instantiate(runtime, tlabAllocateNode, tlabAllocateNode, arguments);
-            new DeadCodeEliminationPhase().apply(graph);
         }
 
         @SuppressWarnings("unused")
@@ -222,7 +220,6 @@ public class NewInstanceSnippets implements SnippetsInterface {
             SnippetTemplate template = cache.get(key);
             Debug.log("Lowering initialize in %s: node=%s, template=%s, arguments=%s", graph, initializeNode, template, arguments);
             template.instantiate(runtime, initializeNode, initializeNode, arguments);
-            new DeadCodeEliminationPhase().apply(graph);
         }
     }
 }

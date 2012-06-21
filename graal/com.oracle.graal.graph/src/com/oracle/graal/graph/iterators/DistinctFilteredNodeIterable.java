@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,22 +20,26 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.nodes;
+package com.oracle.graal.graph.iterators;
+
+import java.util.*;
 
 import com.oracle.graal.graph.*;
 
-/**
- * Base class for nodes that contain "virtual" state, like FrameState and VirtualObjectState.
- * Subclasses of this class will be treated in a special way by the scheduler.
- */
-public abstract class VirtualState extends Node {
 
-    public interface NodeClosure<T extends Node> {
-        void apply(Node usage, T node);
+public class DistinctFilteredNodeIterable<T extends Node> extends FilteredNodeIterable<T> {
+
+    public DistinctFilteredNodeIterable(NodeIterable<T> nodeIterable) {
+        super(nodeIterable);
     }
 
-    public abstract VirtualState duplicateWithVirtualState();
+    @Override
+    public DistinctFilteredNodeIterable<T> distinct() {
+        return this;
+    }
 
-    public abstract void applyToNonVirtual(NodeClosure<? super ValueNode> closure);
-
+    @Override
+    public Iterator<T> iterator() {
+        return new DistinctPredicatedProxyNodeIterator<>(until, nodeIterable.iterator(), predicate);
+    }
 }

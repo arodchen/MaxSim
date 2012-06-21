@@ -20,22 +20,25 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.nodes;
+package com.oracle.graal.compiler.phases;
 
-import com.oracle.graal.graph.*;
+import com.oracle.graal.compiler.loop.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.nodes.*;
 
-/**
- * Base class for nodes that contain "virtual" state, like FrameState and VirtualObjectState.
- * Subclasses of this class will be treated in a special way by the scheduler.
- */
-public abstract class VirtualState extends Node {
+public class LoopTransformHighPhase extends Phase {
 
-    public interface NodeClosure<T extends Node> {
-        void apply(Node usage, T node);
+    @Override
+    protected void run(StructuredGraph graph) {
+        if (graph.hasLoops()) {
+            LoopsData data = new LoopsData(graph);
+            for (LoopEx loop : data.outterFirst()) {
+                if (LoopPolicies.shouldPeel(loop)) {
+                    Debug.log("Peeling %s", loop);
+                    LoopTransformations.peel(loop);
+                    Debug.dump(graph, "After peeling %s", loop);
+                }
+            }
+        }
     }
-
-    public abstract VirtualState duplicateWithVirtualState();
-
-    public abstract void applyToNonVirtual(NodeClosure<? super ValueNode> closure);
-
 }
