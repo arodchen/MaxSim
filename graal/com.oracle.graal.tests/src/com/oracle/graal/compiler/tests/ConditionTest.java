@@ -28,7 +28,7 @@ import java.util.*;
 
 import org.junit.*;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.calc.*;
 
 
@@ -40,10 +40,10 @@ public class ConditionTest {
         for (Condition c1 : Condition.values()) {
             for (Condition c2 : Condition.values()) {
                 boolean implies = c1.implies(c2);
-                if (implies && c1 != Condition.OF && c2 != Condition.OF && c1 != Condition.NOF && c2 != Condition.NOF) {
-                    for (int i = 0; i < 10000; i++) {
-                        CiConstant a = CiConstant.forInt(rand.nextInt());
-                        CiConstant b = CiConstant.forInt(i < 100 ? a.asInt() : rand.nextInt());
+                if (implies) {
+                    for (int i = 0; i < 1000; i++) {
+                        Constant a = Constant.forInt(rand.nextInt());
+                        Constant b = Constant.forInt(i < 100 ? a.asInt() : rand.nextInt());
                         boolean result1 = c1.foldCondition(a, b, null, false);
                         boolean result2 = c2.foldCondition(a, b, null, false);
                         if (result1 && implies) {
@@ -62,10 +62,10 @@ public class ConditionTest {
             for (Condition c2 : Condition.values()) {
                 Condition join = c1.join(c2);
                 assertTrue(join == c2.join(c1));
-                if (join != null && c1 != Condition.OF && c2 != Condition.OF && c1 != Condition.NOF && c2 != Condition.NOF) {
-                    for (int i = 0; i < 10000; i++) {
-                        CiConstant a = CiConstant.forInt(rand.nextInt());
-                        CiConstant b = CiConstant.forInt(i < 100 ? a.asInt() : rand.nextInt());
+                if (join != null) {
+                    for (int i = 0; i < 1000; i++) {
+                        Constant a = Constant.forInt(rand.nextInt());
+                        Constant b = Constant.forInt(i < 100 ? a.asInt() : rand.nextInt());
                         boolean result1 = c1.foldCondition(a, b, null, false);
                         boolean result2 = c2.foldCondition(a, b, null, false);
                         boolean resultJoin = join.foldCondition(a, b, null, false);
@@ -85,10 +85,10 @@ public class ConditionTest {
             for (Condition c2 : Condition.values()) {
                 Condition meet = c1.meet(c2);
                 assertTrue(meet == c2.meet(c1));
-                if (meet != null && c1 != Condition.OF && c2 != Condition.OF && c1 != Condition.NOF && c2 != Condition.NOF) {
-                    for (int i = 0; i < 10000; i++) {
-                        CiConstant a = CiConstant.forInt(rand.nextInt());
-                        CiConstant b = CiConstant.forInt(i < 100 ? a.asInt() : rand.nextInt());
+                if (meet != null) {
+                    for (int i = 0; i < 1000; i++) {
+                        Constant a = Constant.forInt(rand.nextInt());
+                        Constant b = Constant.forInt(i < 100 ? a.asInt() : rand.nextInt());
                         boolean result1 = c1.foldCondition(a, b, null, false);
                         boolean result2 = c2.foldCondition(a, b, null, false);
                         boolean resultMeet = meet.foldCondition(a, b, null, false);

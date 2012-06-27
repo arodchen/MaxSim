@@ -24,10 +24,9 @@ package com.oracle.graal.nodes.spi.types;
 
 import java.util.*;
 
-import com.oracle.graal.graph.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.max.cri.ci.*;
 
 public class ScalarTypeFeedbackStore extends TypeFeedbackStore<ScalarTypeFeedbackStore> implements ScalarTypeFeedbackTool, CloneableTypeFeedback {
 
@@ -40,8 +39,8 @@ public class ScalarTypeFeedbackStore extends TypeFeedbackStore<ScalarTypeFeedbac
         }
 
         @Override
-        public boolean constantBound(Condition condition, CiConstant constant) {
-            if (constant.kind == CiKind.Int || constant.kind == CiKind.Long) {
+        public boolean constantBound(Condition condition, Constant constant) {
+            if (constant.kind == Kind.Int || constant.kind == Kind.Long) {
                 switch (condition) {
                     case EQ:
                         return store.constantBounds.lowerBound == constant.asLong() && store.constantBounds.upperBound == constant.asLong();
@@ -89,7 +88,7 @@ public class ScalarTypeFeedbackStore extends TypeFeedbackStore<ScalarTypeFeedbac
         }
 
         @Override
-        public Node dependency() {
+        public ValueNode dependency() {
             return store.dependency;
         }
     }
@@ -118,21 +117,21 @@ public class ScalarTypeFeedbackStore extends TypeFeedbackStore<ScalarTypeFeedbac
         }
     }
 
-    private final CiKind kind;
+    private final Kind kind;
     private final ConstantBound constantBounds;
     private final TypeFeedbackChanged changed;
-    private Node dependency;
+    private ValueNode dependency;
     private HashMap<ValueNode, Condition> valueBounds;
 
     private void updateDependency() {
         dependency = changed.node;
     }
 
-    public ScalarTypeFeedbackStore(CiKind kind, TypeFeedbackChanged changed) {
+    public ScalarTypeFeedbackStore(Kind kind, TypeFeedbackChanged changed) {
         this.kind = kind;
-        if (kind == CiKind.Int) {
+        if (kind == Kind.Int) {
             constantBounds = new ConstantBound(Integer.MIN_VALUE, Integer.MAX_VALUE);
-        } else if (kind == CiKind.Long) {
+        } else if (kind == Kind.Long) {
             constantBounds = new ConstantBound(Long.MIN_VALUE, Long.MAX_VALUE);
         } else {
             constantBounds = null;
@@ -157,7 +156,7 @@ public class ScalarTypeFeedbackStore extends TypeFeedbackStore<ScalarTypeFeedbac
     }
 
     @Override
-    public void constantBound(Condition condition, CiConstant constant) {
+    public void constantBound(Condition condition, Constant constant) {
         ConstantBound newBound = createBounds(condition, constant);
         if (newBound != null) {
             if (constantBounds.join(newBound)) {
@@ -166,9 +165,9 @@ public class ScalarTypeFeedbackStore extends TypeFeedbackStore<ScalarTypeFeedbac
         }
     }
 
-    private static ConstantBound createBounds(Condition condition, CiConstant constant) {
+    private static ConstantBound createBounds(Condition condition, Constant constant) {
         ConstantBound newBound;
-        if (constant.kind == CiKind.Int || constant.kind == CiKind.Long) {
+        if (constant.kind == Kind.Int || constant.kind == Kind.Long) {
             switch (condition) {
                 case EQ:
                     newBound = new ConstantBound(constant.asLong(), constant.asLong());
@@ -237,39 +236,39 @@ public class ScalarTypeFeedbackStore extends TypeFeedbackStore<ScalarTypeFeedbac
             case LE:
             case LT:
                 simpleValueBound(condition, otherValue);
-                constantBound(condition, new CiConstant(kind, other.constantBounds.upperBound));
+                constantBound(condition, new Constant(kind, other.constantBounds.upperBound));
                 break;
             case GE:
             case GT:
                 simpleValueBound(condition, otherValue);
-                constantBound(condition, new CiConstant(kind, other.constantBounds.lowerBound));
+                constantBound(condition, new Constant(kind, other.constantBounds.lowerBound));
                 break;
             case BT:
                 if (other.constantBounds.lowerBound >= 0) {
                     simpleValueBound(Condition.LT, otherValue);
-                    constantBound(Condition.GE, new CiConstant(kind, 0));
-                    constantBound(Condition.LT, new CiConstant(kind, other.constantBounds.upperBound));
+                    constantBound(Condition.GE, new Constant(kind, 0));
+                    constantBound(Condition.LT, new Constant(kind, other.constantBounds.upperBound));
                 }
                 break;
             case BE:
                 if (other.constantBounds.lowerBound >= 0) {
                     simpleValueBound(Condition.LE, otherValue);
-                    constantBound(Condition.GE, new CiConstant(kind, 0));
-                    constantBound(Condition.LE, new CiConstant(kind, other.constantBounds.upperBound));
+                    constantBound(Condition.GE, new Constant(kind, 0));
+                    constantBound(Condition.LE, new Constant(kind, other.constantBounds.upperBound));
                 }
                 break;
             case AT:
                 if (other.constantBounds.upperBound < 0) {
                     simpleValueBound(Condition.GT, otherValue);
-                    constantBound(Condition.LT, new CiConstant(kind, 0));
-                    constantBound(Condition.GT, new CiConstant(kind, other.constantBounds.lowerBound));
+                    constantBound(Condition.LT, new Constant(kind, 0));
+                    constantBound(Condition.GT, new Constant(kind, other.constantBounds.lowerBound));
                 }
                 break;
             case AE:
                 if (other.constantBounds.upperBound < 0) {
                     simpleValueBound(Condition.GE, otherValue);
-                    constantBound(Condition.LT, new CiConstant(kind, 0));
-                    constantBound(Condition.GE, new CiConstant(kind, other.constantBounds.lowerBound));
+                    constantBound(Condition.LT, new Constant(kind, 0));
+                    constantBound(Condition.GE, new Constant(kind, other.constantBounds.lowerBound));
                 }
                 break;
         }
@@ -358,20 +357,20 @@ public class ScalarTypeFeedbackStore extends TypeFeedbackStore<ScalarTypeFeedbac
     }
 
     @Override
-    public void setTranslated(CiConstant deltaConstant, ScalarTypeQuery old) {
+    public void setTranslated(Constant deltaConstant, ScalarTypeQuery old) {
         assert deltaConstant.kind == kind;
         ScalarTypeFeedbackStore other = old.store();
         assert other.kind == kind;
         long lower = other.constantBounds.lowerBound;
         long upper = other.constantBounds.upperBound;
-        if (kind == CiKind.Int) {
+        if (kind == Kind.Int) {
             int delta = deltaConstant.asInt();
             int newLower = (int) lower + delta;
             int newUpper = (int) upper + delta;
             if ((newLower <= lower && newUpper <= upper) || (newLower > lower && newUpper > upper)) {
                 constantBounds.join(new ConstantBound(newLower, newUpper));
             }
-        } else if (kind == CiKind.Long) {
+        } else if (kind == Kind.Long) {
             long delta = deltaConstant.asLong();
             long newLower = lower + delta;
             long newUpper = upper + delta;
@@ -387,20 +386,20 @@ public class ScalarTypeFeedbackStore extends TypeFeedbackStore<ScalarTypeFeedbac
         return constantBounds.lowerBound == minValue(kind) && constantBounds.upperBound == maxValue(kind) && (valueBounds == null || valueBounds.isEmpty());
     }
 
-    private static long minValue(CiKind kind) {
-        if (kind == CiKind.Int) {
+    private static long minValue(Kind kind) {
+        if (kind == Kind.Int) {
             return Integer.MIN_VALUE;
-        } else if (kind == CiKind.Long) {
+        } else if (kind == Kind.Long) {
             return Long.MIN_VALUE;
         } else {
             throw new UnsupportedOperationException();
         }
     }
 
-    private static long maxValue(CiKind kind) {
-        if (kind == CiKind.Int) {
+    private static long maxValue(Kind kind) {
+        if (kind == Kind.Int) {
             return Integer.MAX_VALUE;
-        } else if (kind == CiKind.Long) {
+        } else if (kind == Kind.Long) {
             return Long.MAX_VALUE;
         } else {
             throw new UnsupportedOperationException();

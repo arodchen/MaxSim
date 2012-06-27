@@ -22,27 +22,26 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.java.MethodCallTargetNode.*;
+import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.type.*;
 
 
-public final class BoxNode extends AbstractStateSplit implements Node.IterableNodeType {
+public final class BoxNode extends AbstractStateSplit implements StateSplit, Node.IterableNodeType {
 
     @Input private ValueNode source;
     private int bci;
-    private CiKind sourceKind;
+    private Kind sourceKind;
 
-    public BoxNode(ValueNode value, RiResolvedType type, CiKind sourceKind, int bci) {
+    public BoxNode(ValueNode value, ResolvedJavaType type, Kind sourceKind, int bci) {
         super(StampFactory.exactNonNull(type));
         this.source = value;
         this.bci = bci;
         this.sourceKind = sourceKind;
-        assert value.kind() != CiKind.Object : "can only box from primitive type";
+        assert value.kind() != Kind.Object : "can only box from primitive type";
     }
 
     public ValueNode source() {
@@ -50,12 +49,12 @@ public final class BoxNode extends AbstractStateSplit implements Node.IterableNo
     }
 
 
-    public CiKind getSourceKind() {
+    public Kind getSourceKind() {
         return sourceKind;
     }
 
     public void expand(BoxingMethodPool pool) {
-        RiResolvedMethod boxingMethod = pool.getBoxingMethod(sourceKind);
+        ResolvedJavaMethod boxingMethod = pool.getBoxingMethod(sourceKind);
         MethodCallTargetNode callTarget = graph().add(new MethodCallTargetNode(InvokeKind.Static, boxingMethod, new ValueNode[]{source}, boxingMethod.signature().returnType(boxingMethod.holder())));
         InvokeNode invokeNode = graph().add(new InvokeNode(callTarget, bci, -1));
         invokeNode.setProbability(this.probability());

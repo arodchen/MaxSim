@@ -22,18 +22,18 @@
  */
 package com.oracle.graal.nodes.java;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.cri.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.max.cri.ci.*;
 
 /**
  * Represents an atomic compare-and-swap operation
  * The result is a boolean that contains whether the value matched the expected value.
  */
-public class CompareAndSwapNode extends AbstractStateSplit implements LIRLowerable, Lowerable, MemoryCheckpoint {
+public class CompareAndSwapNode extends AbstractStateSplit implements StateSplit, LIRLowerable, Lowerable, MemoryCheckpoint {
 
     @Input private ValueNode object;
     @Input private ValueNode offset;
@@ -62,7 +62,7 @@ public class CompareAndSwapNode extends AbstractStateSplit implements LIRLowerab
     }
 
     public CompareAndSwapNode(ValueNode object, int displacement, ValueNode offset, ValueNode expected, ValueNode newValue) {
-        super(StampFactory.forKind(CiKind.Boolean.stackKind()));
+        super(StampFactory.forKind(Kind.Boolean.stackKind()));
         assert expected.kind() == newValue.kind();
         this.object = object;
         this.offset = offset;

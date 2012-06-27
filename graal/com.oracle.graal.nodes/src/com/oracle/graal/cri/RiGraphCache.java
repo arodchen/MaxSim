@@ -22,14 +22,14 @@
  */
 package com.oracle.graal.cri;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.max.cri.ri.*;
 
 
 public interface RiGraphCache {
 
     void put(StructuredGraph graph);
 
-    StructuredGraph get(RiResolvedMethod method);
+    StructuredGraph get(ResolvedJavaMethod method);
 
 }

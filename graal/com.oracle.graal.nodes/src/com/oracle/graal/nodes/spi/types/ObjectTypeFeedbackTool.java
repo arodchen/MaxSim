@@ -22,22 +22,21 @@
  */
 package com.oracle.graal.nodes.spi.types;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 
 public interface ObjectTypeFeedbackTool {
 
-    void constantBound(Condition condition, CiConstant constant);
+    void constantBound(Condition condition, Constant constant);
 
     void valueBound(Condition condition, ValueNode otherValue);
 
-    void declaredType(RiResolvedType type, boolean nonNull);
+    void declaredType(ResolvedJavaType type, boolean nonNull);
 
-    void exactType(RiResolvedType type);
+    void exactType(ResolvedJavaType type);
 
-    void notDeclaredType(RiResolvedType type, boolean includesNull);
+    void notDeclaredType(ResolvedJavaType type, boolean includesNull);
 
-    void notExactType(RiResolvedType type);
+    void notExactType(ResolvedJavaType type);
 }

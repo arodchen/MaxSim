@@ -22,16 +22,22 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(shortName = "-")
 public final class IntegerSubNode extends IntegerArithmeticNode implements Canonicalizable, LIRLowerable {
 
-    public IntegerSubNode(CiKind kind, ValueNode x, ValueNode y) {
+    public IntegerSubNode(Kind kind, ValueNode x, ValueNode y) {
         super(kind, x, y);
+    }
+
+    @Override
+    public boolean inferStamp() {
+        return updateStamp(StampTool.sub(x().integerStamp(), y().integerStamp()));
     }
 
     @Override
@@ -40,10 +46,10 @@ public final class IntegerSubNode extends IntegerArithmeticNode implements Canon
             return ConstantNode.forIntegerKind(kind(), 0, graph());
         }
         if (x().isConstant() && y().isConstant()) {
-            if (kind() == CiKind.Int) {
+            if (kind() == Kind.Int) {
                 return ConstantNode.forInt(x().asConstant().asInt() - y().asConstant().asInt(), graph());
             } else {
-                assert kind() == CiKind.Long;
+                assert kind() == Kind.Long;
                 return ConstantNode.forLong(x().asConstant().asLong() - y().asConstant().asLong(), graph());
             }
         } else if (y().isConstant()) {
@@ -51,17 +57,24 @@ public final class IntegerSubNode extends IntegerArithmeticNode implements Canon
             if (c == 0) {
                 return x();
             }
-            if (kind() == CiKind.Int) {
-                return graph().unique(new IntegerAddNode(kind(), x(), ConstantNode.forInt((int) -c, graph())));
-            } else {
-                assert kind() == CiKind.Long;
-                return graph().unique(new IntegerAddNode(kind(), x(), ConstantNode.forLong(-c, graph())));
+            BinaryNode reassociated = BinaryNode.reassociate(this, ValueNode.isConstantPredicate());
+            if (reassociated != this) {
+                return reassociated;
+            }
+            if (c < 0) {
+                if (kind() == Kind.Int) {
+                    return IntegerArithmeticNode.add(x(), ConstantNode.forInt((int) -c, graph()));
+                } else {
+                    assert kind() == Kind.Long;
+                    return IntegerArithmeticNode.add(x(), ConstantNode.forLong(-c, graph()));
+                }
             }
         } else if (x().isConstant()) {
             long c = x().asConstant().asLong();
             if (c == 0) {
                 return graph().unique(new NegateNode(y()));
             }
+           return BinaryNode.reassociate(this, ValueNode.isConstantPredicate());
         }
         return this;
     }

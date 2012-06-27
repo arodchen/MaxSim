@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.nodes.calc;
 
+import java.util.*;
+
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
@@ -32,7 +34,11 @@ public abstract class FloatingNode extends ValueNode implements Node.ValueNumber
         super(stamp);
     }
 
-    public FloatingNode(Stamp stamp, Node... dependencies) {
+    public FloatingNode(Stamp stamp, ValueNode... dependencies) {
+        super(stamp, dependencies);
+    }
+
+    public FloatingNode(Stamp stamp, List<ValueNode> dependencies) {
         super(stamp, dependencies);
     }
 }

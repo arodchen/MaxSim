@@ -24,32 +24,32 @@ package com.oracle.graal.nodes.extended;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 
 public class BoxingMethodPool {
 
-    private final Set<RiMethod> specialMethods = new HashSet<>();
-    private final RiRuntime runtime;
-    private final RiResolvedMethod[] boxingMethods = new RiResolvedMethod[CiKind.values().length];
-    private final RiResolvedMethod[] unboxingMethods = new RiResolvedMethod[CiKind.values().length];
-    private final RiResolvedField[] boxFields = new RiResolvedField[CiKind.values().length];
+    private final Set<JavaMethod> specialMethods = new HashSet<>();
+    private final CodeCacheProvider runtime;
+    private final ResolvedJavaMethod[] boxingMethods = new ResolvedJavaMethod[Kind.values().length];
+    private final ResolvedJavaMethod[] unboxingMethods = new ResolvedJavaMethod[Kind.values().length];
+    private final ResolvedJavaField[] boxFields = new ResolvedJavaField[Kind.values().length];
 
-    public BoxingMethodPool(RiRuntime runtime) {
+    public BoxingMethodPool(CodeCacheProvider runtime) {
         this.runtime = runtime;
         initialize();
     }
 
     private void initialize() {
         try {
-            initialize(CiKind.Boolean, Boolean.class, "booleanValue");
-            initialize(CiKind.Byte, Byte.class, "byteValue");
-            initialize(CiKind.Char, Character.class, "charValue");
-            initialize(CiKind.Short, Short.class, "shortValue");
-            initialize(CiKind.Int, Integer.class, "intValue");
-            initialize(CiKind.Long, Long.class, "longValue");
-            initialize(CiKind.Float, Float.class, "floatValue");
-            initialize(CiKind.Double, Double.class, "doubleValue");
+            initialize(Kind.Boolean, Boolean.class, "booleanValue");
+            initialize(Kind.Byte, Byte.class, "byteValue");
+            initialize(Kind.Char, Character.class, "charValue");
+            initialize(Kind.Short, Short.class, "shortValue");
+            initialize(Kind.Int, Integer.class, "intValue");
+            initialize(Kind.Long, Long.class, "longValue");
+            initialize(Kind.Float, Float.class, "floatValue");
+            initialize(Kind.Double, Double.class, "doubleValue");
         } catch (SecurityException e) {
             throw new RuntimeException(e);
         } catch (NoSuchMethodException e) {
@@ -57,46 +57,46 @@ public class BoxingMethodPool {
         }
     }
 
-    private void initialize(CiKind kind, Class<?> type, String unboxMethod) throws SecurityException, NoSuchMethodException {
+    private void initialize(Kind kind, Class<?> type, String unboxMethod) throws SecurityException, NoSuchMethodException {
 
         // Get boxing method from runtime.
-        RiResolvedMethod boxingMethod = runtime.getRiMethod(type.getDeclaredMethod("valueOf", kind.toJavaClass()));
+        ResolvedJavaMethod boxingMethod = runtime.getResolvedJavaMethod(type.getDeclaredMethod("valueOf", kind.toJavaClass()));
         specialMethods.add(boxingMethod);
         boxingMethods[kind.ordinal()] = boxingMethod;
 
         // Get unboxing method from runtime.
-        RiResolvedMethod unboxingMethod = runtime.getRiMethod(type.getDeclaredMethod(unboxMethod));
+        ResolvedJavaMethod unboxingMethod = runtime.getResolvedJavaMethod(type.getDeclaredMethod(unboxMethod));
         unboxingMethods[kind.ordinal()] = unboxingMethod;
         specialMethods.add(unboxingMethod);
 
         // Get the field that contains the boxed value.
-        RiResolvedField[] fields = runtime.getType(type).declaredFields();
-        RiResolvedField boxField = fields[0];
-        assert fields.length == 1 && boxField.kind(false) == kind;
+        ResolvedJavaField[] fields = runtime.getResolvedJavaType(type).declaredFields();
+        ResolvedJavaField boxField = fields[0];
+        assert fields.length == 1 && boxField.kind() == kind;
         boxFields[kind.ordinal()] = boxField;
     }
 
-    public boolean isSpecialMethod(RiResolvedMethod method) {
+    public boolean isSpecialMethod(ResolvedJavaMethod method) {
         return specialMethods.contains(method);
     }
 
-    public boolean isBoxingMethod(RiResolvedMethod method) {
-        return isSpecialMethod(method) && method.signature().returnKind(false) == CiKind.Object;
+    public boolean isBoxingMethod(ResolvedJavaMethod method) {
+        return isSpecialMethod(method) && method.signature().returnKind() == Kind.Object;
     }
 
-    public boolean isUnboxingMethod(RiResolvedMethod method) {
-        return isSpecialMethod(method) && method.signature().returnKind(false) != CiKind.Object;
+    public boolean isUnboxingMethod(ResolvedJavaMethod method) {
+        return isSpecialMethod(method) && method.signature().returnKind() != Kind.Object;
     }
 
-    public RiResolvedMethod getBoxingMethod(CiKind kind) {
+    public ResolvedJavaMethod getBoxingMethod(Kind kind) {
         return boxingMethods[kind.ordinal()];
     }
 
-    public RiResolvedMethod getUnboxingMethod(CiKind kind) {
+    public ResolvedJavaMethod getUnboxingMethod(Kind kind) {
         return unboxingMethods[kind.ordinal()];
     }
 
-    public RiResolvedField getBoxField(CiKind kind) {
+    public ResolvedJavaField getBoxField(Kind kind) {
         return boxFields[kind.ordinal()];
     }
 }

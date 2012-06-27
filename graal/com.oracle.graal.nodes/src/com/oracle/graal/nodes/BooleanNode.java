@@ -24,6 +24,7 @@ package com.oracle.graal.nodes;
 
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 
@@ -33,9 +34,17 @@ public abstract class BooleanNode extends FloatingNode {
         super(stamp);
     }
 
-    public BooleanNode(Stamp stamp, Node... dependencies) {
+    public BooleanNode(Stamp stamp, ValueNode... dependencies) {
         super(stamp, dependencies);
     }
 
-    public abstract BooleanNode negate();
+    /**
+     * Tells all usages of this node to negate their effect. For example, IfNodes should switch their true and false successors.
+     */
+    public void negateUsages() {
+        for (Node n : usages().snapshot()) {
+            assert n instanceof Negatable;
+            ((Negatable) n).negate();
+        }
+    }
 }

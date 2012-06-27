@@ -22,10 +22,8 @@
  */
 package com.oracle.graal.nodes.java;
 
-import java.util.*;
-
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.meta.JavaType.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
@@ -34,7 +32,7 @@ import com.oracle.graal.nodes.type.*;
 public final class IsTypeNode extends BooleanNode implements Canonicalizable, LIRLowerable {
 
     @Input private ValueNode objectClass;
-    private final RiResolvedType type;
+    private final ResolvedJavaType type;
 
     public ValueNode objectClass() {
         return objectClass;
@@ -46,14 +44,14 @@ public final class IsTypeNode extends BooleanNode implements Canonicalizable, LI
      * @param object the instruction producing the object to check against the given type
      * @param type the type for this check
      */
-    public IsTypeNode(ValueNode objectClass, RiResolvedType type) {
-        super(StampFactory.illegal());
-        assert objectClass == null || objectClass.kind() == CiKind.Object;
+    public IsTypeNode(ValueNode objectClass, ResolvedJavaType type) {
+        super(StampFactory.condition());
+        assert objectClass == null || objectClass.kind() == Kind.Object;
         this.type = type;
         this.objectClass = objectClass;
     }
 
-    public RiResolvedType type() {
+    public ResolvedJavaType type() {
         return type;
     }
 
@@ -63,24 +61,20 @@ public final class IsTypeNode extends BooleanNode implements Canonicalizable, LI
     }
 
     @Override
-    public Map<Object, Object> getDebugProperties() {
-        Map<Object, Object> properties = super.getDebugProperties();
-        properties.put("type", type);
-        return properties;
-    }
-
-    @Override
     public ValueNode canonical(CanonicalizerTool tool) {
-        RiResolvedType exactType = objectClass() instanceof ReadHubNode ? ((ReadHubNode) objectClass()).object().exactType() : null;
-        if (exactType != null) {
-            return ConstantNode.forBoolean(exactType == type(), graph());
+        if (objectClass().isConstant()) {
+            Constant constant = objectClass().asConstant();
+            Constant typeHub = type.getEncoding(Representation.ObjectHub);
+            assert constant.kind == typeHub.kind;
+            return ConstantNode.forBoolean(tool.runtime().areConstantObjectsEqual(constant, typeHub), graph());
         }
-        // constants return the correct exactType, so they are handled by the code above
+        // TODO(ls) since a ReadHubNode with an exactType should canonicalize itself to a constant this should actually never happen, maybe turn into an assertion?
+        if (objectClass() instanceof ReadHubNode) {
+            ObjectStamp stamp = ((ReadHubNode) objectClass()).object().objectStamp();
+            if (stamp.isExactType()) {
+                return ConstantNode.forBoolean(stamp.type() == type(), graph());
+            }
+        }
         return this;
-    }
-
-    @Override
-    public BooleanNode negate() {
-        throw new Error("unimplemented");
     }
 }

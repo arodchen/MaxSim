@@ -22,16 +22,22 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(shortName = "|")
 public final class OrNode extends LogicNode implements Canonicalizable, LIRLowerable {
 
-    public OrNode(CiKind kind, ValueNode x, ValueNode y) {
+    public OrNode(Kind kind, ValueNode x, ValueNode y) {
         super(kind, x, y);
+    }
+
+    @Override
+    public boolean inferStamp() {
+        return updateStamp(StampTool.or(x().integerStamp(), y().integerStamp()));
     }
 
     @Override
@@ -43,14 +49,14 @@ public final class OrNode extends LogicNode implements Canonicalizable, LIRLower
             return graph().unique(new OrNode(kind(), y(), x()));
         }
         if (x().isConstant()) {
-            if (kind() == CiKind.Int) {
+            if (kind() == Kind.Int) {
                 return ConstantNode.forInt(x().asConstant().asInt() | y().asConstant().asInt(), graph());
             } else {
-                assert kind() == CiKind.Long;
+                assert kind() == Kind.Long;
                 return ConstantNode.forLong(x().asConstant().asLong() | y().asConstant().asLong(), graph());
             }
         } else if (y().isConstant()) {
-            if (kind() == CiKind.Int) {
+            if (kind() == Kind.Int) {
                 int c = y().asConstant().asInt();
                 if (c == -1) {
                     return ConstantNode.forInt(-1, graph());
@@ -59,7 +65,7 @@ public final class OrNode extends LogicNode implements Canonicalizable, LIRLower
                     return x();
                 }
             } else {
-                assert kind() == CiKind.Long;
+                assert kind() == Kind.Long;
                 long c = y().asConstant().asLong();
                 if (c == -1) {
                     return ConstantNode.forLong(-1, graph());
@@ -68,6 +74,7 @@ public final class OrNode extends LogicNode implements Canonicalizable, LIRLower
                     return x();
                 }
             }
+            return BinaryNode.reassociate(this, ValueNode.isConstantPredicate());
         }
         return this;
     }

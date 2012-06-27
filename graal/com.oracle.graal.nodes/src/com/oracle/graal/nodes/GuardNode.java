@@ -22,19 +22,32 @@
  */
 package com.oracle.graal.nodes;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.spi.types.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.max.cri.ri.*;
 
-public final class GuardNode extends FloatingNode implements Canonicalizable, LIRLowerable, TypeFeedbackProvider, Node.IterableNodeType {
+/**
+ * A guard is a node that deoptimizes based on a conditional expression. Guards are not attached to a certain frame
+ * state, they can move around freely and will always use the correct frame state when the nodes are scheduled (i.e.,
+ * the last emitted frame state). The node that is guarded has a data dependency on the guard and the guard in turn has
+ * a data dependency on the condition. A guard may only be executed if it is guaranteed that the guarded node is
+ * executed too (if no exceptions are thrown). Therefore, an {@linkplain AnchorNode anchor} is placed after a control
+ * flow split and the guard has a data dependency to the anchor. The anchor is the most distant node that is
+ * post-dominated by the guarded node and the guard can be scheduled anywhere between those two nodes. This ensures
+ * maximum flexibility for the guard node and guarantees that deoptimization occurs only if the control flow would have
+ * reached the guarded node (without taking exceptions into account).
+ */
+public final class GuardNode extends FloatingNode implements Canonicalizable, LIRLowerable, TypeFeedbackProvider, Node.IterableNodeType, Negatable {
 
     @Input private BooleanNode condition;
     @Input(notDataflow = true) private FixedNode anchor;
-    private final RiDeoptReason reason;
-    private final RiDeoptAction action;
+    private final DeoptimizationReason reason;
+    private final DeoptimizationAction action;
+    private boolean negated;
     private final long leafGraphId;
 
     public FixedNode anchor() {
@@ -58,33 +71,47 @@ public final class GuardNode extends FloatingNode implements Canonicalizable, LI
         condition = x;
     }
 
-    public RiDeoptReason reason() {
+    public boolean negated() {
+        return negated;
+    }
+
+    public DeoptimizationReason reason() {
         return reason;
     }
 
-    public RiDeoptAction action() {
+    public DeoptimizationAction action() {
         return action;
     }
 
-    public GuardNode(BooleanNode condition, FixedNode anchor, RiDeoptReason reason, RiDeoptAction action, long leafGraphId) {
-        super(StampFactory.illegal());
+    public GuardNode(BooleanNode condition, FixedNode anchor, DeoptimizationReason reason, DeoptimizationAction action, boolean negated, long leafGraphId) {
+        super(StampFactory.dependency());
         this.condition = condition;
         this.anchor = anchor;
         this.reason = reason;
         this.action = action;
+        this.negated = negated;
         this.leafGraphId = leafGraphId;
     }
 
     @Override
+    public String toString(Verbosity verbosity) {
+        if (verbosity == Verbosity.Name && negated) {
+            return "!" + super.toString(verbosity);
+        } else {
+            return super.toString(verbosity);
+        }
+    }
+
+    @Override
     public void generate(LIRGeneratorTool gen) {
-        gen.emitGuardCheck(condition(), reason(), action(), leafGraphId);
+        gen.emitGuardCheck(condition(), reason(), action(), negated(), leafGraphId);
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
         if (condition() instanceof ConstantNode) {
             ConstantNode c = (ConstantNode) condition();
-            if (c.asConstant().asBoolean()) {
+            if (c.asConstant().asBoolean() != negated) {
                 if (!dependencies().isEmpty()) {
                     for (Node usage : usages()) {
                         if (usage instanceof ValueNode) {
@@ -104,5 +131,11 @@ public final class GuardNode extends FloatingNode implements Canonicalizable, LI
         if (condition instanceof ConditionalTypeFeedbackProvider) {
             ((ConditionalTypeFeedbackProvider) condition).typeFeedback(tool);
         }
+    }
+
+    @Override
+    public Negatable negate() {
+        negated = !negated;
+        return this;
     }
 }

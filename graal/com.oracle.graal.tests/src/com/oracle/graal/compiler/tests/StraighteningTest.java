@@ -22,15 +22,13 @@
  */
 package com.oracle.graal.compiler.tests;
 
-import junit.framework.AssertionFailedError;
-
 import org.junit.*;
 
 import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.nodes.*;
 
-public class StraighteningTest extends GraphTest {
+public class StraighteningTest extends GraalCompilerTest {
 
     private static final String REFERENCE_SNIPPET = "ref";
 
@@ -71,22 +69,23 @@ public class StraighteningTest extends GraphTest {
         return c == 1;
     }
 
-    @Test(expected = AssertionFailedError.class)
+    @Test(expected = AssertionError.class)
     public void test1() {
         test("test1Snippet");
     }
 
-    @Test(expected = AssertionFailedError.class)
+    @Test(expected = AssertionError.class)
     public void test2() {
         test("test2Snippet");
     }
 
-    @Test(expected = AssertionFailedError.class)
+    @Test(expected = AssertionError.class)
     public void test3() {
         test("test3Snippet");
     }
 
-    private void test(String snippet) {
+    private void test(final String snippet) {
+        // No debug scope to reduce console noise for @Test(expected = ...) tests
         StructuredGraph graph = parse(snippet);
         Debug.dump(graph, "Graph");
         new CanonicalizerPhase(null, runtime(), null).apply(graph);

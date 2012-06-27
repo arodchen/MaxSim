@@ -26,13 +26,17 @@ import static com.oracle.graal.graph.iterators.NodePredicates.*;
 
 import java.util.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
+import com.oracle.graal.graph.iterators.NodePredicates.PositiveTypePredicate;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.nodes.java.*;
 
 public class GraphUtil {
+
+    private static final PositiveTypePredicate FLOATING = isA(FloatingNode.class).or(VirtualState.class).or(CallTargetNode.class);
 
     public static void killCFG(FixedNode node) {
         assert node.isAlive();
@@ -43,7 +47,7 @@ public class GraphUtil {
         } else {
             // Normal control flow node.
             /* We do not take a successor snapshot because this iterator supports concurrent modifications
-             * as long as they do not change the size of the successor list. Not tasking a snapshot allows
+             * as long as they do not change the size of the successor list. Not taking a snapshot allows
              * us to see modifications to other branches that may happen while processing one branch.
              */
             for (Node successor : node.successors()) {
@@ -55,35 +59,37 @@ public class GraphUtil {
 
     private static void killEnd(EndNode end) {
         MergeNode merge = end.merge();
-        merge.removeEnd(end);
-        StructuredGraph graph = (StructuredGraph) end.graph();
-        if (merge instanceof LoopBeginNode && merge.forwardEndCount() == 0) { //dead loop
-            for (PhiNode phi : merge.phis().snapshot()) {
-                propagateKill(phi);
-            }
-            LoopBeginNode begin = (LoopBeginNode) merge;
-            // disconnect and delete loop ends & loop exits
-            for (LoopEndNode loopend : begin.loopEnds().snapshot()) {
-                loopend.predecessor().replaceFirstSuccessor(loopend, null);
-                loopend.safeDelete();
-            }
-            for (LoopExitNode loopexit : begin.loopExits().snapshot()) {
-                for (ValueProxyNode vpn : loopexit.proxies().snapshot()) {
-                    graph.replaceFloating(vpn, vpn.value());
+        if (merge != null) {
+            merge.removeEnd(end);
+            StructuredGraph graph = (StructuredGraph) end.graph();
+            if (merge instanceof LoopBeginNode && merge.forwardEndCount() == 0) { //dead loop
+                for (PhiNode phi : merge.phis().snapshot()) {
+                    propagateKill(phi);
                 }
-                graph.replaceFixedWithFixed(loopexit, graph.add(new BeginNode()));
+                LoopBeginNode begin = (LoopBeginNode) merge;
+                // disconnect and delete loop ends & loop exits
+                for (LoopEndNode loopend : begin.loopEnds().snapshot()) {
+                    loopend.predecessor().replaceFirstSuccessor(loopend, null);
+                    loopend.safeDelete();
+                }
+                for (LoopExitNode loopexit : begin.loopExits().snapshot()) {
+                    for (ValueProxyNode vpn : loopexit.proxies().snapshot()) {
+                        graph.replaceFloating(vpn, vpn.value());
+                    }
+                    graph.replaceFixedWithFixed(loopexit, graph.add(new BeginNode()));
+                }
+                killCFG(begin.next());
+                begin.safeDelete();
+            } else if (merge instanceof LoopBeginNode && ((LoopBeginNode) merge).loopEnds().isEmpty()) { // not a loop anymore
+                graph.reduceDegenerateLoopBegin((LoopBeginNode) merge);
+            } else if (merge.phiPredecessorCount() == 1) { // not a merge anymore
+                graph.reduceTrivialMerge(merge);
             }
-            killCFG(begin.next());
-            begin.safeDelete();
-        } else if (merge instanceof LoopBeginNode && ((LoopBeginNode) merge).loopEnds().isEmpty()) { // not a loop anymore
-            graph.reduceDegenerateLoopBegin((LoopBeginNode) merge);
-        } else if (merge.phiPredecessorCount() == 1) { // not a merge anymore
-            graph.reduceTrivialMerge(merge);
         }
     }
 
     public static NodePredicate isFloatingNode() {
-        return isA(FloatingNode.class).or(CallTargetNode.class).or(FrameState.class).or(VirtualObjectFieldNode.class).or(VirtualObjectNode.class);
+        return FLOATING;
     }
 
     public static void propagateKill(Node node) {
@@ -92,8 +98,8 @@ public class GraphUtil {
 
             // null out remaining usages
             node.replaceAtUsages(null);
-            node.replaceAtPredecessors(null);
-            killUnusedFloatingInputs(node);
+            node.replaceAtPredecessor(null);
+            killWithUnusedFloatingInputs(node);
 
             for (Node usage : usagesSnapshot) {
                 if (!usage.isDeleted()) {
@@ -107,13 +113,13 @@ public class GraphUtil {
         }
     }
 
-    public static void killUnusedFloatingInputs(Node node) {
+    public static void killWithUnusedFloatingInputs(Node node) {
         List<Node> floatingInputs = node.inputs().filter(isFloatingNode()).snapshot();
         node.safeDelete();
 
         for (Node in : floatingInputs) {
             if (in.isAlive() && in.usages().isEmpty()) {
-                killUnusedFloatingInputs(in);
+                killWithUnusedFloatingInputs(in);
             }
         }
     }
@@ -174,6 +180,36 @@ public class GraphUtil {
                 GraphUtil.checkRedundantProxy(vpn);
             }
         }
+    }
+
+    /**
+     * Gets an approximate source code location for a node if possible.
+     *
+     * @return a file name and source line number in stack trace format (e.g. "String.java:32")
+     *          if an approximate source location is found, null otherwise
+     */
+    public static String approxSourceLocation(Node node) {
+        Node n = node;
+        while (n != null) {
+            if (n instanceof MethodCallTargetNode) {
+                n = ((MethodCallTargetNode) n).invoke().node();
+            }
+
+            if (n instanceof StateSplit) {
+                FrameState stateAfter = ((StateSplit) n).stateAfter();
+                if (stateAfter != null) {
+                    ResolvedJavaMethod method = stateAfter.method();
+                    if (method != null) {
+                        StackTraceElement stackTraceElement = method.toStackTraceElement(stateAfter.bci);
+                        if (stackTraceElement.getFileName() != null && stackTraceElement.getLineNumber() >= 0) {
+                            return stackTraceElement.getFileName() + ":" + stackTraceElement.getLineNumber();
+                        }
+                    }
+                }
+            }
+            n = n.predecessor();
+        }
+        return null;
     }
 
     public static ValueNode unProxify(ValueNode proxy) {

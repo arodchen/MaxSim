@@ -22,8 +22,8 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
@@ -43,15 +43,15 @@ public final class ReadNode extends AccessNode implements Node.IterableNodeType,
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
-        if (object() != null && object().isConstant() && object().kind() == CiKind.Object) {
+        CodeCacheProvider runtime = tool.runtime();
+        if (runtime != null && object() != null && object().isConstant() && object().kind() == Kind.Object) {
             if (location() == LocationNode.FINAL_LOCATION && location().getClass() == LocationNode.class) {
                 Object value = object().asConstant().asObject();
                 long displacement = location().displacement();
-                CiKind kind = location().kind();
-                RiRuntime runtime = tool.runtime();
-                CiConstant constant = kind.readUnsafeConstant(value, displacement);
+                Kind kind = location().kind();
+                Constant constant = kind.readUnsafeConstant(value, displacement);
                 if (constant != null) {
-                    return ConstantNode.forCiConstant(constant, runtime, graph());
+                    return ConstantNode.forConstant(constant, runtime, graph());
                 }
             }
         }

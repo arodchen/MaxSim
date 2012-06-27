@@ -26,10 +26,7 @@ import static com.oracle.graal.graph.iterators.NodePredicates.*;
 
 import java.util.*;
 
-import junit.framework.*;
-
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.*;
 
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.phases.*;
@@ -43,7 +40,7 @@ import com.oracle.graal.nodes.java.*;
  * Then canonicalization is applied and it is verified that the resulting graph is equal to the
  * graph of the method that just has a "return 1" statement in it.
  */
-public class MonitorTest extends GraphTest {
+public class MonitorTest extends GraalCompilerTest {
 
     private static final String REFERENCE_SNIPPET = "referenceSnippet";
 
@@ -56,7 +53,7 @@ public class MonitorTest extends GraphTest {
         return 1;
     }
 
-    @Test(expected = AssertionFailedError.class)
+    @Test(expected = AssertionError.class)
     public void test1() {
         test("test1Snippet");
     }

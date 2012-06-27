@@ -22,18 +22,35 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import java.util.*;
+
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
-
+/**
+ * A floating read of a value from memory specified in terms of an object base and an object relative location.
+ * This node does not null check the object.
+ */
 public final class FloatingReadNode extends FloatingAccessNode implements Node.IterableNodeType, LIRLowerable, Canonicalizable {
 
-    public FloatingReadNode(ValueNode object, GuardNode guard, LocationNode location, Stamp stamp, Node... dependencies) {
-        super(object, guard, location, stamp, dependencies);
+    @Input private Node lastLocationAccess;
+
+    public FloatingReadNode(ValueNode object, LocationNode location, Node lastLocationAccess, Stamp stamp, ValueNode... dependencies) {
+        super(object, location, stamp, dependencies);
+        this.lastLocationAccess = lastLocationAccess;
+    }
+
+    public FloatingReadNode(ValueNode object, LocationNode location, Node lastLocationAccess, Stamp stamp, List<ValueNode> dependencies) {
+        super(object, location, stamp, dependencies);
+        this.lastLocationAccess = lastLocationAccess;
+    }
+
+    public Node lastLocationAccess() {
+        return lastLocationAccess;
     }
 
     @Override
@@ -43,15 +60,15 @@ public final class FloatingReadNode extends FloatingAccessNode implements Node.I
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
-        if (object() != null && object().isConstant() && object().kind() == CiKind.Object) {
+        CodeCacheProvider runtime = tool.runtime();
+        if (runtime != null && object() != null && object().isConstant() && object().kind() == Kind.Object) {
             if (this.location() == LocationNode.FINAL_LOCATION && location().getClass() == LocationNode.class) {
                 Object value = object().asConstant().asObject();
                 long displacement = location().displacement();
-                CiKind kind = location().kind();
-                RiRuntime runtime = tool.runtime();
-                CiConstant constant = kind.readUnsafeConstant(value, displacement);
+                Kind kind = location().kind();
+                Constant constant = kind.readUnsafeConstant(value, displacement);
                 if (constant != null) {
-                    return ConstantNode.forCiConstant(constant, runtime, graph());
+                    return ConstantNode.forConstant(constant, runtime, graph());
                 }
             }
         }

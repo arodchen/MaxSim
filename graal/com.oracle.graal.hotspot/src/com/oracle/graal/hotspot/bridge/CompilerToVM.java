@@ -25,10 +25,10 @@ package com.oracle.graal.hotspot.bridge;
 
 import java.lang.reflect.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.ri.*;
+import com.oracle.graal.hotspot.meta.*;
 
 /**
  * Calls from Java into HotSpot.
@@ -37,87 +37,87 @@ public interface CompilerToVM {
 
     // Checkstyle: stop
 
-    byte[] RiMethod_code(HotSpotMethodResolved method);
+    byte[] JavaMethod_code(HotSpotResolvedJavaMethod method);
 
-    String RiMethod_signature(HotSpotMethodResolved method);
+    String JavaMethod_signature(HotSpotResolvedJavaMethod method);
 
-    RiExceptionHandler[] RiMethod_exceptionHandlers(HotSpotMethodResolved method);
+    ExceptionHandler[] JavaMethod_exceptionHandlers(HotSpotResolvedJavaMethod method);
 
-    boolean RiMethod_hasBalancedMonitors(HotSpotMethodResolved method);
+    boolean JavaMethod_hasBalancedMonitors(HotSpotResolvedJavaMethod method);
 
-    RiMethod RiMethod_uniqueConcreteMethod(HotSpotMethodResolved method);
+    JavaMethod JavaMethod_uniqueConcreteMethod(HotSpotResolvedJavaMethod method);
 
-    int RiMethod_invocationCount(HotSpotMethodResolved method);
+    int JavaMethod_invocationCount(HotSpotResolvedJavaMethod method);
 
-    HotSpotMethodData RiMethod_methodData(HotSpotMethodResolved method);
+    HotSpotMethodData JavaMethod_methodData(HotSpotResolvedJavaMethod method);
 
-    RiType RiSignature_lookupType(String returnType, HotSpotTypeResolved accessingClass, boolean eagerResolve);
+    JavaType Signature_lookupType(String returnType, HotSpotResolvedJavaType accessingClass, boolean eagerResolve);
 
-    Object RiConstantPool_lookupConstant(HotSpotTypeResolved pool, int cpi);
+    Object ConstantPool_lookupConstant(HotSpotResolvedJavaType pool, int cpi);
 
-    RiMethod RiConstantPool_lookupMethod(HotSpotTypeResolved pool, int cpi, byte byteCode);
+    JavaMethod ConstantPool_lookupMethod(HotSpotResolvedJavaType pool, int cpi, byte byteCode);
 
-    RiType RiConstantPool_lookupType(HotSpotTypeResolved pool, int cpi);
+    JavaType ConstantPool_lookupType(HotSpotResolvedJavaType pool, int cpi);
 
-    RiField RiConstantPool_lookupField(HotSpotTypeResolved pool, int cpi, byte byteCode);
+    JavaField ConstantPool_lookupField(HotSpotResolvedJavaType pool, int cpi, byte byteCode);
 
-    void RiConstantPool_loadReferencedType(HotSpotTypeResolved pool, int cpi, byte byteCode);
+    void ConstantPool_loadReferencedType(HotSpotResolvedJavaType pool, int cpi, byte byteCode);
 
-    HotSpotCompiledMethod installMethod(HotSpotTargetMethod targetMethod, boolean installCode, HotSpotCodeInfo info);
-
-    long installStub(HotSpotTargetMethod targetMethod, HotSpotCodeInfo info);
+    HotSpotCompiledMethod installMethod(HotSpotTargetMethod targetMethod, boolean makeDefault, HotSpotCodeInfo info);
 
     HotSpotVMConfig getConfiguration();
 
-    RiMethod RiType_resolveMethodImpl(HotSpotTypeResolved klass, String name, String signature);
+    JavaMethod JavaType_resolveMethodImpl(HotSpotResolvedJavaType klass, String name, String signature);
 
-    boolean RiType_isSubtypeOf(HotSpotTypeResolved klass, RiType other);
+    boolean JavaType_isSubtypeOf(HotSpotResolvedJavaType klass, JavaType other);
 
-    RiType RiType_leastCommonAncestor(HotSpotTypeResolved thisType, HotSpotTypeResolved otherType);
+    JavaType JavaType_leastCommonAncestor(HotSpotResolvedJavaType thisType, HotSpotResolvedJavaType otherType);
 
-    RiType getPrimitiveArrayType(CiKind kind);
+    JavaType getPrimitiveArrayType(Kind kind);
 
-    RiType RiType_arrayOf(HotSpotTypeResolved klass);
+    JavaType JavaType_arrayOf(HotSpotResolvedJavaType klass);
 
-    RiType RiType_componentType(HotSpotTypeResolved klass);
+    JavaType JavaType_componentType(HotSpotResolvedJavaType klass);
 
-    boolean RiType_isInitialized(HotSpotTypeResolved klass);
+    boolean JavaType_isInitialized(HotSpotResolvedJavaType klass);
 
-    RiType getType(Class<?> javaClass);
+    JavaType getType(Class<?> javaClass);
 
-    RiType RiType_uniqueConcreteSubtype(HotSpotTypeResolved klass);
+    JavaType JavaType_uniqueConcreteSubtype(HotSpotResolvedJavaType klass);
 
-    RiType RiType_superType(HotSpotTypeResolved klass);
+    JavaType JavaType_superType(HotSpotResolvedJavaType klass);
 
-    int getArrayLength(CiConstant array);
+    int getArrayLength(Constant array);
 
-    boolean compareConstantObjects(CiConstant x, CiConstant y);
+    boolean compareConstantObjects(Constant x, Constant y);
 
-    RiType getRiType(CiConstant constant);
+    JavaType getJavaType(Constant constant);
 
-    RiResolvedField[] RiType_fields(HotSpotTypeResolved klass);
+    ResolvedJavaField[] JavaType_fields(HotSpotResolvedJavaType klass);
 
-    boolean RiMethod_hasCompiledCode(HotSpotMethodResolved method);
+    boolean JavaMethod_hasCompiledCode(HotSpotResolvedJavaMethod method);
 
-    int RiMethod_getCompiledCodeSize(HotSpotMethodResolved method);
+    int JavaMethod_getCompiledCodeSize(HotSpotResolvedJavaMethod method);
 
-    RiMethod getRiMethod(Method reflectionMethod);
+    JavaMethod getJavaMethod(Method reflectionMethod);
 
-    long getMaxCallTargetOffset(CiRuntimeCall rtcall);
+    long getMaxCallTargetOffset(RuntimeCall rtcall);
 
     String disassembleNative(byte[] code, long address);
 
-    String disassembleJava(HotSpotMethodResolved method);
+    String disassembleJava(HotSpotResolvedJavaMethod method);
 
-    StackTraceElement RiMethod_toStackTraceElement(HotSpotMethodResolved method, int bci);
+    StackTraceElement JavaMethod_toStackTraceElement(HotSpotResolvedJavaMethod method, int bci);
 
     Object executeCompiledMethod(HotSpotCompiledMethod method, Object arg1, Object arg2, Object arg3);
 
     Object executeCompiledMethodVarargs(HotSpotCompiledMethod method, Object... args);
 
-    int RiMethod_vtableEntryOffset(HotSpotMethodResolved method);
+    int JavaMethod_vtableEntryOffset(HotSpotResolvedJavaMethod method);
 
     long[] getDeoptedLeafGraphIds();
+
+    String decodePC(long pc);
 
     // Checkstyle: resume
 }

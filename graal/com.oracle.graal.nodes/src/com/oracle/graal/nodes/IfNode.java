@@ -24,7 +24,7 @@ package com.oracle.graal.nodes;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.spi.types.*;
 import com.oracle.graal.nodes.type.*;
@@ -33,11 +33,10 @@ import com.oracle.graal.nodes.type.*;
  * The {@code IfNode} represents a branch that can go one of two directions depending on the outcome of a
  * comparison.
  */
-public final class IfNode extends ControlSplitNode implements Simplifiable, LIRLowerable, SplitTypeFeedbackProvider {
+public final class IfNode extends ControlSplitNode implements Simplifiable, LIRLowerable, SplitTypeFeedbackProvider, Negatable {
     public static final int TRUE_EDGE = 0;
     public static final int FALSE_EDGE = 1;
-
-    private static final BeginNode[] EMPTY_IF_SUCCESSORS = new BeginNode[] {null, null};
+    private final long leafGraphId;
 
     @Input private BooleanNode compare;
 
@@ -45,14 +44,19 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         return compare;
     }
 
-    public IfNode(BooleanNode condition, FixedNode trueSuccessor, FixedNode falseSuccessor, double takenProbability) {
-        super(StampFactory.illegal(), new BeginNode[] {BeginNode.begin(trueSuccessor), BeginNode.begin(falseSuccessor)}, new double[] {takenProbability, 1 - takenProbability});
-        this.compare = condition;
+    public void setCompare(BooleanNode x) {
+        updateUsages(compare, x);
+        compare = x;
     }
 
-    public IfNode(BooleanNode condition, double probability) {
-        super(StampFactory.illegal(), EMPTY_IF_SUCCESSORS, new double[] {probability, 1 - probability});
+    public IfNode(BooleanNode condition, FixedNode trueSuccessor, FixedNode falseSuccessor, double takenProbability, long leafGraphId) {
+        super(StampFactory.forVoid(), new BeginNode[] {BeginNode.begin(trueSuccessor), BeginNode.begin(falseSuccessor)}, new double[] {takenProbability, 1 - takenProbability});
         this.compare = condition;
+        this.leafGraphId = leafGraphId;
+    }
+
+    public long leafGraphId() {
+        return leafGraphId;
     }
 
     /**
@@ -127,6 +131,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                     if (!phis.hasNext()) {
                         // empty if construct with no phis: remove it
                         removeEmptyIf(tool);
+                        return;
                     } else {
                         PhiNode singlePhi = phis.next();
                         if (!phis.hasNext()) {
@@ -137,13 +142,14 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                             if (trueValue.kind() != falseValue.kind()) {
                                 return;
                             }
-                            if (trueValue.kind() != CiKind.Int && trueValue.kind() != CiKind.Long) {
+                            if (trueValue.kind() != Kind.Int && trueValue.kind() != Kind.Long) {
                                 return;
                             }
                             if (trueValue.isConstant() && falseValue.isConstant()) {
                                 MaterializeNode materialize = MaterializeNode.create(compare(), graph(), trueValue, falseValue);
                                 ((StructuredGraph) graph()).replaceFloating(singlePhi, materialize);
                                 removeEmptyIf(tool);
+                                return;
                             }
                         }
                     }
@@ -187,5 +193,19 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         if (compare instanceof ConditionalTypeFeedbackProvider) {
             ((ConditionalTypeFeedbackProvider) compare).typeFeedback(blockSuccessor == TRUE_EDGE ? tool : tool.negate());
         }
+    }
+
+    @Override
+    public Negatable negate() {
+        BeginNode trueSucc = trueSuccessor();
+        BeginNode falseSucc = falseSuccessor();
+        setTrueSuccessor(null);
+        setFalseSuccessor(null);
+        setTrueSuccessor(falseSucc);
+        setFalseSuccessor(trueSucc);
+        double prop = branchProbability[TRUE_EDGE];
+        branchProbability[TRUE_EDGE] = branchProbability[FALSE_EDGE];
+        branchProbability[FALSE_EDGE] = prop;
+        return this;
     }
 }

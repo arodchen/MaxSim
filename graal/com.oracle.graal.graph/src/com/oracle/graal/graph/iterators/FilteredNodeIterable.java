@@ -26,10 +26,10 @@ import java.util.*;
 
 import com.oracle.graal.graph.*;
 
-public class FilteredNodeIterable<T extends Node> extends NodeIterable<T> {
-    private final NodeIterable<T> nodeIterable;
-    private NodePredicate predicate = NodePredicates.alwaysTrue();
-    private NodePredicate until = NodePredicates.isNull();
+public class FilteredNodeIterable<T extends Node> extends AbstractNodeIterable<T> {
+    protected final NodeIterable<T> nodeIterable;
+    protected NodePredicate predicate = NodePredicates.alwaysTrue();
+    protected NodePredicate until = NodePredicates.isNull();
     public FilteredNodeIterable(NodeIterable<T> nodeIterable) {
         this.nodeIterable = nodeIterable;
     }
@@ -52,9 +52,20 @@ public class FilteredNodeIterable<T extends Node> extends NodeIterable<T> {
         return this;
     }
     @Override
+    public FilteredNodeIterable<T> nonNull() {
+        this.predicate = this.predicate.or(NodePredicates.isNotNull());
+        return this;
+    }
+    @Override
+    public DistinctFilteredNodeIterable<T> distinct() {
+        DistinctFilteredNodeIterable<T> distinct = new DistinctFilteredNodeIterable<>(nodeIterable);
+        distinct.predicate = predicate;
+        distinct.until = until;
+        return distinct;
+    }
+    @Override
     public Iterator<T> iterator() {
-        final Iterator<T> iterator = nodeIterable.iterator();
-        return new PredicatedProxyNodeIterator<>(until, iterator, predicate);
+        return new PredicatedProxyNodeIterator<>(until, nodeIterable.iterator(), predicate);
     }
 
     @SuppressWarnings("unchecked")

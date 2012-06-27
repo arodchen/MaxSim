@@ -28,18 +28,14 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.util.*;
 
 /**
  * Denotes the merging of multiple control-flow paths.
  */
-public class MergeNode extends BeginNode implements Node.IterableNodeType, LIRLowerable {
+public class MergeNode extends BeginStateSplitNode implements Node.IterableNodeType, LIRLowerable {
 
     @Input(notDataflow = true) private final NodeInputList<EndNode> ends = new NodeInputList<>(this);
-
-    @Override
-    public boolean needsStateAfter() {
-        return false;
-    }
 
     @Override
     public void generate(LIRGeneratorTool gen) {
@@ -85,8 +81,12 @@ public class MergeNode extends BeginNode implements Node.IterableNodeType, LIRLo
         int predIndex = phiPredecessorIndex(pred);
         assert predIndex != -1;
         deleteEnd(pred);
-        for (PhiNode phi : phis()) {
+        for (PhiNode phi : phis().snapshot()) {
+            ValueNode removedValue = phi.valueAt(predIndex);
             phi.removeInput(predIndex);
+            if (removedValue != null && removedValue.isAlive() && removedValue.usages().isEmpty() && GraphUtil.isFloatingNode().apply(removedValue)) {
+                GraphUtil.killWithUnusedFloatingInputs(removedValue);
+            }
         }
     }
 
@@ -177,7 +177,7 @@ public class MergeNode extends BeginNode implements Node.IterableNodeType, LIRLo
                     phi.addInput(newInput);
                 }
                 this.removeEnd(end);
-                end.replaceAtPredecessors(newEnd);
+                end.replaceAtPredecessor(newEnd);
                 end.safeDelete();
                 tool.addToWorkList(newEnd.predecessor()); // ?
             }

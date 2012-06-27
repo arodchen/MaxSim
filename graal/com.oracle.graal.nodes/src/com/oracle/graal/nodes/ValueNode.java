@@ -24,10 +24,12 @@ package com.oracle.graal.nodes;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.type.GenericStamp.*;
+import com.oracle.graal.nodes.util.*;
 
 /**
  * This class represents a value within the graph, including local variables, phis, and
@@ -36,14 +38,17 @@ import com.oracle.graal.nodes.type.*;
 public abstract class ValueNode extends ScheduledNode implements StampProvider {
 
     /**
-     * The kind of this value. This is {@link CiKind#Void} for instructions that produce no value.
-     * This kind is guaranteed to be a {@linkplain CiKind#stackKind() stack kind}.
+     * The kind of this value. This is {@link Kind#Void} for instructions that produce no value.
+     * This kind is guaranteed to be a {@linkplain Kind#stackKind() stack kind}.
      */
     private Stamp stamp;
 
-    @Input private NodeInputList<Node> dependencies;
+    @Input(notDataflow = true) private NodeInputList<ValueNode> dependencies;
 
-    public NodeInputList<Node> dependencies() {
+    /**
+     * This collection keeps dependencies that should be observed while scheduling (guards, etc.).
+     */
+    public NodeInputList<ValueNode> dependencies() {
         return dependencies;
     }
 
@@ -53,7 +58,13 @@ public abstract class ValueNode extends ScheduledNode implements StampProvider {
         assert kind() != null && kind() == kind().stackKind() : kind() + " != " + kind().stackKind();
     }
 
-    public ValueNode(Stamp stamp, Node... dependencies) {
+    public ValueNode(Stamp stamp, ValueNode... dependencies) {
+        this.stamp = stamp;
+        this.dependencies = new NodeInputList<>(this, dependencies);
+        assert kind() != null && kind() == kind().stackKind() : kind() + " != " + kind().stackKind();
+    }
+
+    public ValueNode(Stamp stamp, List<ValueNode> dependencies) {
         this.stamp = stamp;
         this.dependencies = new NodeInputList<>(this, dependencies);
         assert kind() != null && kind() == kind().stackKind() : kind() + " != " + kind().stackKind();
@@ -67,20 +78,59 @@ public abstract class ValueNode extends ScheduledNode implements StampProvider {
         this.stamp = stamp;
     }
 
-    public CiKind kind() {
+    /**
+     * Checks if the given stamp is different than the current one ({@code newStamp.equals(oldStamp) == false}). If it
+     * is different then the new stamp will become the current stamp for this node.
+     *
+     * @return true if the stamp has changed, false otherwise.
+     */
+    protected final boolean updateStamp(Stamp newStamp) {
+        if (newStamp.equals(stamp)) {
+            return false;
+        } else {
+            stamp = newStamp;
+            return true;
+        }
+    }
+
+    /**
+     * This method can be overridden by subclasses of {@link ValueNode} if they need to recompute their stamp if their
+     * inputs change. A typical implementation will compute the stamp and pass it to {@link #updateStamp(Stamp)}, whose
+     * return value can be used as the result of this method.
+     *
+     * @return true if the stamp has changed, false otherwise.
+     */
+    public boolean inferStamp() {
+        return false;
+    }
+
+    public Kind kind() {
         return stamp.kind();
     }
 
     /**
      * Checks whether this value is a constant (i.e. it is of type {@link ConstantNode}.
+     *
      * @return {@code true} if this value is a constant
      */
     public final boolean isConstant() {
         return this instanceof ConstantNode;
     }
 
+    private static final NodePredicate IS_CONSTANT = new NodePredicate() {
+        @Override
+        public boolean apply(Node n) {
+            return n instanceof ValueNode && ((ValueNode) n).isConstant();
+        }
+    };
+
+    public static NodePredicate isConstantPredicate() {
+        return IS_CONSTANT;
+    }
+
     /**
      * Checks whether this value represents the null constant.
+     *
      * @return {@code true} if this value represents the null constant
      */
     public final boolean isNullConstant() {
@@ -89,30 +139,44 @@ public abstract class ValueNode extends ScheduledNode implements StampProvider {
 
     /**
      * Convert this value to a constant if it is a constant, otherwise return null.
-     * @return the {@link CiConstant} represented by this value if it is a constant; {@code null}
-     * otherwise
+     *
+     * @return the {@link Constant} represented by this value if it is a constant; {@code null} otherwise
      */
-    public final CiConstant asConstant() {
+    public final Constant asConstant() {
         if (this instanceof ConstantNode) {
             return ((ConstantNode) this).value;
         }
         return null;
     }
 
-    /**
-     * Computes the exact type of the result of this node, if possible.
-     * @return the exact type of the result of this node, if it is known; {@code null} otherwise
-     */
-    public final RiResolvedType exactType() {
-        return stamp.exactType();
+    public <T extends Stamp> boolean verifyStamp(Class<T> stampClass) {
+        assert stamp != null;
+        assert stampClass.isInstance(stamp) : this + " (" + GraphUtil.approxSourceLocation(this) + ") has unexpected stamp type: expected " + stampClass.getName() +
+            ", got " + stamp.getClass().getName();
+        return true;
     }
 
-    /**
-     * Computes the declared type of the result of this node, if possible.
-     * @return the declared type of the result of this node, if it is known; {@code null} otherwise
-     */
-    public final RiResolvedType declaredType() {
-        return stamp.declaredType();
+    public final ObjectStamp objectStamp() {
+        assert verifyStamp(ObjectStamp.class);
+        return (ObjectStamp) stamp;
+    }
+
+    public final IntegerStamp integerStamp() {
+        assert verifyStamp(IntegerStamp.class);
+        return (IntegerStamp) stamp;
+    }
+
+    public final FloatStamp floatStamp() {
+        assert verifyStamp(FloatStamp.class);
+        return (FloatStamp) stamp;
+    }
+
+    @Override
+    public boolean verify() {
+        for (ValueNode v : dependencies().nonNull()) {
+            assertTrue(!(v.stamp() instanceof GenericStamp) || ((GenericStamp) v.stamp()).type() == GenericStampType.Dependency, "cannot depend on node with stamp %s", v.stamp());
+        }
+        return super.verify();
     }
 
     @Override
@@ -121,7 +185,7 @@ public abstract class ValueNode extends ScheduledNode implements StampProvider {
         if (!dependencies.isEmpty()) {
             StringBuilder str = new StringBuilder();
             for (int i = 0; i < dependencies.size(); i++) {
-                str.append(i == 0 ? "" : ", ").append(dependencies.get(i).toString(Verbosity.Id));
+                str.append(i == 0 ? "" : ", ").append(dependencies.get(i) == null ? "null" : dependencies.get(i).toString(Verbosity.Id));
             }
             properties.put("dependencies", str.toString());
         }

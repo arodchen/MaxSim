@@ -22,14 +22,15 @@
  */
 package com.oracle.graal.compiler.alloc;
 
-import static com.oracle.max.cri.ci.CiUtil.*;
 import static com.oracle.graal.alloc.util.LocationUtil.*;
+import static com.oracle.graal.api.code.CodeUtil.*;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ci.CiRegister.RegisterFlag;
 import com.oracle.max.criutils.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.Register.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.alloc.Interval.RegisterBinding;
 import com.oracle.graal.compiler.alloc.Interval.RegisterPriority;
@@ -46,7 +47,7 @@ final class LinearScanWalker extends IntervalWalker {
 
     private final boolean hasCalleeSavedRegisters;
 
-    private CiRegister[] availableRegs;
+    private Register[] availableRegs;
 
     private final int[] usePos;
     private final int[] blockPos;
@@ -82,7 +83,7 @@ final class LinearScanWalker extends IntervalWalker {
     }
 
     void initUseLists(boolean onlyProcessUsePos) {
-        for (CiRegister register : availableRegs) {
+        for (Register register : availableRegs) {
             int i = register.number;
             usePos[i] = Integer.MAX_VALUE;
 
@@ -94,7 +95,7 @@ final class LinearScanWalker extends IntervalWalker {
     }
 
     void excludeFromUse(Interval i) {
-        CiValue location = i.location();
+        Value location = i.location();
         int i1 = asRegister(location).number;
         if (i1 >= availableRegs[0].number && i1 <= availableRegs[availableRegs.length - 1].number) {
             usePos[i1] = 0;
@@ -606,13 +607,13 @@ final class LinearScanWalker extends IntervalWalker {
         // only intervals overlapping with cur are processed, non-overlapping invervals can be ignored safely
         if (GraalOptions.TraceLinearScanLevel >= 4) {
             TTY.println("      state of registers:");
-            for (CiRegister register : availableRegs) {
+            for (Register register : availableRegs) {
                 int i = register.number;
                 TTY.println("      reg %d: usePos: %d", register.number, usePos[i]);
             }
         }
 
-        CiRegister hint = null;
+        Register hint = null;
         Interval locationHint = interval.locationHint(true);
         if (locationHint != null && locationHint.location() != null && isRegister(locationHint.location())) {
             hint = asRegister(locationHint.location());
@@ -629,12 +630,12 @@ final class LinearScanWalker extends IntervalWalker {
         boolean needSplit = false;
         int splitPos = -1;
 
-        CiRegister reg = null;
-        CiRegister minFullReg = null;
-        CiRegister maxPartialReg = null;
+        Register reg = null;
+        Register minFullReg = null;
+        Register maxPartialReg = null;
 
         for (int i = 0; i < availableRegs.length; ++i) {
-            CiRegister availableReg = availableRegs[i];
+            Register availableReg = availableRegs[i];
             int number = availableReg.number;
             if (usePos[number] >= intervalTo) {
                 // this register is free for the full interval
@@ -674,11 +675,11 @@ final class LinearScanWalker extends IntervalWalker {
         return true;
     }
 
-    CiRegister findLockedRegister(int regNeededUntil, int intervalTo, CiValue ignoreReg, boolean[] needSplit) {
+    Register findLockedRegister(int regNeededUntil, int intervalTo, Value ignoreReg, boolean[] needSplit) {
         int maxReg = -1;
-        CiRegister ignore = isRegister(ignoreReg) ? asRegister(ignoreReg) : null;
+        Register ignore = isRegister(ignoreReg) ? asRegister(ignoreReg) : null;
 
-        for (CiRegister reg : availableRegs) {
+        for (Register reg : availableRegs) {
             int i = reg.number;
             if (reg == ignore) {
                 // this register must be ignored
@@ -700,7 +701,7 @@ final class LinearScanWalker extends IntervalWalker {
         return null;
     }
 
-    void splitAndSpillIntersectingIntervals(CiRegister reg) {
+    void splitAndSpillIntersectingIntervals(Register reg) {
         assert reg != null : "no register assigned";
 
         for (int i = 0; i < spillIntervals[reg.number].size(); i++) {
@@ -727,7 +728,7 @@ final class LinearScanWalker extends IntervalWalker {
 
         if (GraalOptions.TraceLinearScanLevel >= 4) {
             TTY.println("      state of registers:");
-            for (CiRegister reg : availableRegs) {
+            for (Register reg : availableRegs) {
                 int i = reg.number;
                 TTY.print("      reg %d: usePos: %d, blockPos: %d, intervals: ", i, usePos[i], blockPos[i]);
                 for (int j = 0; j < spillIntervals[i].size(); j++) {
@@ -743,9 +744,9 @@ final class LinearScanWalker extends IntervalWalker {
         int intervalTo = interval.to();
         assert regNeededUntil > 0 && regNeededUntil < Integer.MAX_VALUE : "interval has no use";
 
-        CiRegister reg = null;
-        CiRegister ignore = interval.location() != null && isRegister(interval.location()) ? asRegister(interval.location()) : null;
-        for (CiRegister availableReg : availableRegs) {
+        Register reg = null;
+        Register ignore = interval.location() != null && isRegister(interval.location()) ? asRegister(interval.location()) : null;
+        for (Register availableReg : availableRegs) {
             int number = availableReg.number;
             if (availableReg == ignore) {
                 // this register must be ignored
@@ -766,7 +767,7 @@ final class LinearScanWalker extends IntervalWalker {
                 assert false : "cannot spill interval that is used in first instruction (possible reason: no register found) firstUsage=" + firstUsage + ", interval.from()=" + interval.from();
                 // assign a reasonable register and do a bailout in product mode to avoid errors
                 allocator.assignSpillSlot(interval);
-                throw new CiBailout("LinearScan: no register found");
+                throw new BailoutException("LinearScan: no register found");
             }
 
             splitAndSpillInterval(interval);
@@ -821,7 +822,7 @@ final class LinearScanWalker extends IntervalWalker {
     }
 
     void initVarsForAlloc(Interval interval) {
-        EnumMap<RegisterFlag, CiRegister[]> categorizedRegs = allocator.frameMap.registerConfig.getCategorizedAllocatableRegisters();
+        EnumMap<RegisterFlag, Register[]> categorizedRegs = allocator.frameMap.registerConfig.getCategorizedAllocatableRegisters();
         availableRegs = categorizedRegs.get(asVariable(interval.operand).flag);
     }
 
@@ -905,7 +906,7 @@ final class LinearScanWalker extends IntervalWalker {
             TTY.println("      splitParent: %s, insertMoveWhenActivated: %b", interval.splitParent().operandNumber, interval.insertMoveWhenActivated());
         }
 
-        final CiValue operand = interval.operand;
+        final Value operand = interval.operand;
         if (interval.location() != null && isStackSlot(interval.location())) {
             // activating an interval that has a stack slot assigned . split it at first use position
             // used for method parameters

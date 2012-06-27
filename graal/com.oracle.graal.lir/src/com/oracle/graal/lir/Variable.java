@@ -22,13 +22,14 @@
  */
 package com.oracle.graal.lir;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 
 /**
  * Represents a value that is yet to be bound to a machine location (such as
- * a {@link CiRegisterValue} or {@link CiStackSlot}) by a register allocator.
+ * a {@link RegisterValue} or {@link StackSlot}) by a register allocator.
  */
-public final class Variable extends CiValue {
+public final class Variable extends Value {
     private static final long serialVersionUID = 4507578431686109809L;
 
     /**
@@ -39,14 +40,14 @@ public final class Variable extends CiValue {
     /**
      * The type of register that this variable needs to get assigned.
      */
-    public final CiRegister.RegisterFlag flag;
+    public final Register.RegisterFlag flag;
 
     /**
      * Creates a new variable.
      * @param kind
      * @param index
      */
-    public Variable(CiKind kind, int index, CiRegister.RegisterFlag flag) {
+    public Variable(Kind kind, int index, Register.RegisterFlag flag) {
         super(kind);
         assert kind == kind.stackKind() : "Variables can be only created for stack kinds";
         assert index >= 0;

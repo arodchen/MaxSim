@@ -31,20 +31,24 @@ import com.oracle.graal.nodes.type.*;
  */
 public final class NegateNode extends FloatingNode implements Canonicalizable, LIRLowerable {
 
-    @Input
-    private ValueNode x;
+    @Input private ValueNode x;
 
     public ValueNode x() {
         return x;
     }
 
+    @Override
+    public boolean inferStamp() {
+        return updateStamp(StampTool.negate(x().stamp()));
+    }
+
     /**
-     * Creates new NegateOp instance.
+     * Creates new NegateNode instance.
      *
      * @param x the instruction producing the value that is input to this instruction
      */
     public NegateNode(ValueNode x) {
-        super(StampFactory.forKind(x.kind()));
+        super(StampTool.negate(x.stamp()));
         this.x = x;
     }
 

@@ -22,12 +22,12 @@
  */
 package com.oracle.graal.snippets.target.amd64;
 
-import static com.oracle.max.cri.ci.CiValueUtil.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 
 import java.util.*;
 
 import com.oracle.max.asm.target.amd64.*;
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.amd64.*;
@@ -40,15 +40,15 @@ public class AMD64MathIntrinsicOp extends AMD64LIRInstruction {
         LOG, LOG10;
     }
 
-    public AMD64MathIntrinsicOp(Opcode opcode, CiValue result, CiValue input) {
-        super(opcode, new CiValue[] {result}, null, new CiValue[] {input}, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS);
+    public AMD64MathIntrinsicOp(Opcode opcode, Value result, Value input) {
+        super(opcode, new Value[] {result}, null, new Value[] {input}, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS);
     }
 
     @Override
     public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
         Opcode opcode = (Opcode) code;
-        CiValue result = output(0);
-        CiValue input = input(0);
+        Value result = output(0);
+        Value input = input(0);
 
         switch (opcode) {
             case SQRT:  masm.sqrtsd(asDoubleReg(result), asDoubleReg(input)); break;

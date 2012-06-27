@@ -22,12 +22,12 @@
  */
 package com.oracle.graal.hotspot.target.amd64;
 
-import static com.oracle.max.cri.ci.CiValueUtil.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 
 import java.util.*;
 
 import com.oracle.max.asm.target.amd64.*;
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.amd64.*;
@@ -38,7 +38,7 @@ import com.oracle.graal.lir.asm.*;
  */
 public class AMD64TailcallOp extends AMD64LIRInstruction {
 
-    public AMD64TailcallOp(List<CiValue> parameters, CiValue target, CiValue[] callingConvention) {
+    public AMD64TailcallOp(List<Value> parameters, Value target, Value[] callingConvention) {
         super("TAILCALL", LIRInstruction.NO_OPERANDS, null, toArray(parameters, target), LIRInstruction.NO_OPERANDS, callingConvention.clone());
         assert inputs.length == temps.length + 1;
 
@@ -48,8 +48,8 @@ public class AMD64TailcallOp extends AMD64LIRInstruction {
         }
     }
 
-    private static CiValue[] toArray(List<CiValue> parameters, CiValue target) {
-        CiValue[] result = new CiValue[parameters.size() + 1];
+    private static Value[] toArray(List<Value> parameters, Value target) {
+        Value[] result = new Value[parameters.size() + 1];
         parameters.toArray(result);
         result[parameters.size()] = target;
         return result;

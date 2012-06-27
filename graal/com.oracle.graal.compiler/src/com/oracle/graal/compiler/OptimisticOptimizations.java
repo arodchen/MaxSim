@@ -24,9 +24,9 @@ package com.oracle.graal.compiler;
 
 import java.util.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
 import com.oracle.max.criutils.*;
 
 
@@ -45,20 +45,20 @@ public final class OptimisticOptimizations {
 
     private final Set<Optimization> enabledOpts;
 
-    public OptimisticOptimizations(RiResolvedMethod method) {
+    public OptimisticOptimizations(ResolvedJavaMethod method) {
         this.enabledOpts = EnumSet.noneOf(Optimization.class);
 
-        RiProfilingInfo profilingInfo = method.profilingInfo();
-        if (checkDeoptimizations(profilingInfo, RiDeoptReason.UnreachedCode)) {
+        ProfilingInfo profilingInfo = method.profilingInfo();
+        if (checkDeoptimizations(profilingInfo, DeoptimizationReason.UnreachedCode)) {
             enabledOpts.add(Optimization.RemoveNeverExecutedCode);
         }
-        if (checkDeoptimizations(profilingInfo, RiDeoptReason.TypeCheckedInliningViolated)) {
+        if (checkDeoptimizations(profilingInfo, DeoptimizationReason.TypeCheckedInliningViolated)) {
             enabledOpts.add(Optimization.UseTypeCheckedInlining);
         }
-        if (checkDeoptimizations(profilingInfo, RiDeoptReason.OptimizedTypeCheckViolated)) {
+        if (checkDeoptimizations(profilingInfo, DeoptimizationReason.OptimizedTypeCheckViolated)) {
             enabledOpts.add(Optimization.UseTypeCheckHints);
         }
-        if (checkDeoptimizations(profilingInfo, RiDeoptReason.NotCompiledExceptionHandler)) {
+        if (checkDeoptimizations(profilingInfo, DeoptimizationReason.NotCompiledExceptionHandler)) {
             enabledOpts.add(Optimization.UseExceptionProbability);
         }
     }
@@ -67,11 +67,11 @@ public final class OptimisticOptimizations {
         this.enabledOpts = enabledOpts;
     }
 
-    public void log(RiMethod method) {
+    public void log(JavaMethod method) {
         for (Optimization opt: Optimization.values()) {
             if (!enabledOpts.contains(opt)) {
                 if (GraalOptions.PrintDisabledOptimisticOptimizations) {
-                    TTY.println("WARN: deactivated optimistic optimization %s for %s", opt.name(), CiUtil.format("%H.%n(%p)", method));
+                    TTY.println("WARN: deactivated optimistic optimization %s for %s", opt.name(), CodeUtil.format("%H.%n(%p)", method));
                 }
                 disabledOptimisticOptsMetric.increment();
             }
@@ -82,7 +82,7 @@ public final class OptimisticOptimizations {
         return GraalOptions.RemoveNeverExecutedCode && enabledOpts.contains(Optimization.RemoveNeverExecutedCode);
     }
 
-    public boolean useUseTypeCheckHints() {
+    public boolean useTypeCheckHints() {
         return GraalOptions.UseTypeCheckHints && enabledOpts.contains(Optimization.UseTypeCheckHints);
     }
 
@@ -111,7 +111,7 @@ public final class OptimisticOptimizations {
         return false;
     }
 
-    private static boolean checkDeoptimizations(RiProfilingInfo profilingInfo, RiDeoptReason reason) {
+    private static boolean checkDeoptimizations(ProfilingInfo profilingInfo, DeoptimizationReason reason) {
         return profilingInfo.getDeoptimizationCount(reason) < GraalOptions.DeoptsToDisableOptimisticOptimization;
     }
 }

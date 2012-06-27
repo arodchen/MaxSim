@@ -22,11 +22,11 @@
  */
 package com.oracle.graal.nodes.java;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.types.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.max.cri.ci.*;
 
 /**
  * The {@code AccessIndexedNode} class is the base class of instructions that read or write
@@ -35,16 +35,11 @@ import com.oracle.max.cri.ci.*;
 public abstract class AccessIndexedNode extends AccessArrayNode implements TypeFeedbackProvider {
 
     @Input private ValueNode index;
-    @Input private ValueNode length;
-    private final CiKind elementType;
+    private final Kind elementType;
     private final long leafGraphId;
 
     public ValueNode index() {
         return index;
-    }
-
-    public ValueNode length() {
-        return length;
     }
 
     /**
@@ -52,13 +47,11 @@ public abstract class AccessIndexedNode extends AccessArrayNode implements TypeF
      * @param kind the result kind of the access
      * @param array the instruction producing the array
      * @param index the instruction producing the index
-     * @param length the instruction producing the length
      * @param elementKind the type of the elements of the array
      */
-    protected AccessIndexedNode(Stamp stamp, ValueNode array, ValueNode index, ValueNode length, CiKind elementKind, long leafGraphId) {
+    protected AccessIndexedNode(Stamp stamp, ValueNode array, ValueNode index, Kind elementKind, long leafGraphId) {
         super(stamp, array);
         this.index = index;
-        this.length = length;
         this.elementType = elementKind;
         this.leafGraphId = leafGraphId;
     }
@@ -67,7 +60,7 @@ public abstract class AccessIndexedNode extends AccessArrayNode implements TypeF
      * Gets the element type of the array.
      * @return the element type
      */
-    public CiKind elementKind() {
+    public Kind elementKind() {
         return elementType;
     }
 
@@ -77,7 +70,6 @@ public abstract class AccessIndexedNode extends AccessArrayNode implements TypeF
 
     @Override
     public void typeFeedback(TypeFeedbackTool tool) {
-        tool.addScalar(index()).constantBound(Condition.GE, CiConstant.INT_0);
-        tool.addScalar(index()).valueBound(Condition.LT, length, tool.queryScalar(length));
+        tool.addScalar(index()).constantBound(Condition.GE, Constant.INT_0);
     }
 }

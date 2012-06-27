@@ -31,9 +31,25 @@ import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
-public class BeginNode extends AbstractStateSplit implements LIRLowerable, Simplifiable, Node.IterableNodeType {
+public class BeginNode extends FixedWithNextNode implements StateSplit, LIRLowerable, Simplifiable, Node.IterableNodeType {
+    @Input(notDataflow = true) private FrameState stateAfter;
+
+    public FrameState stateAfter() {
+        return stateAfter;
+    }
+
+    public void setStateAfter(FrameState x) {
+        assert x == null || x.isAlive() : "frame state must be in a graph";
+        updateUsages(stateAfter, x);
+        stateAfter = x;
+    }
+
+    public boolean hasSideEffect() {
+        return false;
+    }
+
     public BeginNode() {
-        super(StampFactory.illegal());
+        super(StampFactory.dependency());
     }
 
     public static BeginNode begin(FixedNode with) {
@@ -127,7 +143,7 @@ public class BeginNode extends AbstractStateSplit implements LIRLowerable, Simpl
     }
 
     public NodeIterable<FixedNode> getBlockNodes() {
-        return new NodeIterable<FixedNode>() {
+        return new AbstractNodeIterable<FixedNode>() {
             @Override
             public Iterator<FixedNode> iterator() {
                 return new BlockNodeIterator(BeginNode.this);

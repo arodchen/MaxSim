@@ -22,17 +22,23 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.spi.types.*;
+import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(shortName = "+")
 public class IntegerAddNode extends IntegerArithmeticNode implements Canonicalizable, LIRLowerable, TypeFeedbackProvider {
 
-    public IntegerAddNode(CiKind kind, ValueNode x, ValueNode y) {
+    public IntegerAddNode(Kind kind, ValueNode x, ValueNode y) {
         super(kind, x, y);
+    }
+
+    @Override
+    public boolean inferStamp() {
+        return updateStamp(StampTool.add(x().integerStamp(), y().integerStamp()));
     }
 
     @Override
@@ -41,31 +47,39 @@ public class IntegerAddNode extends IntegerArithmeticNode implements Canonicaliz
             return graph().unique(new IntegerAddNode(kind(), y(), x()));
         }
         if (x().isConstant()) {
-            if (kind() == CiKind.Int) {
+            if (kind() == Kind.Int) {
                 return ConstantNode.forInt(x().asConstant().asInt() + y().asConstant().asInt(), graph());
             } else {
-                assert kind() == CiKind.Long;
+                assert kind() == Kind.Long;
                 return ConstantNode.forLong(x().asConstant().asLong() + y().asConstant().asLong(), graph());
             }
         } else if (y().isConstant()) {
-            if (kind() == CiKind.Int) {
-                int c = y().asConstant().asInt();
-                if (c == 0) {
-                    return x();
-                }
-            } else {
-                assert kind() == CiKind.Long;
-                long c = y().asConstant().asLong();
-                if (c == 0) {
-                    return x();
+            long c = y().asConstant().asLong();
+            if (c == 0) {
+                return x();
+            }
+            // canonicalize expressions like "(a + 1) + 2"
+            BinaryNode reassociated = BinaryNode.reassociate(this, ValueNode.isConstantPredicate());
+            if (reassociated != this) {
+                return reassociated;
+            }
+            if (c < 0) {
+                if (kind() == Kind.Int) {
+                    return IntegerArithmeticNode.sub(x(), ConstantNode.forInt((int) -c, graph()));
+                } else {
+                    assert kind() == Kind.Long;
+                    return IntegerArithmeticNode.sub(x(), ConstantNode.forLong(-c, graph()));
                 }
             }
+        }
+        if (x() instanceof NegateNode) {
+            return IntegerArithmeticNode.sub(y(), ((NegateNode) x()).x());
         }
         return this;
     }
 
     public static boolean isIntegerAddition(ValueNode result, ValueNode a, ValueNode b) {
-        CiKind kind = result.kind();
+        Kind kind = result.kind();
         if (kind != a.kind() || kind != b.kind() || !(kind.isInt() || kind.isLong())) {
             return false;
         }
@@ -84,11 +98,11 @@ public class IntegerAddNode extends IntegerArithmeticNode implements Canonicaliz
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        CiValue op1 = gen.operand(x());
+        Value op1 = gen.operand(x());
         assert op1 != null : x() + ", this=" + this;
-        CiValue op2 = gen.operand(y());
+        Value op2 = gen.operand(y());
         if (!y().isConstant() && !FloatAddNode.livesLonger(this, y(), gen)) {
-            CiValue op = op1;
+            Value op = op1;
             op1 = op2;
             op2 = op;
         }

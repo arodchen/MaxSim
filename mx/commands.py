@@ -51,15 +51,6 @@ _jacoco = 'off'
 
 _make_eclipse_launch = False
 
-_jacocoExcludes = ['com.oracle.graal.hotspot.snippets.ArrayCopySnippets',
-                   'com.oracle.graal.snippets.DoubleSnippets',
-                   'com.oracle.graal.snippets.FloatSnippets',
-                   'com.oracle.graal.snippets.MathSnippetsX86',
-                   'com.oracle.graal.snippets.NodeClassSnippets',
-                   'com.oracle.graal.hotspot.snippets.SystemSnippets',
-                   'com.oracle.graal.hotspot.snippets.UnsafeSnippets',
-                   'com.oracle.graal.compiler.tests.*']
-
 _copyrightTemplate = """/*
  * Copyright (c) {0}, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -184,7 +175,7 @@ def dacapo(args):
     """run one or all DaCapo benchmarks
     
     DaCapo options are distinguished from VM options by a '@' prefix.
-    For example, '@--iterations @5' will pass '--iterations 5' to the
+    For example, '@-n @5' will pass '-n 5' to the
     DaCapo harness."""
 
     numTests = {}
@@ -295,12 +286,22 @@ def scaladacapo(args):
 
 def _vmLibDirInJdk(jdk):
     """
-    Get the directory within a JDK where jvm.cfg file and the server
-    and client subdirectories are located.
+    Get the directory within a JDK where the server and client 
+    subdirectories are located.
     """
     if platform.system() == 'Darwin':
         return join(jdk, 'jre', 'lib')
+    if platform.system() == 'Windows':
+        return join(jdk, 'jre', 'bin')
     return join(jdk, 'jre', 'lib', 'amd64')
+
+def _vmCfgInJdk(jdk):
+    """
+    Get the jvm.cfg file.
+    """
+    if platform.system() == 'Windows':
+        return join(jdk, 'jre', 'lib', 'amd64', 'jvm.cfg')
+    return join(_vmLibDirInJdk(jdk), 'jvm.cfg')
 
 def _jdk(build='product', create=False):
     """
@@ -324,7 +325,7 @@ def _jdk(build='product', create=False):
                 
             # Make a copy of the default VM so that this JDK can be
             # reliably used as the bootstrap for a HotSpot build.                
-            jvmCfg = join(_vmLibDirInJdk(jdk), 'jvm.cfg')
+            jvmCfg = _vmCfgInJdk(jdk)
             if not exists(jvmCfg):
                 mx.abort(jvmCfg + ' does not exist')
                 
@@ -347,6 +348,11 @@ def _jdk(build='product', create=False):
                 for line in lines:
                     f.write(line)
                     
+            # Install a copy of the disassembler library
+            try:
+                hsdis([], copyToDir=_vmLibDirInJdk(jdk))
+            except SystemExit:
+                pass
     else:
         if not exists(jdk):
             mx.abort('The ' + build + ' VM has not been created - run \'mx clean; mx build ' + build + '\'')
@@ -368,9 +374,9 @@ def _runInDebugShell(cmd, workingDir, logFile=None, findInOutput=None, respondTo
         log = open(logFile, 'w')
     ret = False
     while True:
-        line = stdout.readline().decode()
+        line = stdout.readline().decode(sys.stdout.encoding)
         if logFile:
-            log.write(line)
+            log.write(line.encode('utf-8'))
         line = line.strip()
         mx.log(line)
         if line == STARTTOKEN:
@@ -384,7 +390,14 @@ def _runInDebugShell(cmd, workingDir, logFile=None, findInOutput=None, respondTo
             if match:
                 ret = True
         if line == ENDTOKEN:
-            break
+            if not findInOutput:
+                stdin.write('echo ERR%errorlevel%' + newLine)
+            else:
+                break
+        if line.startswith('ERR'):
+            if line == 'ERR0':
+                ret = True
+            break;
     stdin.write('exit' + newLine)
     if logFile:
         log.close()
@@ -499,8 +512,7 @@ def build(args, vm=None):
                 mx.log('Error executing create command')
                 return 
             winBuildCmd = 'msbuild ' + _graal_home + r'\build\vs-amd64\jvm.vcxproj /p:Configuration=' + project_config + ' /p:Platform=x64'
-            winBuildSuccess = re.compile('Build succeeded.')
-            if not _runInDebugShell(winBuildCmd, _graal_home, compilelogfile, winBuildSuccess):
+            if not _runInDebugShell(winBuildCmd, _graal_home, compilelogfile):
                 mx.log('Error building project')
                 return 
         else:
@@ -520,7 +532,7 @@ def build(args, vm=None):
             
             mx.run([mx.gmake_cmd(), build + buildSuffix], cwd=join(_graal_home, 'make'), err=filterXusage)
         
-        jvmCfg = join(_vmLibDirInJdk(jdk), 'jvm.cfg')
+        jvmCfg = _vmCfgInJdk(jdk)
         found = False
         if not exists(jvmCfg):
             mx.abort(jvmCfg + ' does not exist')
@@ -562,59 +574,96 @@ def vm(args, vm=None, nonZeroIsFatal=True, out=None, err=None, cwd=None, timeout
         vm = _vm
         
     build = vmbuild if vmbuild is not None else _vmbuild if _vmSourcesAvailable else 'product'
+    jdk = _jdk(build)
     mx.expand_project_in_args(args)
     if _make_eclipse_launch:
         mx.make_eclipse_launch(args, 'graal-' + build, name=None, deps=mx.project('com.oracle.graal.hotspot').all_deps([], True))
     if len([a for a in args if 'PrintAssembly' in a]) != 0:
-        hsdis([])
+        hsdis([], copyToDir=_vmLibDirInJdk(jdk))
     if mx.java().debug_port is not None:
         args = ['-Xdebug', '-Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=' + str(mx.java().debug_port)] + args
     if _jacoco == 'on' or _jacoco == 'append':
         jacocoagent = mx.library("JACOCOAGENT", True)
+        # Exclude all compiler tests and snippets
+        excludes = ['com.oracle.graal.compiler.tests.*']
+        for p in mx.projects():
+            _find_classes_with_annotations(excludes, p, None, ['@Snippet', '@ClassSubstitution'], includeInnerClasses=True)
         agentOptions = {
                         'append' : 'true' if _jacoco == 'append' else 'false',
                         'bootclasspath' : 'true',
                         'includes' : 'com.oracle.*',
-                        'excludes' : ':'.join(_jacocoExcludes)
+                        'excludes' : ':'.join(excludes)
         }
         args = ['-javaagent:' + jacocoagent.get_path(True) + '=' + ','.join([k + '=' + v for k, v in agentOptions.items()])] + args
-    exe = join(_jdk(build), 'bin', mx.exe_suffix('java'))
+    exe = join(jdk, 'bin', mx.exe_suffix('java'))
     return mx.run([exe, '-' + vm] + args, nonZeroIsFatal=nonZeroIsFatal, out=out, err=err, cwd=cwd, timeout=timeout)
 
-
-# Table of unit tests.
-# Keys are project names, values are package name lists.
-# All source files in the given (project,package) pairs are scanned for lines
-# containing '@Test'. These are then determined to be the classes defining
-# unit tests.
-_unittests = {
-    'com.oracle.graal.tests': ['com.oracle.graal.compiler.tests'],
-}
-_jtttests = {
-    'com.oracle.graal.jtt': ['com.oracle.graal.jtt'],
-}
-
-def _add_test_classes(testClassList, searchDir, pkgRoot):
+def _find_classes_with_annotations(classes, p, pkgRoot, annotations, includeInnerClasses=False):
+    """
+    Scan the sources of project 'p' for Java source files containing a line starting with 'annotation'
+    (ignoring preceding whitespace) and add the fully qualified class name
+    to 'classes' for each Java source file matched.
+    """
+    for a in annotations:
+        assert a.startswith('@')
     pkgDecl = re.compile(r"^package\s+([a-zA-Z_][\w\.]*)\s*;$")
-    for root, _, files in os.walk(searchDir):
-        for name in files:
-            if name.endswith('.java') and name != 'package-info.java':
-                hasTest = False
-                with open(join(root, name)) as f:
-                    pkg = None
-                    for line in f:
-                        if line.startswith("package "):
-                            match = pkgDecl.match(line)
-                            if match:
-                                pkg = match.group(1)
-                        else:
-                            if line.strip().startswith('@Test'):
-                                hasTest = True
-                                break
-                if hasTest:
-                    assert pkg is not None
-                    if pkg.startswith(pkgRoot):
-                        testClassList.append(pkg + '.' + name[:-len('.java')])
+    for srcDir in p.source_dirs():
+        outputDir = p.output_dir()
+        for root, _, files in os.walk(srcDir):
+            for name in files:
+                if name.endswith('.java') and name != 'package-info.java':
+                    annotationFound = False
+                    with open(join(root, name)) as f:
+                        pkg = None
+                        for line in f:
+                            if line.startswith("package "):
+                                match = pkgDecl.match(line)
+                                if match:
+                                    pkg = match.group(1)
+                            else:
+                                stripped = line.strip()
+                                for a in annotations:
+                                    if stripped == a or stripped.startswith(a + '('):
+                                        annotationFound = True
+                                        break
+                                if annotationFound:
+                                    break
+                    if annotationFound:
+                        basename = name[:-len('.java')]
+                        assert pkg is not None
+                        if pkgRoot is None or pkg.startswith(pkgRoot):
+                            pkgOutputDir = join(outputDir, pkg.replace('.', os.path.sep))
+                            for e in os.listdir(pkgOutputDir):
+                                if includeInnerClasses:
+                                    if e.endswith('.class') and (e.startswith(basename) or e.startswith(basename + '$')):
+                                        classes.append(pkg + '.' + e[:-len('.class')])
+                                elif e == basename + '.class':
+                                    classes.append(pkg + '.' + basename)
+
+def _run_tests(args, harnessName, harness):
+    pos = [a for a in args if a[0] != '-' and a[0] != '@' ]
+    neg = [a[1:] for a in args if a[0] == '-']
+    vmArgs = [a[1:] for a in args if a[0] == '@']
+
+    def containsAny(c, substrings):
+        for s in substrings:
+            if s in c:
+                return True
+        return False
+    
+    for p in mx.projects():
+        if getattr(p, 'testHarness', None) == harnessName:
+            classes = []
+            _find_classes_with_annotations(classes, p, None, ['@Test'])
+        
+            if len(pos) != 0:
+                classes = [c for c in classes if containsAny(c, pos)]
+            if len(neg) != 0:
+                classes = [c for c in classes if not containsAny(c, neg)]
+            
+            if len(classes) != 0:
+                mx.log('running tests in ' + p.name)
+                harness(p, vmArgs, classes)                
 
 def unittest(args):
     """run the Graal Compiler Unit Tests in the GraalVM
@@ -623,28 +672,9 @@ def unittest(args):
     include a filter as a substring are run. Negative filters are
     those with a '-' prefix. VM args should have a @ prefix."""
     
-    pos = [a for a in args if a[0] != '-' and a[0] != '@' ]
-    neg = [a[1:] for a in args if a[0] == '-']
-    vmArgs = [a[1:] for a in args if a[0] == '@']
-
-    def containsAny(c, substrings):
-        for s in substrings:
-            if s in c:
-                return True
-        return False
-    
-    for proj in _unittests.iterkeys():
-        p = mx.project(proj)
-        classes = []
-        for pkg in _unittests[proj]:
-            _add_test_classes(classes, join(p.dir, 'src'), pkg)
-    
-        if len(pos) != 0:
-            classes = [c for c in classes if containsAny(c, pos)]
-        if len(neg) != 0:
-            classes = [c for c in classes if not containsAny(c, neg)]
-            
-        vm(['-XX:-BootstrapGraal', '-esa'] + vmArgs + ['-cp', mx.classpath(proj), 'org.junit.runner.JUnitCore'] + classes)
+    def harness(p, vmArgs, classes):
+        vm(['-XX:-BootstrapGraal', '-esa'] + vmArgs + ['-cp', mx.classpath(p.name), 'org.junit.runner.JUnitCore'] + classes)
+    _run_tests(args, 'unittest', harness)
     
 def jtt(args):
     """run the Java Tester Tests in the GraalVM
@@ -653,28 +683,9 @@ def jtt(args):
     include a filter as a substring are run. Negative filters are
     those with a '-' prefix. VM args should have a @ prefix."""
     
-    pos = [a for a in args if a[0] != '-' and a[0] != '@' ]
-    neg = [a[1:] for a in args if a[0] == '-']
-    vmArgs = [a[1:] for a in args if a[0] == '@']
-
-    def containsAny(c, substrings):
-        for s in substrings:
-            if s in c:
-                return True
-        return False
-    
-    for proj in _jtttests.iterkeys():
-        p = mx.project(proj)
-        classes = []
-        for pkg in _jtttests[proj]:
-            _add_test_classes(classes, join(p.dir, 'src'), pkg)
-    
-        if len(pos) != 0:
-            classes = [c for c in classes if containsAny(c, pos)]
-        if len(neg) != 0:
-            classes = [c for c in classes if not containsAny(c, neg)]
-            
-        vm(['-XX:-BootstrapGraal', '-XX:CompileOnly=::test', '-Xcomp', '-esa'] + vmArgs + ['-cp', mx.classpath(proj), 'org.junit.runner.JUnitCore'] + classes)
+    def harness(p, vmArgs, classes):
+        vm(['-XX:-BootstrapGraal', '-XX:CompileOnly=com/oracle/graal/jtt', '-XX:CompileCommand=compileonly,java/lang/Object::<init>', '-XX:CompileCommand=quiet', '-Xcomp', '-esa'] + vmArgs + ['-cp', mx.classpath(p.name), 'org.junit.runner.JUnitCore'] + classes)
+    _run_tests(args, 'jtt', harness)
     
 def buildvms(args):
     """build one or more VMs in various configurations"""
@@ -734,6 +745,10 @@ def gate(args):
 
     args = parser.parse_args(args)
 
+    global _vmbuild
+    global _vm
+    global _jacoco
+    
     tasks = []             
     total = Task('Gate')
     try:
@@ -750,9 +765,7 @@ def gate(args):
         t = Task('BuildJava')
         build(['--no-native'])
         tasks.append(t.stop())
-        global _jacoco
         for vmbuild in ['fastdebug', 'product']:
-            global _vmbuild
             _vmbuild = vmbuild
             
             if args.buildNative:
@@ -775,7 +788,7 @@ def gate(args):
                 _jacoco = 'append'
             
             t = Task('JavaTesterTests:' + vmbuild)
-            jtt([])
+            jtt(['@-XX:CompileCommand=exclude,*::run*'] if vmbuild == 'product'  else [])
             tasks.append(t.stop())
             
             if vmbuild == 'product' and args.jacocout is not None:
@@ -814,6 +827,15 @@ def gate(args):
             t = Task('BuildHotSpotVarieties')
             buildvms(['--vms', 'client,server', '--builds', 'fastdebug,product'])
             tasks.append(t.stop())
+
+            for vmbuild in ['product', 'fastdebug']:
+                _vmbuild = vmbuild
+                for theVm in ['client', 'server']:
+                    _vm = theVm
+
+                    t = Task('DaCapo_pmd:' + theVm + ':' + vmbuild)
+                    dacapo(['pmd'])
+                    tasks.append(t.stop())
         
     except KeyboardInterrupt:
         total.abort(1)
@@ -941,19 +963,20 @@ def specjvm2008(args):
     vm = _vm;
     sanitycheck.getSPECjvm2008(benchArgs, skipValid, wt, it).bench(vm, opts=vmArgs)
     
-def hsdis(args):
-    """install the hsdis library
+def hsdis(args, copyToDir=None):
+    """downloads the hsdis library
 
     This is needed to support HotSpot's assembly dumping features.
-    By default it installs the Intel syntax version, use the 'att' argument to install AT&T syntax."""
+    By default it downloads the Intel syntax version, use the 'att' argument to install AT&T syntax."""
     flavor = 'intel'
     if 'att' in args:
         flavor = 'att'
-    build = _vmbuild if _vmSourcesAvailable else 'product'
     lib = mx.lib_suffix('hsdis-amd64')
-    path = join(_vmLibDirInJdk(_jdk(build)), lib)
+    path = join(_graal_home, 'lib', lib)
     if not exists(path):
         mx.download(path, ['http://lafo.ssw.uni-linz.ac.at/hsdis/' + flavor + "/" + lib])
+    if copyToDir is not None and exists(copyToDir):
+        shutil.copy(path, copyToDir)
     
 def hcfdis(args):
     """disassembles HexCodeFiles embedded in text files
@@ -978,6 +1001,68 @@ def jacocoreport(args):
         mx.abort('jacocoreport takes only one argument : an output directory')
     mx.run_java(['-jar', jacocoreport.get_path(True), '-in', 'jacoco.exec', '-g', join(_graal_home, 'graal'), out])
     
+def site(args):
+    """creates a website containing javadoc and the project dependency graph"""
+    
+    parser = ArgumentParser(prog='site')
+    parser.add_argument('-d', '--base', action='store', help='directory for generated site', required=True, metavar='<dir>')
+    parser.add_argument('-c', '--clean', action='store_true', help='remove existing site in <dir>')
+
+    args = parser.parse_args(args)
+    
+    args.base = os.path.abspath(args.base)
+    
+    if not exists(args.base):
+        os.mkdir(args.base)
+    elif args.clean:
+        shutil.rmtree(args.base)
+        os.mkdir(args.base)
+    
+    mx.javadoc(['--base', args.base])
+
+    unified = join(args.base, 'all')
+    if exists(unified):
+        shutil.rmtree(unified)
+    mx.javadoc(['--base', args.base, '--unified', '--arg', '@-overview', '--arg', '@' + join(_graal_home, 'graal', 'overview.html')])
+    os.rename(join(args.base, 'javadoc'), unified)
+        
+    _, tmp = tempfile.mkstemp()
+    try:
+        svg = join(args.base, 'all', 'modules.svg')
+        with open(tmp, 'w') as fp:
+            print >> fp, 'digraph projects {'
+            print >> fp, 'rankdir=BT;'
+            print >> fp, 'size = "13,13";'
+            print >> fp, 'node [shape=rect, fontcolor="blue"];'
+            print >> fp, 'edge [color="green"];'
+            for p in mx.projects():
+                print >> fp, '"' + p.name + '" [URL = "../' + p.name + '/javadoc/index.html", target = "_top"]'  
+                for dep in p.canonical_deps():
+                    if mx.project(dep, False):
+                        print >> fp, '"' + p.name + '" -> "' + dep + '"'
+            depths = dict()
+            for p in mx.projects():
+                d = p.max_depth()
+                depths.setdefault(d, list()).append(p.name)
+            for d, names in depths.iteritems():
+                print >> fp, '{ rank = same; "' + '"; "'.join(names) + '"; }' 
+            print >> fp, '}'
+
+        mx.run(['dot', '-Tsvg', '-o' + svg, tmp])
+        
+        # Post-process generated SVG to remove unified title elements which most browsers
+        # render as redundant (and annoying) tooltips.
+        with open(svg, 'r') as fp:
+            content = fp.read()
+        content = re.sub('<title>.*</title>', '', content)
+        content = re.sub('xlink:title="[^"]*"', '', content)
+        with open(svg, 'w') as fp:
+            fp.write(content)
+        
+        print 'Created website - root is ' + join(unified, 'index.html')
+    finally:
+        os.remove(tmp)
+    
 def mx_init():
     _vmbuild = 'product'
     commands = {
@@ -999,6 +1084,7 @@ def mx_init():
         'unittest' : [unittest, '[filters...]'],
         'jtt' : [jtt, '[filters...]'],
         'jacocoreport' : [jacocoreport, '[output directory]'],
+        'site' : [site, '[-options]'],
         'vm': [vm, '[-options] class [args...]'],
         'vmg': [vmg, '[-options] class [args...]'],
         'vmfg': [vmfg, '[-options] class [args...]']

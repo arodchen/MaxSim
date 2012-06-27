@@ -24,7 +24,8 @@ package com.oracle.graal.nodes;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
@@ -39,7 +40,7 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     @Input private FrameState stateAfter;
     private final int bci;
     // megamorph should only be true when the compiler is sure that the call site is megamorph, and false when in doubt
-    private boolean megamorph;
+    private boolean megamorphic;
     private boolean useForInlining;
     private final long leafGraphId;
 
@@ -48,17 +49,17 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
      * @param blockSuccessors
      * @param branchProbability
      */
-    public InvokeWithExceptionNode(MethodCallTargetNode callTarget, BeginNode exceptionEdge, int bci, long leafGraphId) {
+    public InvokeWithExceptionNode(MethodCallTargetNode callTarget, DispatchBeginNode exceptionEdge, int bci, long leafGraphId) {
         super(callTarget.returnStamp(), new BeginNode[]{null, exceptionEdge}, new double[]{1.0, 0.0});
         this.bci = bci;
         this.callTarget = callTarget;
         this.leafGraphId = leafGraphId;
-        this.megamorph = true;
+        this.megamorphic = true;
         this.useForInlining = true;
     }
 
-    public BeginNode exceptionEdge() {
-        return blockSuccessor(EXCEPTION_EDGE);
+    public DispatchBeginNode exceptionEdge() {
+        return (DispatchBeginNode) blockSuccessor(EXCEPTION_EDGE);
     }
 
     public void setExceptionEdge(BeginNode x) {
@@ -78,13 +79,13 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     }
 
     @Override
-    public boolean megamorph() {
-        return megamorph;
+    public boolean isMegamorphic() {
+        return megamorphic;
     }
 
     @Override
-    public void setMegamorph(boolean megamorph) {
-        this.megamorph = megamorph;
+    public void setMegamorphic(boolean value) {
+        this.megamorphic = value;
     }
 
     @Override
@@ -145,9 +146,13 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
         this.stateAfter = stateAfter;
     }
 
+    public boolean hasSideEffect() {
+        return true;
+    }
+
     public FrameState stateDuring() {
         FrameState tempStateAfter = stateAfter();
-        FrameState stateDuring = tempStateAfter.duplicateModified(bci(), tempStateAfter.rethrowException(), this.callTarget.targetMethod().signature().returnKind(false));
+        FrameState stateDuring = tempStateAfter.duplicateModified(bci(), tempStateAfter.rethrowException(), this.callTarget.targetMethod().signature().returnKind());
         stateDuring.setDuringCall(true);
         return stateDuring;
     }
@@ -157,7 +162,7 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
         Map<Object, Object> debugProperties = super.getDebugProperties();
         debugProperties.put("memoryCheckpoint", "true");
         if (callTarget != null && callTarget.targetMethod() != null) {
-            debugProperties.put("targetMethod", CiUtil.format("%h.%n(%p)", callTarget.targetMethod()));
+            debugProperties.put("targetMethod", CodeUtil.format("%h.%n(%p)", callTarget.targetMethod()));
         }
         return debugProperties;
     }
@@ -169,12 +174,8 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     }
 
     @Override
-    public boolean needsStateAfter() {
-        return true;
-    }
-
-    @Override
     public void intrinsify(Node node) {
+        assert !(node instanceof ValueNode) || ((ValueNode) node).kind().isVoid() == kind().isVoid();
         MethodCallTargetNode call = callTarget;
         FrameState state = stateAfter();
         killExceptionEdge();
@@ -183,10 +184,10 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
             stateSplit.setStateAfter(state);
         }
         if (node == null) {
-            assert kind() == CiKind.Void && usages().isEmpty();
+            assert kind() == Kind.Void && usages().isEmpty();
             ((StructuredGraph) graph()).removeSplit(this, NORMAL_EDGE);
         } else if (node instanceof DeoptimizeNode) {
-            this.replaceAtPredecessors(node);
+            this.replaceAtPredecessor(node);
             this.replaceAtUsages(null);
             GraphUtil.killCFG(this);
             return;

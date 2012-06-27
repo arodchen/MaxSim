@@ -25,12 +25,13 @@ package com.oracle.graal.hotspot;
 import java.io.*;
 import java.util.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.printer.*;
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
 import com.oracle.max.criutils.*;
 
 public class HotSpotDebugConfig implements DebugConfig {
@@ -42,11 +43,9 @@ public class HotSpotDebugConfig implements DebugConfig {
     private final MethodFilter[] methodFilter;
     private final List<DebugDumpHandler> dumpHandlers = new ArrayList<>();
     private final PrintStream output;
+    private final Set<Object> extraFilters = new HashSet<>();
 
-    private static final PrintStream cachedOut = System.out;
-
-
-    public HotSpotDebugConfig(String logFilter, String meterFilter, String timerFilter, String dumpFilter, String methodFilter, String logFile) {
+    public HotSpotDebugConfig(String logFilter, String meterFilter, String timerFilter, String dumpFilter, String methodFilter, PrintStream output) {
         this.logFilter = DebugFilter.parse(logFilter);
         this.meterFilter = DebugFilter.parse(meterFilter);
         this.timerFilter = DebugFilter.parse(timerFilter);
@@ -63,7 +62,7 @@ public class HotSpotDebugConfig implements DebugConfig {
 
         // Report the filters that have been configured so the user can verify it's what they expect
         if (logFilter != null || meterFilter != null || timerFilter != null || dumpFilter != null || methodFilter != null) {
-            TTY.println(this.toString());
+            TTY.println(Thread.currentThread().getName() + ": " + toString());
         }
 
         if (GraalOptions.PrintIdealGraphFile) {
@@ -72,15 +71,7 @@ public class HotSpotDebugConfig implements DebugConfig {
             dumpHandlers.add(new IdealGraphPrinterDumpHandler(GraalOptions.PrintIdealGraphAddress, GraalOptions.PrintIdealGraphPort));
         }
         dumpHandlers.add(new CFGPrinterObserver());
-        if (logFile == null || logFile.isEmpty()) {
-            output = cachedOut;
-        } else {
-            try {
-                output = new PrintStream(logFile);
-            } catch (FileNotFoundException e) {
-                throw new RuntimeException("couldn't create log file: " + logFile, e);
-            }
-        }
+        this.output = output;
     }
 
     public boolean isLogEnabled() {
@@ -112,14 +103,18 @@ public class HotSpotDebugConfig implements DebugConfig {
     }
 
     private boolean checkMethodFilter() {
-        if (methodFilter == null) {
+        if (methodFilter == null && extraFilters.isEmpty()) {
             return true;
         } else {
             for (Object o : Debug.context()) {
-                if (o instanceof RiMethod) {
-                    for (MethodFilter filter : methodFilter) {
-                        if (filter.matches((RiMethod) o)) {
-                            return true;
+                if (extraFilters.contains(o)) {
+                    return true;
+                } else if (methodFilter != null) {
+                    if (o instanceof JavaMethod) {
+                        for (MethodFilter filter : methodFilter) {
+                            if (filter.matches((JavaMethod) o)) {
+                                return true;
+                            }
                         }
                     }
                 }
@@ -155,18 +150,28 @@ public class HotSpotDebugConfig implements DebugConfig {
 
     @Override
     public RuntimeException interceptException(Throwable e) {
-        if (e instanceof CiBailout) {
+        if (e instanceof BailoutException) {
             return null;
         }
         Debug.setConfig(Debug.fixedConfig(true, true, false, false, dumpHandlers, output));
-        // sync "Exception occured in scope: " with mx/sanitycheck.py::Test.__init__
-        Debug.log(String.format("Exception occured in scope: %s", Debug.currentScope()));
+        Debug.log(String.format("Exception occurred in scope: %s", Debug.currentScope()));
         for (Object o : Debug.context()) {
-            Debug.log("Context obj %s", o);
-            if (o instanceof Graph && GraalOptions.DumpOnError) {
-                Graph graph = (Graph) o;
-                Debug.log("Found graph in context: ", graph);
-                Debug.dump(o, "Exception graph");
+            if (o instanceof Graph) {
+                Debug.log("Context obj %s", o);
+                if (GraalOptions.DumpOnError) {
+                    Debug.dump(o, "Exception graph");
+                } else {
+                    Debug.log("Use -G:+DumpOnError to enable dumping of graphs on this error");
+                }
+            } else if (o instanceof Node) {
+                String location = GraphUtil.approxSourceLocation((Node) o);
+                if (location != null) {
+                    Debug.log("Context obj %s (approx. location: %s)", o, location);
+                } else {
+                    Debug.log("Context obj %s", o);
+                }
+            } else {
+                Debug.log("Context obj %s", o);
             }
         }
         return null;
@@ -175,5 +180,15 @@ public class HotSpotDebugConfig implements DebugConfig {
     @Override
     public Collection<? extends DebugDumpHandler> dumpHandlers() {
         return dumpHandlers;
+    }
+
+    @Override
+    public void addToContext(Object o) {
+        extraFilters.add(o);
+    }
+
+    @Override
+    public void removeFromContext(Object o) {
+        extraFilters.remove(o);
     }
 }

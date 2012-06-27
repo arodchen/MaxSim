@@ -50,10 +50,10 @@ The configuration files (i.e. in the 'mx' sub-directory) of a suite are:
 
   commands.py
       Suite specific extensions to the commands available to mx.
-      This is only processed for the primary suite.
 
   includes
-      Other suites to be loaded. This is recursive.
+      Other suites to be loaded. This is recursive. Each
+      line in an includes file is a path to a suite directory.
 
   env
       A set of environment variable definitions. These override any
@@ -124,7 +124,7 @@ by extension commands.
 Property values can use environment variables with Bash syntax (e.g. ${HOME}).
 """
 
-import sys, os, errno, time, subprocess, shlex, types, urllib2, contextlib, StringIO, zipfile, signal, xml.sax.saxutils
+import sys, os, errno, time, subprocess, shlex, types, urllib2, contextlib, StringIO, zipfile, signal, xml.sax.saxutils, tempfile
 import shutil, fnmatch, re, xml.dom.minidom
 from collections import Callable
 from threading import Thread
@@ -172,6 +172,13 @@ class Project(Dependency):
         self.javaCompliance = JavaCompliance(javaCompliance) if javaCompliance is not None else None
         self.native = False
         self.dir = dir
+        
+        # Create directories for projects that don't yet exist
+        if not exists(dir):
+            os.mkdir(dir)
+        for s in self.source_dirs():
+            if not exists(s):
+                os.mkdir(s)
 
     def all_deps(self, deps, includeLibs, includeSelf=True):
         """
@@ -216,11 +223,17 @@ class Project(Dependency):
             if d == 1:
                 result.add(n)
 
-
         if len(result) == len(self.deps) and frozenset(self.deps) == result:
             return self.deps
         return result;
 
+    def max_depth(self):
+        """
+        Get the maximum canonical distance between this project and its most distant dependency.
+        """
+        distances = dict()
+        self._compute_max_dep_distances(self.name, distances, 0)
+        return max(distances.values())        
 
     def source_dirs(self):
         """
@@ -281,8 +294,8 @@ class Suite:
         self.primary = primary
         mxDir = join(dir, 'mx')
         self._load_env(mxDir)
-        if primary:
-            self._load_commands(mxDir)
+        self._load_commands(mxDir)
+        self._load_includes(mxDir)
 
     def _load_projects(self, mxDir):
         libsMap = dict()
@@ -353,8 +366,9 @@ class Suite:
         if exists(commands):
             # temporarily extend the Python path
             sys.path.insert(0, mxDir)
-
             mod = __import__('commands')
+            
+            sys.modules[join(mxDir, 'commands')] = sys.modules.pop('commands')
 
             # revert the Python path
             del sys.path[0]
@@ -372,7 +386,9 @@ class Suite:
         if exists(includes):
             with open(includes) as f:
                 for line in f:
-                    self.includes.append(expandvars_in_property(line.strip()))
+                    include = expandvars_in_property(line.strip())
+                    self.includes.append(include)
+                    _loadSuite(include, False)
 
     def _load_env(self, mxDir):
         e = join(mxDir, 'env')
@@ -386,9 +402,8 @@ class Suite:
 
     def _post_init(self, opts):
         mxDir = join(self.dir, 'mx')
-        self._load_includes(mxDir)
         self._load_projects(mxDir)
-        if self.mx_post_parse_cmd_line is not None:
+        if hasattr(self, 'mx_post_parse_cmd_line'):
             self.mx_post_parse_cmd_line(opts)
         for p in self.projects:
             existing = _projects.get(p.name)
@@ -404,11 +419,11 @@ class Suite:
 class XMLElement(xml.dom.minidom.Element):
     def writexml(self, writer, indent="", addindent="", newl=""):
         writer.write(indent+"<" + self.tagName)
-    
+
         attrs = self._get_attributes()
         a_names = attrs.keys()
         a_names.sort()
-    
+
         for a_name in a_names:
             writer.write(" %s=\"" % a_name)
             xml.dom.minidom._write_data(writer, attrs[a_name].value)
@@ -416,7 +431,7 @@ class XMLElement(xml.dom.minidom.Element):
         if self.childNodes:
             if not self.ownerDocument.padTextNodeWithoutSiblings and len(self.childNodes) == 1 and isinstance(self.childNodes[0], xml.dom.minidom.Text):
                 # if the only child of an Element node is a Text node, then the
-                # text is printed without any indentation or new line padding  
+                # text is printed without any indentation or new line padding
                 writer.write(">")
                 self.childNodes[0].writexml(writer)
                 writer.write("</%s>%s" % (self.tagName,newl))
@@ -440,7 +455,7 @@ class XMLDoc(xml.dom.minidom.Document):
         e = XMLElement(tagName)
         e.ownerDocument = self
         return e
-    
+
     def open(self, tag, attributes={}, data=None):
         element = self.createElement(tag)
         for key, value in attributes.items():
@@ -453,13 +468,13 @@ class XMLDoc(xml.dom.minidom.Document):
 
     def close(self, tag):
         assert self.current != self
-        assert tag == self.current.tagName, str(tag) + ' != ' + self.current.tagName  
+        assert tag == self.current.tagName, str(tag) + ' != ' + self.current.tagName
         self.current = self.current.parentNode
         return self
-    
+
     def element(self, tag, attributes={}, data=None):
         return self.open(tag, attributes, data).close(tag)
-            
+
     def xml(self, indent='', newl='', escape=False):
         assert self.current == self
         result = self.toprettyxml(indent, newl, encoding="UTF-8")
@@ -534,20 +549,49 @@ def _as_classpath(deps, resolve):
         cp += [_opts.cp_suffix]
     return os.pathsep.join(cp)
 
-def classpath(names=None, resolve=True, includeSelf=True):
+def classpath(names=None, resolve=True, includeSelf=True, includeBootClasspath=False):
     """
     Get the class path for a list of given projects, resolving each entry in the
     path (e.g. downloading a missing library) if 'resolve' is true.
     """
     if names is None:
-        return _as_classpath(sorted_deps(includeLibs=True), resolve)
-    deps = []
-    if isinstance(names, types.StringTypes):
-        project(names).all_deps(deps, True, includeSelf)
+        result = _as_classpath(sorted_deps(includeLibs=True), resolve)
     else:
-        for n in names:
-            project(n).all_deps(deps, True, includeSelf)
-    return _as_classpath(deps, resolve)
+        deps = []
+        if isinstance(names, types.StringTypes):
+            project(names).all_deps(deps, True, includeSelf)
+        else:
+            for n in names:
+                project(n).all_deps(deps, True, includeSelf)
+        result = _as_classpath(deps, resolve)
+    if includeBootClasspath:
+        result = os.pathsep.join([java().bootclasspath(), result])
+    return result
+
+def classpath_walk(names=None, resolve=True, includeSelf=True, includeBootClasspath=False):
+    """
+    Walks the resources available in a given classpath, yielding a tuple for each resource
+    where the first member of the tuple is a directory path or ZipFile object for a
+    classpath entry and the second member is the qualified path of the resource relative
+    to the classpath entry.
+    """
+    cp = classpath(names, resolve, includeSelf, includeBootClasspath)
+    for entry in cp.split(os.pathsep):
+        if not exists(entry):
+            continue
+        if isdir(entry):
+            for root, dirs, files in os.walk(entry):
+                for d in dirs:
+                    entryPath = join(root[len(entry) + 1:], d)
+                    yield entry, entryPath
+                for f in files:
+                    entryPath = join(root[len(entry) + 1:], f)
+                    yield entry, entryPath
+        elif entry.endswith('.jar') or entry.endswith('.zip'):
+            with zipfile.ZipFile(entry, 'r') as zf:
+                for zi in zf.infolist():
+                    entryPath = zi.filename
+                    yield zf, entryPath
 
 def sorted_deps(projectNames=None, includeLibs=False):
     """
@@ -830,6 +874,7 @@ class JavaConfig:
         self.javac = exe_suffix(join(self.jdk, 'bin', 'javac'))
         self.javap = exe_suffix(join(self.jdk, 'bin', 'javap'))
         self.javadoc = exe_suffix(join(self.jdk, 'bin', 'javadoc'))
+        self._bootclasspath = None
 
         if not exists(self.java):
             abort('Java launcher derived from JAVA_HOME does not exist: ' + self.java)
@@ -862,6 +907,27 @@ class JavaConfig:
 
     def format_cmd(self, args):
         return [self.java] + self.java_args_pfx + self.java_args + self.java_args_sfx + args
+
+    def bootclasspath(self):
+        if self._bootclasspath is None:
+            tmpDir = tempfile.mkdtemp()
+            try:
+                src = join(tmpDir, 'bootclasspath.java')
+                with open(src, 'w') as fp:
+                    print >> fp, """
+public class bootclasspath {
+    public static void main(String[] args) {
+        String s = System.getProperty("sun.boot.class.path");
+        if (s != null) {
+            System.out.println(s);
+        }
+    }
+}"""
+                subprocess.check_call([self.javac, '-d', tmpDir, src])
+                self._bootclasspath = subprocess.check_output([self.java, '-cp', tmpDir, 'bootclasspath'])
+            finally:
+                shutil.rmtree(tmpDir)
+        return self._bootclasspath
 
 def check_get_env(key):
     """
@@ -1039,7 +1105,7 @@ def build(args, parser=None):
     javaCompliance = java().javaCompliance
 
     defaultEcjPath = join(_mainSuite.dir, 'mx', 'ecj.jar')
-    
+
     parser = parser if parser is not None else ArgumentParser(prog='mx build')
     parser.add_argument('-f', action='store_true', dest='force', help='force build (disables timestamp checking)')
     parser.add_argument('-c', action='store_true', dest='clean', help='removes existing build output')
@@ -1440,8 +1506,7 @@ def projectgraph(args, suite=None):
         for dep in p.canonical_deps():
             print '"' + p.name + '"->"' + dep + '"'
     print '}'
-    
-    
+
 def _source_locator_memento(deps):
     slm = XMLDoc()
     slm.open('sourceLookupDirector')
@@ -1450,7 +1515,7 @@ def _source_locator_memento(deps):
     # Every Java program depends on the JRE
     memento = XMLDoc().element('classpathContainer', {'path' : 'org.eclipse.jdt.launching.JRE_CONTAINER'}).xml()
     slm.element('classpathContainer', {'memento' : memento, 'typeId':'org.eclipse.jdt.launching.sourceContainer.classpathContainer'})
-        
+
     for dep in deps:
         if dep.isLibrary():
             if hasattr(dep, 'eclipse.container'):
@@ -1482,7 +1547,7 @@ def make_eclipse_attach(hostname, port, name=None, deps=[]):
     launch.element('stringAttribute', {'key' : 'org.eclipse.jdt.launching.VM_CONNECTOR_ID', 'value' : 'org.eclipse.jdt.launching.socketAttachConnector'})
     launch.close('launchConfiguration')
     launch = launch.xml(newl='\n') % slm.xml(escape=True)
-    
+
     if name is None:
         name = 'attach-' + hostname + '-' + port
     eclipseLaunches = join('mx', 'eclipse-launches')
@@ -1516,11 +1581,11 @@ def make_eclipse_launch(javaArgs, jre, name=None, deps=[]):
             mainClass = a
             appArgs = list(reversed(argsCopy))
             break
-    
+
     if mainClass is None:
         log('Cannot create Eclipse launch configuration without main class or jar file: java ' + ' '.join(javaArgs))
         return False
-    
+
     if name is None:
         if mainClass == '-jar':
             name = basename(appArgs[0])
@@ -1535,9 +1600,9 @@ def make_eclipse_launch(javaArgs, jre, name=None, deps=[]):
             for s in suites():
                 deps += [p for p in s.projects if e == p.output_dir()]
                 deps += [l for l in s.libs if e == l.get_path(False)]
-    
+
     slm = _source_locator_memento(deps)
-    
+
     launch = XMLDoc()
     launch.open('launchConfiguration', {'type' : 'org.eclipse.jdt.launching.localJavaApplication'})
     launch.element('stringAttribute', {'key' : 'org.eclipse.debug.core.source_locator_id', 'value' : 'org.eclipse.jdt.launching.sourceLocator.JavaSourceLookupDirector'})
@@ -1564,13 +1629,13 @@ def eclipseinit(args, suite=None):
     for p in projects():
         if p.native:
             continue
-        
+
         if not exists(p.dir):
             os.makedirs(p.dir)
 
         out = XMLDoc()
         out.open('classpath')
-        
+
         for src in p.srcDirs:
             srcDir = join(p.dir, src)
             if not exists(srcDir):
@@ -1677,13 +1742,16 @@ def eclipseinit(args, suite=None):
                     content = content.replace('${javaCompliance}', str(p.javaCompliance))
                     update_file(join(settingsDir, name), content)
 
-    make_eclipse_attach('localhost', '8000', deps=projects())                    
+    make_eclipse_attach('localhost', '8000', deps=projects())
 
 def netbeansinit(args, suite=None):
     """(re)generate NetBeans project configurations"""
 
     if suite is None:
         suite = _mainSuite
+
+    def println(out, obj):
+        out.write(str(obj) + '\n')
 
     updated = False
     for p in projects():
@@ -1714,7 +1782,7 @@ def netbeansinit(args, suite=None):
         out.element('root', {'id' : 'test.src.dir'})
         out.close('test-roots')
         out.close('data')
-        
+
         firstDep = True
         for dep in p.all_deps([], True):
             if dep == p:
@@ -1889,69 +1957,90 @@ def ideinit(args, suite=None):
     eclipseinit(args, suite)
     netbeansinit(args, suite)
 
-def javadoc(args):
+def javadoc(args, parser=None, docDir='javadoc', includeDeps=True):
     """generate javadoc for some/all Java projects"""
-    
-    parser = ArgumentParser(prog='mx javadoc')
+
+    parser = ArgumentParser(prog='mx javadoc') if parser is None else parser
+    parser.add_argument('-d', '--base', action='store', help='base directory for output')
     parser.add_argument('--unified', action='store_true', help='put javadoc in a single directory instead of one per project')
     parser.add_argument('--force', action='store_true', help='(re)generate javadoc even if package-list file exists')
     parser.add_argument('--projects', action='store', help='comma separated projects to process (omit to process all projects)')
     parser.add_argument('--argfile', action='store', help='name of file containing extra javadoc options')
+    parser.add_argument('--arg', action='append', dest='extra_args', help='extra Javadoc arguments (e.g. --arg @-use)', metavar='@<arg>', default=[])
     parser.add_argument('-m', '--memory', action='store', help='-Xmx value to pass to underlying JVM')
-    
+    parser.add_argument('--packages', action='store', help='comma separated packages to process (omit to process all packages)')
+
     args = parser.parse_args(args)
-    
+
     # build list of projects to be processed
     candidates = sorted_deps()
     if args.projects is not None:
         candidates = [project(name) for name in args.projects.split(',')]
-        
+
+    # optionally restrict packages within a project
+    packages = []
+    if args.packages is not None:
+        packages = [name for name in args.packages.split(',')]
+
+    def outDir(p):
+        if args.base is None:
+            return join(p.dir, docDir)
+        return join(args.base, p.name, docDir)
+
+    def check_package_list(p):
+        return not exists(join(outDir(p), 'package-list'))
+
     def assess_candidate(p, projects):
         if p in projects:
             return False
-        if args.force or args.unified or not exists(join(p.dir, 'javadoc', 'package-list')):
+        if args.force or args.unified or check_package_list(p):
             projects.append(p)
             return True
         return False
-        
+
     projects = []
     for p in candidates:
         if not p.native:
-            deps = p.all_deps([], includeLibs=False, includeSelf=False)
-            for d in deps:
-                assess_candidate(d, projects)
+            if includeDeps:
+                deps = p.all_deps([], includeLibs=False, includeSelf=False)
+                for d in deps:
+                    assess_candidate(d, projects)
             if not assess_candidate(p, projects):
                 log('[package-list file exists - skipping {0}]'.format(p.name))
 
-    
+
     def find_packages(sourceDirs, pkgs=set()):
         for sourceDir in sourceDirs:
             for root, _, files in os.walk(sourceDir):
                 if len([name for name in files if name.endswith('.java')]) != 0:
-                    pkgs.add(root[len(sourceDir) + 1:].replace('/','.'))
+                    pkg = root[len(sourceDir) + 1:].replace('/','.')
+                    if (len(packages) == 0) | (pkg in packages):
+                        pkgs.add(pkg)
         return pkgs
 
-    extraArgs = []
+    extraArgs = [a.lstrip('@') for a in args.extra_args]
     if args.argfile is not None:
         extraArgs += ['@' + args.argfile]
+    memory = '2g'
     if args.memory is not None:
-        extraArgs.append('-J-Xmx' + args.memory)
+        memory = args.memory
+    memory = '-J-Xmx' + memory
 
     if not args.unified:
         for p in projects:
             pkgs = find_packages(p.source_dirs(), set())
             deps = p.all_deps([], includeLibs=False, includeSelf=False)
-            links = ['-link', 'http://docs.oracle.com/javase/6/docs/api/']
-            out = join(p.dir, 'javadoc')
+            links = ['-link', 'http://docs.oracle.com/javase/' + str(p.javaCompliance.value) + '/docs/api/']
+            out = outDir(p)
             for d in deps:
-                depOut = join(d.dir, 'javadoc')
+                depOut = outDir(d)
                 links.append('-link')
                 links.append(os.path.relpath(depOut, out))
             cp = classpath(p.name, includeSelf=True)
             sp = os.pathsep.join(p.source_dirs())
-            log('Generating javadoc for {0} in {1}'.format(p.name, out))
-            run([java().javadoc, '-J-Xmx2g', '-classpath', cp, '-quiet', '-d', out, '-sourcepath', sp] + links + extraArgs + list(pkgs))
-            log('Generated javadoc for {0} in {1}'.format(p.name, out))
+            log('Generating {2} for {0} in {1}'.format(p.name, out, docDir))
+            run([java().javadoc, memory, '-classpath', cp, '-quiet', '-d', out, '-sourcepath', sp] + links + extraArgs + list(pkgs))
+            log('Generated {2} for {0} in {1}'.format(p.name, out, docDir))
     else:
         pkgs = set()
         sp = []
@@ -1960,14 +2049,30 @@ def javadoc(args):
             find_packages(p.source_dirs(), pkgs)
             sp += p.source_dirs()
             names.append(p.name)
-            
-        links = ['-link', 'http://docs.oracle.com/javase/6/docs/api/']
-        out = join(_mainSuite.dir, 'javadoc')
+
+        links = ['-link', 'http://docs.oracle.com/javase/' + str(_java.javaCompliance.value) + '/docs/api/']
+        out = join(_mainSuite.dir, docDir)
+        if args.base is not None:
+            out = join(args.base, docDir)
         cp = classpath()
         sp = os.pathsep.join(sp)
-        log('Generating javadoc for {0} in {1}'.format(', '.join(names), out))
-        run([java().javadoc, '-classpath', cp, '-quiet', '-d', out, '-sourcepath', sp] + links + extraArgs + list(pkgs))
-        log('Generated javadoc for {0} in {1}'.format(', '.join(names), out))
+        log('Generating {2} for {0} in {1}'.format(', '.join(names), out, docDir))
+        run([java().javadoc, memory, '-classpath', cp, '-quiet', '-d', out, '-sourcepath', sp] + links + extraArgs + list(pkgs))
+        log('Generated {2} for {0} in {1}'.format(', '.join(names), out, docDir))
+
+def findclass(args):
+    """find all classes matching a given substring"""
+
+    for entry, filename in classpath_walk(includeBootClasspath=True):
+        if filename.endswith('.class'):
+            if isinstance(entry, zipfile.ZipFile):
+                classname = filename.replace('/', '.')
+            else:
+                classname = filename.replace(os.sep, '.')
+            classname = classname[:-len('.class')]
+            for a in args:
+                if a in classname:
+                    log(classname)
 
 def javap(args):
     """launch javap with a -classpath option denoting all available classes
@@ -2010,6 +2115,7 @@ commands = {
     'canonicalizeprojects': [canonicalizeprojects, ''],
     'clean': [clean, ''],
     'eclipseinit': [eclipseinit, ''],
+    'findclass': [findclass, ''],
     'help': [help_, '[command]'],
     'ideclean': [ideclean, ''],
     'ideinit': [ideinit, ''],
@@ -2022,11 +2128,27 @@ commands = {
 
 _argParser = ArgParser()
 
+def _findPrimarySuite():
+    # try current working directory first
+    mxDir = join(os.getcwd(), 'mx')
+    if exists(mxDir) and isdir(mxDir):
+        return dirname(mxDir)
+
+    # now search path of my executable
+    me = sys.argv[0]
+    parent = dirname(me)
+    while parent:
+        mxDir = join(parent, 'mx')
+        if exists(mxDir) and isdir(mxDir):
+            return parent
+        parent = dirname(parent)
+    return None
+
 def main():
-    cwdMxDir = join(os.getcwd(), 'mx')
-    if exists(cwdMxDir) and isdir(cwdMxDir):
+    primarySuiteDir = _findPrimarySuite()
+    if primarySuiteDir:
         global _mainSuite
-        _mainSuite = _loadSuite(os.getcwd(), True)
+        _mainSuite = _loadSuite(primarySuiteDir, True)
 
     opts, commandAndArgs = _argParser._parse_cmd_line()
 

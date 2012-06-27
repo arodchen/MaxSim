@@ -22,8 +22,8 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
@@ -40,35 +40,32 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
      * @param object the receiver object
      * @param field the compiler interface field
      */
-    public LoadFieldNode(ValueNode object, RiResolvedField field) {
-        super(createStamp(field), object, field);
+    public LoadFieldNode(ValueNode object, ResolvedJavaField field, long leafGraphId) {
+        super(createStamp(field), object, field, leafGraphId);
     }
 
-    private static Stamp createStamp(RiResolvedField field) {
-        CiKind kind = field.kind(false);
-        if (kind == CiKind.Object && field.type() instanceof RiResolvedType) {
-            RiResolvedType resolvedType = (RiResolvedType) field.type();
-            return StampFactory.declared(resolvedType);
+    private static Stamp createStamp(ResolvedJavaField field) {
+        Kind kind = field.kind();
+        if (kind == Kind.Object && field.type() instanceof ResolvedJavaType) {
+            return StampFactory.declared((ResolvedJavaType) field.type());
         } else {
             return StampFactory.forKind(kind);
         }
     }
 
     @Override
-    public boolean needsStateAfter() {
-        return false;
-    }
-
-    @Override
     public ValueNode canonical(CanonicalizerTool tool) {
-        CiConstant constant = null;
-        if (isStatic()) {
-            constant = field().constantValue(null);
-        } else if (object().isConstant() && !object().isNullConstant()) {
-            constant = field().constantValue(object().asConstant());
-        }
-        if (constant != null) {
-            return ConstantNode.forCiConstant(constant, tool.runtime(), graph());
+        CodeCacheProvider runtime = tool.runtime();
+        if (runtime != null) {
+            Constant constant = null;
+            if (isStatic()) {
+                constant = field().constantValue(null);
+            } else if (object().isConstant() && !object().isNullConstant()) {
+                constant = field().constantValue(object().asConstant());
+            }
+            if (constant != null) {
+                return ConstantNode.forConstant(constant, runtime, graph());
+            }
         }
         return this;
     }

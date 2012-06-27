@@ -22,7 +22,10 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.max.cri.ci.*;
+import java.lang.reflect.*;
+
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.cri.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
@@ -32,34 +35,46 @@ import com.oracle.graal.nodes.type.*;
 /**
  * The {@code LoadIndexedNode} represents a read from an element of an array.
  */
-public final class LoadIndexedNode extends AccessIndexedNode implements Lowerable, Node.IterableNodeType {
+public final class LoadIndexedNode extends AccessIndexedNode implements Canonicalizable, Lowerable, Node.IterableNodeType {
 
     /**
      * Creates a new LoadIndexedNode.
      * @param array the instruction producing the array
      * @param index the instruction producing the index
-     * @param length the instruction producing the length
      * @param elementKind the element type
      */
-    public LoadIndexedNode(ValueNode array, ValueNode index, ValueNode length, CiKind elementKind, long leafGraphId) {
-        super(createStamp(array, elementKind), array, index, length, elementKind, leafGraphId);
+    public LoadIndexedNode(ValueNode array, ValueNode index, Kind elementKind, long leafGraphId) {
+        super(createStamp(array, elementKind), array, index, elementKind, leafGraphId);
     }
 
-    private static Stamp createStamp(ValueNode array, CiKind kind) {
-        if (kind == CiKind.Object && array.declaredType() != null) {
-            return StampFactory.declared(array.declaredType().componentType());
+    private static Stamp createStamp(ValueNode array, Kind kind) {
+        if (kind == Kind.Object && array.objectStamp().type() != null) {
+            return StampFactory.declared(array.objectStamp().type().componentType());
         } else {
             return StampFactory.forKind(kind);
         }
     }
 
     @Override
-    public boolean needsStateAfter() {
-        return false;
+    public void lower(CiLoweringTool tool) {
+        tool.getRuntime().lower(this, tool);
     }
 
     @Override
-    public void lower(CiLoweringTool tool) {
-        tool.getRuntime().lower(this, tool);
+    public ValueNode canonical(CanonicalizerTool tool) {
+        CodeCacheProvider runtime = tool.runtime();
+        if (runtime != null && index().isConstant() && array().isConstant() && !array().isNullConstant()) {
+            Constant arrayConst = array().asConstant();
+            if (tool.isImmutable(arrayConst)) {
+                int index = index().asConstant().asInt();
+                Object array = arrayConst.asObject();
+                int length = Array.getLength(array);
+                if (index >= 0 && index < length) {
+                    return ConstantNode.forConstant(elementKind().readUnsafeConstant(array,
+                                    elementKind().arrayBaseOffset() + index * elementKind().arrayIndexScale()), runtime, graph());
+                }
+            }
+        }
+        return this;
     }
 }

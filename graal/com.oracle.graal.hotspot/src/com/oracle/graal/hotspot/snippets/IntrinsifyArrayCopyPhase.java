@@ -24,8 +24,8 @@ package com.oracle.graal.hotspot.snippets;
 
 import java.lang.reflect.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.compiler.util.*;
@@ -36,18 +36,18 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 
 public class IntrinsifyArrayCopyPhase extends Phase {
-    private final GraalRuntime runtime;
-    private RiResolvedMethod arrayCopy;
-    private RiResolvedMethod byteArrayCopy;
-    private RiResolvedMethod shortArrayCopy;
-    private RiResolvedMethod charArrayCopy;
-    private RiResolvedMethod intArrayCopy;
-    private RiResolvedMethod longArrayCopy;
-    private RiResolvedMethod floatArrayCopy;
-    private RiResolvedMethod doubleArrayCopy;
-    private RiResolvedMethod objectArrayCopy;
+    private final ExtendedRiRuntime runtime;
+    private ResolvedJavaMethod arrayCopy;
+    private ResolvedJavaMethod byteArrayCopy;
+    private ResolvedJavaMethod shortArrayCopy;
+    private ResolvedJavaMethod charArrayCopy;
+    private ResolvedJavaMethod intArrayCopy;
+    private ResolvedJavaMethod longArrayCopy;
+    private ResolvedJavaMethod floatArrayCopy;
+    private ResolvedJavaMethod doubleArrayCopy;
+    private ResolvedJavaMethod objectArrayCopy;
 
-    public IntrinsifyArrayCopyPhase(GraalRuntime runtime) {
+    public IntrinsifyArrayCopyPhase(ExtendedRiRuntime runtime) {
         this.runtime = runtime;
         try {
             byteArrayCopy = getArrayCopySnippet(runtime, byte.class);
@@ -58,7 +58,7 @@ public class IntrinsifyArrayCopyPhase extends Phase {
             floatArrayCopy = getArrayCopySnippet(runtime, float.class);
             doubleArrayCopy = getArrayCopySnippet(runtime, double.class);
             objectArrayCopy = getArrayCopySnippet(runtime, Object.class);
-            arrayCopy = runtime.getRiMethod(System.class.getDeclaredMethod("arraycopy", Object.class, int.class, Object.class, int.class, int.class));
+            arrayCopy = runtime.getResolvedJavaMethod(System.class.getDeclaredMethod("arraycopy", Object.class, int.class, Object.class, int.class, int.class));
         } catch (SecurityException e) {
             e.printStackTrace();
         } catch (NoSuchMethodException e) {
@@ -66,48 +66,48 @@ public class IntrinsifyArrayCopyPhase extends Phase {
         }
     }
 
-    private static RiResolvedMethod getArrayCopySnippet(RiRuntime runtime, Class<?> componentClass) throws NoSuchMethodException {
+    private static ResolvedJavaMethod getArrayCopySnippet(CodeCacheProvider runtime, Class<?> componentClass) throws NoSuchMethodException {
         Class<?> arrayClass = Array.newInstance(componentClass, 0).getClass();
-        return runtime.getRiMethod(ArrayCopySnippets.class.getDeclaredMethod("arraycopy", arrayClass, int.class, arrayClass, int.class, int.class));
+        return runtime.getResolvedJavaMethod(ArrayCopySnippets.class.getDeclaredMethod("arraycopy", arrayClass, int.class, arrayClass, int.class, int.class));
     }
 
     @Override
     protected void run(StructuredGraph graph) {
         boolean hits = false;
         for (MethodCallTargetNode methodCallTarget : graph.getNodes(MethodCallTargetNode.class)) {
-            RiResolvedMethod targetMethod = methodCallTarget.targetMethod();
-            RiResolvedMethod snippetMethod = null;
+            ResolvedJavaMethod targetMethod = methodCallTarget.targetMethod();
+            ResolvedJavaMethod snippetMethod = null;
             if (targetMethod == arrayCopy) {
                 ValueNode src = methodCallTarget.arguments().get(0);
                 ValueNode dest = methodCallTarget.arguments().get(2);
                 assert src != null && dest != null;
-                RiResolvedType srcDeclaredType = src.declaredType();
-                RiResolvedType destDeclaredType = dest.declaredType();
-                if (srcDeclaredType != null
-                                && srcDeclaredType.isArrayClass()
-                                && destDeclaredType != null
-                                && destDeclaredType.isArrayClass()) {
-                    CiKind componentKind = srcDeclaredType.componentType().kind(false);
-                    if (srcDeclaredType.componentType() == destDeclaredType.componentType()) {
-                        if (componentKind == CiKind.Int) {
+                ResolvedJavaType srcType = src.objectStamp().type();
+                ResolvedJavaType destType = dest.objectStamp().type();
+                if (srcType != null
+                                && srcType.isArrayClass()
+                                && destType != null
+                                && destType.isArrayClass()) {
+                    Kind componentKind = srcType.componentType().kind();
+                    if (srcType.componentType() == destType.componentType()) {
+                        if (componentKind == Kind.Int) {
                             snippetMethod = intArrayCopy;
-                        } else if (componentKind == CiKind.Char) {
+                        } else if (componentKind == Kind.Char) {
                             snippetMethod = charArrayCopy;
-                        } else if (componentKind == CiKind.Long) {
+                        } else if (componentKind == Kind.Long) {
                             snippetMethod = longArrayCopy;
-                        } else if (componentKind == CiKind.Byte) {
+                        } else if (componentKind == Kind.Byte) {
                             snippetMethod = byteArrayCopy;
-                        } else if (componentKind == CiKind.Short) {
+                        } else if (componentKind == Kind.Short) {
                             snippetMethod = shortArrayCopy;
-                        } else if (componentKind == CiKind.Float) {
+                        } else if (componentKind == Kind.Float) {
                             snippetMethod = floatArrayCopy;
-                        } else if (componentKind == CiKind.Double) {
+                        } else if (componentKind == Kind.Double) {
                             snippetMethod = doubleArrayCopy;
-                        } else if (componentKind == CiKind.Object) {
+                        } else if (componentKind == Kind.Object) {
                             snippetMethod = objectArrayCopy;
                         }
-                    } else if (componentKind == CiKind.Object
-                                    && srcDeclaredType.componentType().isSubtypeOf(destDeclaredType.componentType())) {
+                    } else if (componentKind == Kind.Object
+                                    && srcType.componentType().isSubtypeOf(destType.componentType())) {
                         snippetMethod = objectArrayCopy;
                     }
                 }

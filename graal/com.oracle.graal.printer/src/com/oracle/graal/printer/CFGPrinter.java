@@ -22,14 +22,15 @@
  */
 package com.oracle.graal.printer;
 
-import static com.oracle.max.cri.ci.CiValueUtil.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 
 import java.io.*;
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.criutils.*;
 import com.oracle.graal.alloc.util.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.alloc.*;
 import com.oracle.graal.compiler.alloc.Interval.UsePosList;
 import com.oracle.graal.compiler.gen.*;
@@ -48,7 +49,7 @@ import com.oracle.graal.nodes.calc.*;
  */
 class CFGPrinter extends CompilationPrinter {
 
-    protected CiTarget target;
+    protected TargetDescription target;
     protected LIR lir;
     protected LIRGenerator lirGenerator;
     protected ControlFlowGraph cfg;
@@ -307,7 +308,7 @@ class CFGPrinter extends CompilationPrinter {
         out.print("tid ").print(nodeToString(node)).println(COLUMN_END);
 
         if (lirGenerator != null) {
-            CiValue operand = lirGenerator.nodeOperands.get(node);
+            Value operand = lirGenerator.nodeOperands.get(node);
             if (operand != null) {
                 out.print("result ").print(operand.toString()).println(COLUMN_END);
             }
@@ -381,7 +382,7 @@ class CFGPrinter extends CompilationPrinter {
         StringBuilder buf = new StringBuilder();
         FrameState curState = state;
         do {
-            buf.append(CiUtil.toLocation(curState.method(), curState.bci)).append('\n');
+            buf.append(CodeUtil.toLocation(curState.method(), curState.bci)).append('\n');
 
             if (curState.stackSize() > 0) {
                 buf.append("stack: ");
@@ -406,7 +407,7 @@ class CFGPrinter extends CompilationPrinter {
     private String stateValueToString(ValueNode value) {
         String result = nodeToString(value);
         if (lirGenerator != null && lirGenerator.nodeOperands != null && value != null) {
-            CiValue operand = lirGenerator.nodeOperands.get(value);
+            Value operand = lirGenerator.nodeOperands.get(value);
             if (operand != null) {
                 result += ": " + operand;
             }
@@ -437,7 +438,7 @@ class CFGPrinter extends CompilationPrinter {
                 out.adjustIndentation(-level);
                 String state;
                 if (inst.info.hasDebugInfo()) {
-                    state = debugInfoToString(inst.info.debugInfo().codePos, inst.info.debugInfo().registerRefMap, inst.info.debugInfo().frameRefMap, target.arch);
+                    state = debugInfoToString(inst.info.debugInfo().getBytecodePosition(), inst.info.debugInfo().getRegisterRefMap(), inst.info.debugInfo().getFrameRefMap(), target.arch);
                 } else {
                     state = debugInfoToString(inst.info.topFrame, null, null, target.arch);
                 }
@@ -462,7 +463,7 @@ class CFGPrinter extends CompilationPrinter {
             prefix = "B";
         } else if (node instanceof ValueNode) {
             ValueNode value = (ValueNode) node;
-            if (value.kind() == CiKind.Illegal) {
+            if (value.kind() == Kind.Illegal) {
                 prefix = "v";
             } else {
                 prefix = String.valueOf(value.kind().typeChar);

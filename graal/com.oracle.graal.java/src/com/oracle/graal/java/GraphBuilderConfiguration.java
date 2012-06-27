@@ -22,8 +22,8 @@
  */
 package com.oracle.graal.java;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.phases.*;
-import com.oracle.max.cri.ri.*;
 
 public class GraphBuilderConfiguration {
 
@@ -33,18 +33,18 @@ public class GraphBuilderConfiguration {
 
     private final ResolvePolicy resolving;
     private final PhasePlan plan;
-    private RiResolvedType[] skippedExceptionTypes;
+    private ResolvedJavaType[] skippedExceptionTypes;
 
     public GraphBuilderConfiguration(ResolvePolicy resolving, PhasePlan plan) {
         this.resolving = resolving;
         this.plan = plan;
     }
 
-    public void setSkippedExceptionTypes(RiResolvedType[] skippedExceptionTypes) {
+    public void setSkippedExceptionTypes(ResolvedJavaType[] skippedExceptionTypes) {
         this.skippedExceptionTypes = skippedExceptionTypes;
     }
 
-    public RiResolvedType[] getSkippedExceptionTypes() {
+    public ResolvedJavaType[] getSkippedExceptionTypes() {
         return skippedExceptionTypes;
     }
 

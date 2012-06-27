@@ -22,26 +22,27 @@
  */
 package com.oracle.graal.nodes;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.max.cri.ri.*;
 
 @NodeInfo(shortName = "Deopt")
 public class DeoptimizeNode extends FixedNode implements Node.IterableNodeType, LIRLowerable {
 
     private String message;
-    private final RiDeoptAction action;
-    private final RiDeoptReason reason;
+    private final DeoptimizationAction action;
+    private final DeoptimizationReason reason;
     private final long leafGraphId;
 
 
-    public DeoptimizeNode(RiDeoptAction action, RiDeoptReason reason) {
+    public DeoptimizeNode(DeoptimizationAction action, DeoptimizationReason reason) {
         this(action, reason, -1);
     }
 
-    public DeoptimizeNode(RiDeoptAction action, RiDeoptReason reason, long leafGraphId) {
-        super(StampFactory.illegal());
+    public DeoptimizeNode(DeoptimizationAction action, DeoptimizationReason reason, long leafGraphId) {
+        super(StampFactory.forVoid());
         this.action = action;
         this.reason = reason;
         this.leafGraphId = leafGraphId;
@@ -55,11 +56,11 @@ public class DeoptimizeNode extends FixedNode implements Node.IterableNodeType, 
         return message;
     }
 
-    public RiDeoptAction action() {
+    public DeoptimizationAction action() {
         return action;
     }
 
-    public RiDeoptReason reason() {
+    public DeoptimizationReason reason() {
         return reason;
     }
 
@@ -74,7 +75,7 @@ public class DeoptimizeNode extends FixedNode implements Node.IterableNodeType, 
 
     @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static void deopt(@ConstantNodeParameter RiDeoptAction action, @ConstantNodeParameter RiDeoptReason reason) {
+    public static void deopt(@ConstantNodeParameter DeoptimizationAction action, @ConstantNodeParameter DeoptimizationReason reason) {
         throw new UnsupportedOperationException();
     }
 }

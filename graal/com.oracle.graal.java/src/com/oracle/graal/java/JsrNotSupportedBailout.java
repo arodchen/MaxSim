@@ -22,10 +22,10 @@
  */
 package com.oracle.graal.java;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.code.*;
 
 
-public class JsrNotSupportedBailout extends CiBailout{
+public class JsrNotSupportedBailout extends BailoutException{
     private static final long serialVersionUID = -7476925652727154272L;
 
     public JsrNotSupportedBailout(String reason) {

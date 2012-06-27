@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
@@ -30,28 +30,31 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo(shortName = ">>")
 public final class RightShiftNode extends ShiftNode implements Canonicalizable, LIRLowerable {
 
-    public RightShiftNode(CiKind kind, ValueNode x, ValueNode y) {
+    public RightShiftNode(Kind kind, ValueNode x, ValueNode y) {
         super(kind, x, y);
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
+        if (x().integerStamp().lowerBound() >= 0) {
+            return graph().unique(new UnsignedRightShiftNode(kind(), x(), y()));
+        }
         if (y().isConstant()) {
             int amount = y().asConstant().asInt();
             int originalAmout = amount;
             int mask;
-            if (kind() == CiKind.Int) {
+            if (kind() == Kind.Int) {
                 mask = 0x1f;
             } else {
-                assert kind() == CiKind.Long;
+                assert kind() == Kind.Long;
                 mask = 0x3f;
             }
             amount &= mask;
             if (x().isConstant()) {
-                if (kind() == CiKind.Int) {
+                if (kind() == Kind.Int) {
                     return ConstantNode.forInt(x().asConstant().asInt() >> amount, graph());
                 } else {
-                    assert kind() == CiKind.Long;
+                    assert kind() == Kind.Long;
                     return ConstantNode.forLong(x().asConstant().asLong() >> amount, graph());
                 }
             }

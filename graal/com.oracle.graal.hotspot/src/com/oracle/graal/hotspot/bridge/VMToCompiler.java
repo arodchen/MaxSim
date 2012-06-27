@@ -23,16 +23,19 @@
 
 package com.oracle.graal.hotspot.bridge;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
-import com.oracle.graal.hotspot.ri.*;
+import java.io.*;
+
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.*;
+import com.oracle.graal.compiler.phases.*;
+import com.oracle.graal.hotspot.meta.*;
 
 /**
  * Calls from HotSpot into Java.
  */
 public interface VMToCompiler {
 
-    boolean compileMethod(HotSpotMethodResolved method, int entryBCI, boolean blocking, int priority) throws Throwable;
+    boolean compileMethod(HotSpotResolvedJavaMethod method, int entryBCI, boolean blocking, int priority) throws Throwable;
 
     void shutdownCompiler() throws Throwable;
 
@@ -40,23 +43,25 @@ public interface VMToCompiler {
 
     void bootstrap() throws Throwable;
 
-    RiMethod createRiMethodUnresolved(String name, String signature, RiType holder);
+    PrintStream log();
 
-    RiSignature createRiSignature(String signature);
+    JavaMethod createJavaMethod(String name, String signature, JavaType holder);
 
-    RiField createRiField(RiType holder, String name, RiType type, int offset, int flags);
+    Signature createSignature(String signature);
 
-    RiType createRiType(HotSpotConstantPool pool, String name);
+    JavaField createJavaField(JavaType holder, String name, JavaType type, int offset, int flags);
 
-    RiType createRiTypePrimitive(int basicType);
+    JavaType createPrimitiveJavaType(int basicType);
 
-    RiType createRiTypeUnresolved(String name);
+    JavaType createJavaType(String name);
 
-    CiConstant createCiConstant(CiKind kind, long value);
+    Constant createConstant(Kind kind, long value);
 
-    CiConstant createCiConstantFloat(float value);
+    Constant createConstantFloat(float value);
 
-    CiConstant createCiConstantDouble(double value);
+    Constant createConstantDouble(double value);
 
-    CiConstant createCiConstantObject(Object object);
+    Constant createConstantObject(Object object);
+
+    PhasePlan createPhasePlan(OptimisticOptimizations optimisticOpts);
 }

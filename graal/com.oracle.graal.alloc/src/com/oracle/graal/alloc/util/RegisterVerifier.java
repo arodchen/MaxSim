@@ -22,12 +22,11 @@
  */
 package com.oracle.graal.alloc.util;
 
-import static com.oracle.max.cri.ci.CiValueUtil.*;
 import static com.oracle.graal.alloc.util.LocationUtil.*;
-
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
@@ -45,11 +44,11 @@ public final class RegisterVerifier {
     /**
      * Saved information of previous check.
      * <br>
-     * State mapping: mapping from registers and stack slots ({@link CiRegister} and {@link Integer} stack slot offsets) to the
-     * value that is currently contained in there ({@link Location} for operands that were variables; {@link CiRegisterValue} or
-     * {@link CiStackSlot} for operands that used fixed registers or stack slots).
+     * State mapping: mapping from registers and stack slots ({@link Register} and {@link Integer} stack slot offsets) to the
+     * value that is currently contained in there ({@link Location} for operands that were variables; {@link RegisterValue} or
+     * {@link StackSlot} for operands that used fixed registers or stack slots).
      */
-    private final Map<Object, CiValue>[] blockStates;
+    private final Map<Object, Value>[] blockStates;
 
     private void addToWorkList(Block block) {
         if (!workList.contains(block)) {
@@ -57,15 +56,15 @@ public final class RegisterVerifier {
         }
     }
 
-    private Map<Object, CiValue> stateFor(Block block) {
+    private Map<Object, Value> stateFor(Block block) {
         return blockStates[block.getId()];
     }
 
-    private void setStateFor(Block block, Map<Object, CiValue> savedState) {
+    private void setStateFor(Block block, Map<Object, Value> savedState) {
         blockStates[block.getId()] = savedState;
     }
 
-    private static Map<Object, CiValue> copy(Map<Object, CiValue> inputState) {
+    private static Map<Object, Value> copy(Map<Object, Value> inputState) {
         return new HashMap<>(inputState);
     }
 
@@ -82,12 +81,12 @@ public final class RegisterVerifier {
         this.blockStates = new Map[lir.linearScanOrder().size()];
     }
 
-    private Map<Object, CiValue> curInputState;
+    private Map<Object, Value> curInputState;
 
     private void verify(Block startBlock) {
-        ValueProcedure useProc =    new ValueProcedure() { @Override public CiValue doValue(CiValue value, OperandMode mode, EnumSet<OperandFlag> flags) { return use(value, flags); } };
-        ValueProcedure tempProc =   new ValueProcedure() { @Override public CiValue doValue(CiValue value) { return temp(value); } };
-        ValueProcedure outputProc = new ValueProcedure() { @Override public CiValue doValue(CiValue value) { return output(value); } };
+        ValueProcedure useProc =    new ValueProcedure() { @Override public Value doValue(Value value, OperandMode mode, EnumSet<OperandFlag> flags) { return use(value, flags); } };
+        ValueProcedure tempProc =   new ValueProcedure() { @Override public Value doValue(Value value) { return temp(value); } };
+        ValueProcedure outputProc = new ValueProcedure() { @Override public Value doValue(Value value) { return output(value); } };
 
         curInputState = new HashMap<>();
         setStateFor(startBlock, curInputState);
@@ -125,7 +124,7 @@ public final class RegisterVerifier {
     }
 
     private void processSuccessor(Block succ) {
-        Map<Object, CiValue> savedState = stateFor(succ);
+        Map<Object, Value> savedState = stateFor(succ);
         if (savedState == null) {
             // Block was not processed before, so set initial inputState.
             Debug.log("  successor %s: initial visit", succ);
@@ -136,11 +135,11 @@ public final class RegisterVerifier {
             // This block was already processed before.
             // Check if new inputState is consistent with savedState.
             Debug.log("  successor %s: state present", succ);
-            Iterator<Map.Entry<Object, CiValue>> iter = savedState.entrySet().iterator();
+            Iterator<Map.Entry<Object, Value>> iter = savedState.entrySet().iterator();
             while (iter.hasNext()) {
-                Map.Entry<Object, CiValue> entry = iter.next();
-                CiValue savedValue = entry.getValue();
-                CiValue inputValue = curInputState.get(entry.getKey());
+                Map.Entry<Object, Value> entry = iter.next();
+                Value savedValue = entry.getValue();
+                Value inputValue = curInputState.get(entry.getKey());
 
                 if (savedValue != inputValue) {
                     // Current inputState and previous savedState assume a different value in this register.
@@ -159,7 +158,7 @@ public final class RegisterVerifier {
         Iterator<Object> iter = curInputState.keySet().iterator();
         while (iter.hasNext()) {
             Object value1 = iter.next();
-            if (value1 instanceof CiRegister && frameMap.registerConfig.getAttributesMap()[((CiRegister) value1).number].isCallerSave) {
+            if (value1 instanceof Register && frameMap.registerConfig.getAttributesMap()[((Register) value1).number].isCallerSave()) {
                 Debug.log("    remove caller save register %s", value1);
                 iter.remove();
             }
@@ -171,7 +170,7 @@ public final class RegisterVerifier {
      * include the kind of the value because we do not want to distinguish between the same register with
      * different kinds.
      */
-    private Object key(CiValue value) {
+    private Object key(Value value) {
         if (isLocation(value)) {
             return key(asLocation(value).location);
         } else if (isRegister(value)) {
@@ -183,13 +182,13 @@ public final class RegisterVerifier {
         }
     }
 
-    private boolean isIgnoredRegister(CiValue value) {
-        return isRegister(value) && !frameMap.registerConfig.getAttributesMap()[asRegister(value).number].isAllocatable;
+    private boolean isIgnoredRegister(Value value) {
+        return isRegister(value) && !frameMap.registerConfig.getAttributesMap()[asRegister(value).number].isAllocatable();
     }
 
-    private CiValue use(CiValue value, EnumSet<OperandFlag> flags) {
-        if (!isConstant(value) && value != CiValue.IllegalValue && !isIgnoredRegister(value)) {
-            CiValue actual = curInputState.get(key(value));
+    private Value use(Value value, EnumSet<OperandFlag> flags) {
+        if (!isConstant(value) && value != Value.IllegalValue && !isIgnoredRegister(value)) {
+            Value actual = curInputState.get(key(value));
             if (actual == null && flags.contains(OperandFlag.Uninitialized)) {
                 // OK, since uninitialized values are allowed explicitly.
             } else if (value != actual) {
@@ -201,16 +200,16 @@ public final class RegisterVerifier {
         return value;
     }
 
-    private CiValue temp(CiValue value) {
-        if (!isConstant(value) && value != CiValue.IllegalValue && !isIgnoredRegister(value)) {
+    private Value temp(Value value) {
+        if (!isConstant(value) && value != Value.IllegalValue && !isIgnoredRegister(value)) {
             Debug.log("    temp %s -> remove key %s", value, key(value));
             curInputState.remove(key(value));
         }
         return value;
     }
 
-    private CiValue output(CiValue value) {
-        if (value != CiValue.IllegalValue && !isIgnoredRegister(value)) {
+    private Value output(Value value) {
+        if (value != Value.IllegalValue && !isIgnoredRegister(value)) {
             Debug.log("    output %s -> set key %s", value, key(value));
             curInputState.put(key(value), value);
         }
@@ -223,14 +222,14 @@ public final class RegisterVerifier {
         Collections.sort(keys, new Comparator<Object>() {
             @Override
             public int compare(Object o1, Object o2) {
-                if (o1 instanceof CiRegister) {
-                    if (o2 instanceof CiRegister) {
-                        return ((CiRegister) o1).number - ((CiRegister) o2).number;
+                if (o1 instanceof Register) {
+                    if (o2 instanceof Register) {
+                        return ((Register) o1).number - ((Register) o2).number;
                     } else {
                         return -1;
                     }
                 } else {
-                    if (o2 instanceof CiRegister) {
+                    if (o2 instanceof Register) {
                         return 1;
                     } else {
                         return ((Integer) o1).intValue() - ((Integer) o2).intValue();

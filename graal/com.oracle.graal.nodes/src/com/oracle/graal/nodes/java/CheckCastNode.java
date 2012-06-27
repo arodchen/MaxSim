@@ -22,57 +22,46 @@
  */
 package com.oracle.graal.nodes.java;
 
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.cri.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.spi.types.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
 
 /**
- * The {@code CheckCastNode} represents a {@link Bytecodes#CHECKCAST}.
- *
- * The {@link #targetClass()} of a CheckCastNode can be null for array store checks!
+ * Implements a type check that results in a {@link ClassCastException} if it fails.
  */
-public final class CheckCastNode extends TypeCheckNode implements Canonicalizable, LIRLowerable, Node.IterableNodeType, TypeFeedbackProvider, TypeCanonicalizable {
+public final class CheckCastNode extends FixedWithNextNode implements Canonicalizable, LIRLowerable, Lowerable, Node.IterableNodeType, TypeFeedbackProvider, TypeCanonicalizable {
 
-    @Input(notDataflow = true) protected final FixedNode anchor;
-    protected final boolean emitCode;
-
-    public FixedNode anchor() {
-        return anchor;
-    }
-
-    public boolean emitCode() {
-        return emitCode;
-    }
+    @Input private ValueNode object;
+    @Input private ValueNode targetClassInstruction;
+    private final ResolvedJavaType targetClass;
+    private final JavaTypeProfile profile;
 
     /**
      * Creates a new CheckCast instruction.
-     *
      * @param targetClassInstruction the instruction which produces the class which is being cast to
      * @param targetClass the class being cast to
      * @param object the instruction producing the object
      */
-    public CheckCastNode(FixedNode anchor, ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object) {
-        this(anchor, targetClassInstruction, targetClass, object, EMPTY_HINTS, false);
+    public CheckCastNode(ValueNode targetClassInstruction, ResolvedJavaType targetClass, ValueNode object) {
+        this(targetClassInstruction, targetClass, object, null);
     }
 
-    public CheckCastNode(FixedNode anchor, ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object, boolean emitCode) {
-        this(anchor, targetClassInstruction, targetClass, object, EMPTY_HINTS, false, emitCode);
+    public CheckCastNode(ValueNode targetClassInstruction, ResolvedJavaType targetClass, ValueNode object, JavaTypeProfile profile) {
+        super(targetClass == null ? StampFactory.forKind(Kind.Object) : StampFactory.declared(targetClass));
+        this.targetClassInstruction = targetClassInstruction;
+        this.targetClass = targetClass;
+        this.object = object;
+        this.profile = profile;
     }
 
-    public CheckCastNode(FixedNode anchor, ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object, RiResolvedType[] hints, boolean hintsExact) {
-        this(anchor, targetClassInstruction, targetClass, object, hints, hintsExact, true);
-    }
-
-    private CheckCastNode(FixedNode anchor, ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object, RiResolvedType[] hints, boolean hintsExact, boolean emitCode) {
-        super(targetClassInstruction, targetClass, object, hints, hintsExact, targetClass == null ? StampFactory.forKind(CiKind.Object) : StampFactory.declared(targetClass));
-        this.anchor = anchor;
-        this.emitCode = emitCode;
+    @Override
+    public void lower(CiLoweringTool tool) {
+        tool.getRuntime().lower(this, tool);
     }
 
     @Override
@@ -82,41 +71,24 @@ public final class CheckCastNode extends TypeCheckNode implements Canonicalizabl
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
-        RiResolvedType objectDeclaredType = object().declaredType();
-        RiResolvedType targetClass = targetClass();
-        if (objectDeclaredType != null && targetClass != null && objectDeclaredType.isSubtypeOf(targetClass)) {
-            freeAnchor();
-            return object();
-        }
-        CiConstant constant = object().asConstant();
-        if (constant != null) {
-            assert constant.kind == CiKind.Object;
-            if (constant.isNull()) {
-                freeAnchor();
+        assert object() != null : this;
+
+        if (targetClass != null) {
+            ResolvedJavaType objectType = object().objectStamp().type();
+            if (objectType != null && objectType.isSubtypeOf(targetClass)) {
+                // we don't have to check for null types here because they will also pass the checkcast.
                 return object();
             }
         }
 
-        if (tool.assumptions() != null && hints() != null && targetClass() != null) {
-            if (!hintsExact() && hints().length == 1 && hints()[0] == targetClass().uniqueConcreteSubtype()) {
-                tool.assumptions().recordConcreteSubtype(targetClass(), hints()[0]);
-                return graph().unique(new CheckCastNode(anchor, targetClassInstruction(), targetClass(), object(), hints(), true));
+        Constant constant = object().asConstant();
+        if (constant != null) {
+            assert constant.kind == Kind.Object;
+            if (constant.isNull()) {
+                return object();
             }
         }
         return this;
-    }
-
-    // TODO (thomaswue): Find a better way to handle anchors.
-    private void freeAnchor() {
-        ValueAnchorNode anchorUsage = usages().filter(ValueAnchorNode.class).first();
-        if (anchorUsage != null) {
-            anchorUsage.replaceFirstInput(this, null);
-        }
-    }
-
-    @Override
-    public BooleanNode negate() {
-        throw new Error("A CheckCast does not produce a boolean value, so it should actually not be a subclass of BooleanNode");
     }
 
     @Override
@@ -129,7 +101,7 @@ public final class CheckCastNode extends TypeCheckNode implements Canonicalizabl
     @Override
     public Result canonical(TypeFeedbackTool tool) {
         ObjectTypeQuery query = tool.queryObject(object());
-        if (query.constantBound(Condition.EQ, CiConstant.NULL_OBJECT)) {
+        if (query.constantBound(Condition.EQ, Constant.NULL_OBJECT)) {
             return new Result(object(), query);
         } else if (targetClass() != null) {
             if (query.declaredType(targetClass())) {
@@ -137,5 +109,28 @@ public final class CheckCastNode extends TypeCheckNode implements Canonicalizabl
             }
         }
         return null;
+    }
+
+    public ValueNode object() {
+        return object;
+    }
+
+    public ValueNode targetClassInstruction() {
+        return targetClassInstruction;
+    }
+
+    /**
+     * Gets the target class, i.e. the class being cast to, or the class being tested against.
+     * This may be null in the case where the type being tested is dynamically loaded such as
+     * when checking an object array store.
+     *
+     * @return the target class or null if not known
+     */
+    public ResolvedJavaType targetClass() {
+        return targetClass;
+    }
+
+    public JavaTypeProfile profile() {
+        return profile;
     }
 }

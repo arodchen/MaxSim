@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.nodes.spi.types;
 
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.nodes.*;
 
 public interface TypeFeedbackTool {
@@ -35,7 +35,7 @@ public interface TypeFeedbackTool {
 
     ObjectTypeQuery queryObject(ValueNode value);
 
-    RiRuntime runtime();
+    CodeCacheProvider runtime();
 
     TypeFeedbackTool negate();
 

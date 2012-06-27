@@ -22,16 +22,31 @@
  */
 package com.oracle.graal.nodes.java;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.max.cri.ri.*;
 
 /**
  * The {@code StoreFieldNode} represents a write to a static or instance field.
  */
-public final class StoreFieldNode extends AccessFieldNode {
+public final class StoreFieldNode extends AccessFieldNode implements StateSplit {
 
     @Input private ValueNode value;
+    @Input(notDataflow = true) private FrameState stateAfter;
+
+    public FrameState stateAfter() {
+        return stateAfter;
+    }
+
+    public void setStateAfter(FrameState x) {
+        assert x == null || x.isAlive() : "frame state must be in a graph";
+        updateUsages(stateAfter, x);
+        stateAfter = x;
+    }
+
+    public boolean hasSideEffect() {
+        return true;
+    }
 
     public ValueNode value() {
         return value;
@@ -43,8 +58,8 @@ public final class StoreFieldNode extends AccessFieldNode {
      * @param field the compiler interface field
      * @param value the node representing the value to store to the field
      */
-    public StoreFieldNode(ValueNode object, RiResolvedField field, ValueNode value) {
-        super(StampFactory.illegal(), object, field);
+    public StoreFieldNode(ValueNode object, ResolvedJavaField field, ValueNode value, long leafGraphId) {
+        super(StampFactory.forVoid(), object, field, leafGraphId);
         this.value = value;
     }
 }

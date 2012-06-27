@@ -27,10 +27,10 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 
-public final class WriteMemoryCheckpointNode extends AbstractStateSplit implements LIRLowerable, MemoryCheckpoint {
+public final class WriteMemoryCheckpointNode extends AbstractStateSplit implements StateSplit, LIRLowerable, MemoryCheckpoint {
 
     public WriteMemoryCheckpointNode() {
-        this(StampFactory.illegal());
+        this(StampFactory.forVoid());
     }
 
     public WriteMemoryCheckpointNode(Stamp stamp) {

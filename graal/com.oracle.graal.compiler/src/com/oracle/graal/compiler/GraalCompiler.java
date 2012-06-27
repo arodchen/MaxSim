@@ -27,6 +27,8 @@ import java.util.*;
 import java.util.concurrent.*;
 
 import com.oracle.graal.alloc.simple.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.alloc.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.phases.*;
@@ -40,8 +42,6 @@ import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.cfg.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
 import com.oracle.max.cri.xir.*;
 
 public class GraalCompiler {
@@ -49,12 +49,12 @@ public class GraalCompiler {
     /**
      * The target that this compiler has been configured for.
      */
-    public final CiTarget target;
+    public final TargetDescription target;
 
     /**
      * The runtime that this compiler has been configured for.
      */
-    public final GraalRuntime runtime;
+    public final ExtendedRiRuntime runtime;
 
     /**
      * The XIR generator that lowers Java operations to machine operations.
@@ -66,7 +66,7 @@ public class GraalCompiler {
      */
     public final Backend backend;
 
-    public GraalCompiler(GraalRuntime runtime, CiTarget target, Backend backend, RiXirGenerator xirGen) {
+    public GraalCompiler(ExtendedRiRuntime runtime, TargetDescription target, Backend backend, RiXirGenerator xirGen) {
         this.runtime = runtime;
         this.target = target;
         this.xir = xirGen;
@@ -74,15 +74,15 @@ public class GraalCompiler {
     }
 
 
-    public CiTargetMethod compileMethod(final RiResolvedMethod method, final StructuredGraph graph, int osrBCI, final RiGraphCache cache, final PhasePlan plan, final OptimisticOptimizations optimisticOpts) {
+    public CompilationResult compileMethod(final ResolvedJavaMethod method, final StructuredGraph graph, int osrBCI, final RiGraphCache cache, final PhasePlan plan, final OptimisticOptimizations optimisticOpts) {
         assert (method.accessFlags() & Modifier.NATIVE) == 0 : "compiling native methods is not supported";
         if (osrBCI != -1) {
-            throw new CiBailout("No OSR supported");
+            throw new BailoutException("No OSR supported");
         }
 
-        return Debug.scope("GraalCompiler", new Object[] {graph, method, this}, new Callable<CiTargetMethod>() {
-            public CiTargetMethod call() {
-                final CiAssumptions assumptions = GraalOptions.OptAssumptions ? new CiAssumptions() : null;
+        return Debug.scope("GraalCompiler", new Object[] {graph, method, this}, new Callable<CompilationResult>() {
+            public CompilationResult call() {
+                final Assumptions assumptions = GraalOptions.OptAssumptions ? new Assumptions() : null;
                 final LIR lir = Debug.scope("FrontEnd", new Callable<LIR>() {
                     public LIR call() {
                         return emitHIR(graph, assumptions, cache, plan, optimisticOpts);
@@ -90,11 +90,11 @@ public class GraalCompiler {
                 });
                 final FrameMap frameMap = Debug.scope("BackEnd", lir, new Callable<FrameMap>() {
                     public FrameMap call() {
-                        return emitLIR(lir, graph, method);
+                        return emitLIR(lir, graph, method, assumptions);
                     }
                 });
-                return Debug.scope("CodeGen", frameMap, new Callable<CiTargetMethod>() {
-                    public CiTargetMethod call() {
+                return Debug.scope("CodeGen", frameMap, new Callable<CompilationResult>() {
+                    public CompilationResult call() {
                         return emitCode(assumptions, method, lir, frameMap);
                     }
                 });
@@ -105,7 +105,7 @@ public class GraalCompiler {
     /**
      * Builds the graph, optimizes it.
      */
-    public LIR emitHIR(StructuredGraph graph, CiAssumptions assumptions, RiGraphCache cache, PhasePlan plan, OptimisticOptimizations optimisticOpts) {
+    public LIR emitHIR(StructuredGraph graph, Assumptions assumptions, RiGraphCache cache, PhasePlan plan, OptimisticOptimizations optimisticOpts) {
 
         if (graph.start().next() == null) {
             plan.runPhases(PhasePosition.AFTER_PARSING, graph);
@@ -134,69 +134,81 @@ public class GraalCompiler {
 
         if (GraalOptions.Inline && !plan.isPhaseDisabled(InliningPhase.class)) {
             new InliningPhase(target, runtime, null, assumptions, cache, plan, optimisticOpts).apply(graph);
-            new DeadCodeEliminationPhase().apply(graph);
             new PhiStampPhase().apply(graph);
+
             if (GraalOptions.PropagateTypes) {
                 new PropagateTypeCachePhase(target, runtime, assumptions).apply(graph);
             }
 
+            if (GraalOptions.CheckCastElimination) {
+                new CheckCastEliminationPhase().apply(graph);
+            }
+
             if (GraalOptions.OptCanonicalizer) {
                 new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
             }
         }
 
+        new ConvertUnreachedToGuardPhase(optimisticOpts).apply(graph);
 
         plan.runPhases(PhasePosition.HIGH_LEVEL, graph);
+
+        if (GraalOptions.FullUnroll) {
+            new LoopFullUnrollPhase(runtime).apply(graph);
+        }
 
         if (GraalOptions.EscapeAnalysis && !plan.isPhaseDisabled(EscapeAnalysisPhase.class)) {
             new EscapeAnalysisPhase(target, runtime, assumptions, cache, plan, optimisticOpts).apply(graph);
             new PhiStampPhase().apply(graph);
-            if (GraalOptions.OptCanonicalizer) {
-                new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
-            }
         }
-        if (GraalOptions.OptLoops) {
-            if (GraalOptions.OptLoopTransform) {
-                new LoopTransformPhase().apply(graph);
-            }
+        if (GraalOptions.OptLoopTransform) {
+            new LoopTransformHighPhase().apply(graph);
         }
-        new RemoveValueProxyPhase().apply(graph);
         if (GraalOptions.OptCanonicalizer) {
             new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
         }
+
+        new LoweringPhase(runtime, assumptions).apply(graph);
+
+        if (GraalOptions.CullFrameStates) {
+            new CullFrameStatesPhase().apply(graph);
+        }
+        new FloatingReadPhase().apply(graph);
         if (GraalOptions.OptGVN) {
             new GlobalValueNumberingPhase().apply(graph);
         }
-
-        graph.mark();
-        new LoweringPhase(runtime).apply(graph);
-        new CanonicalizerPhase(target, runtime, true, assumptions).apply(graph);
-
-        if (GraalOptions.Lower) {
-            new FloatingReadPhase().apply(graph);
-            if (GraalOptions.OptGVN) {
-                new GlobalValueNumberingPhase().apply(graph);
-            }
-            if (GraalOptions.OptReadElimination) {
-                new ReadEliminationPhase().apply(graph);
-            }
+        if (GraalOptions.OptReadElimination) {
+            new ReadEliminationPhase().apply(graph);
         }
 
         if (GraalOptions.PropagateTypes) {
             new PropagateTypeCachePhase(target, runtime, assumptions).apply(graph);
         }
+
+        if (GraalOptions.CheckCastElimination) {
+            new CheckCastEliminationPhase().apply(graph);
+        }
+
+        if (GraalOptions.OptLoopTransform) {
+            new LoopTransformLowPhase().apply(graph);
+        }
+        new RemoveValueProxyPhase().apply(graph);
         if (GraalOptions.OptCanonicalizer) {
             new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
         }
-        if (GraalOptions.OptGVN) {
-            new GlobalValueNumberingPhase().apply(graph);
+        if (GraalOptions.CheckCastElimination) {
+            new CheckCastEliminationPhase().apply(graph);
         }
-        new DeadCodeEliminationPhase().apply(graph);
+
 
         plan.runPhases(PhasePosition.MID_LEVEL, graph);
 
         plan.runPhases(PhasePosition.LOW_LEVEL, graph);
 
+        new DeadCodeEliminationPhase().apply(graph);
+        if (GraalOptions.OptCanonicalizer) {
+            new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
+        }
         // Add safepoints to loops
         if (GraalOptions.GenLoopSafepoints) {
             new LoopSafepointInsertionPhase().apply(graph);
@@ -232,9 +244,9 @@ public class GraalCompiler {
         });
     }
 
-    public FrameMap emitLIR(final LIR lir, StructuredGraph graph, final RiResolvedMethod method) {
+    public FrameMap emitLIR(final LIR lir, StructuredGraph graph, final ResolvedJavaMethod method, Assumptions assumptions) {
         final FrameMap frameMap = backend.newFrameMap(runtime.getRegisterConfig(method));
-        final LIRGenerator lirGenerator = backend.newLIRGenerator(graph, frameMap, method, lir, xir);
+        final LIRGenerator lirGenerator = backend.newLIRGenerator(graph, frameMap, method, lir, xir, assumptions);
 
         Debug.scope("LIRGen", lirGenerator, new Runnable() {
             public void run() {
@@ -259,10 +271,10 @@ public class GraalCompiler {
         return frameMap;
     }
 
-    public CiTargetMethod emitCode(CiAssumptions assumptions, RiResolvedMethod method, LIR lir, FrameMap frameMap) {
+    public CompilationResult emitCode(Assumptions assumptions, ResolvedJavaMethod method, LIR lir, FrameMap frameMap) {
         TargetMethodAssembler tasm = backend.newAssembler(frameMap, lir);
         backend.emitCode(tasm, method, lir);
-        CiTargetMethod targetMethod = tasm.finishTargetMethod(method, false);
+        CompilationResult targetMethod = tasm.finishTargetMethod(method, false);
         if (assumptions != null && !assumptions.isEmpty()) {
             targetMethod.setAssumptions(assumptions);
         }

@@ -24,7 +24,6 @@ package com.oracle.graal.compiler.phases;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.cfg.*;
@@ -50,7 +49,7 @@ public class FloatingReadPhase extends Phase {
             map.putAll(other.map);
         }
 
-        public void mergeLoopEntryWith(MemoryMap otherMemoryMap, LoopBeginNode begin) {
+        public void mergeLoopEntryWith(MemoryMap otherMemoryMap, LoopBeginNode begin, EndNode pred) {
             for (Object keyInOther : otherMemoryMap.map.keySet()) {
                 assert loopEntryMap.containsKey(keyInOther) || map.get(keyInOther) == otherMemoryMap.map.get(keyInOther) : keyInOther + ", " + map.get(keyInOther) + " vs " + otherMemoryMap.map.get(keyInOther) + " " + begin;
             }
@@ -65,7 +64,10 @@ public class FloatingReadPhase extends Phase {
                     other = otherMemoryMap.map.get(LocationNode.ANY_LOCATION);
                 }
 
-                phiNode.addInput((ValueNode) other);
+                // this explicitly honors the phi input index, since the iteration order will not always adhere to the end index ordering.
+                // TODO(ls) check for instances of this problem in other places.
+                int index = begin.phiPredecessorIndex(pred);
+                phiNode.initializeValueAt(index, (ValueNode) other);
             }
         }
 
@@ -113,7 +115,8 @@ public class FloatingReadPhase extends Phase {
                 Debug.log("Add new input to %s: %s.", original, newValue);
                 assert phi.valueCount() <= phi.merge().forwardEndCount() : phi.merge();
             } else {
-                PhiNode phi = m.graph().unique(new PhiNode(CiKind.Illegal, m, PhiType.Memory));
+                PhiNode phi = m.graph().unique(new PhiNode(PhiType.Memory, m));
+                // TODO(ls) how does this work? add documentation ...
                 for (int i = 0; i < mergeOperationCount + 1; ++i) {
                     phi.addInput((ValueNode) original);
                 }
@@ -135,6 +138,9 @@ public class FloatingReadPhase extends Phase {
         }
 
         public void processWrite(WriteNode writeNode) {
+            if (writeNode.location().locationIdentity() == LocationNode.ANY_LOCATION) {
+                map.clear();
+            }
             map.put(writeNode.location().locationIdentity(), writeNode);
         }
 
@@ -145,9 +151,20 @@ public class FloatingReadPhase extends Phase {
             Debug.log("Register read to node %s.", readNode);
             FloatingReadNode floatingRead;
             if (readNode.location().locationIdentity() == LocationNode.FINAL_LOCATION) {
-                floatingRead = graph.unique(new FloatingReadNode(readNode.object(), readNode.guard(), readNode.location(), readNode.stamp()));
+                floatingRead = graph.unique(new FloatingReadNode(readNode.object(), readNode.location(), null, readNode.stamp(), readNode.dependencies()));
             } else {
-                floatingRead = graph.unique(new FloatingReadNode(readNode.object(), readNode.guard(), readNode.location(), readNode.stamp(), getLocationForRead(readNode)));
+                floatingRead = graph.unique(new FloatingReadNode(readNode.object(), readNode.location(), getLocationForRead(readNode), readNode.stamp(), readNode.dependencies()));
+            }
+            floatingRead.setNullCheck(readNode.getNullCheck());
+            ValueAnchorNode anchor = null;
+            for (GuardNode guard : readNode.dependencies().filter(GuardNode.class)) {
+                if (anchor == null) {
+                    anchor = graph.add(new ValueAnchorNode());
+                }
+                anchor.addAnchoredNode(guard);
+            }
+            if (anchor != null) {
+                graph.addAfterFixed(readNode, anchor);
             }
             graph.replaceFixedWithFloating(readNode, floatingRead);
         }
@@ -185,7 +202,7 @@ public class FloatingReadPhase extends Phase {
         }
 
         private void createLoopEntryPhi(Object modifiedLocation, Node other, Loop loop) {
-            PhiNode phi = other.graph().unique(new PhiNode(CiKind.Illegal, (MergeNode) loop.header.getBeginNode(), PhiType.Memory));
+            PhiNode phi = other.graph().unique(new PhiNode(PhiType.Memory, (MergeNode) loop.header.getBeginNode()));
             phi.addInput((ValueNode) other);
             map.put(modifiedLocation, phi);
             loopEntryMap.put(modifiedLocation, phi);
@@ -293,7 +310,7 @@ public class FloatingReadPhase extends Phase {
             MemoryMap memoryMap = memoryMaps[beginBlock.getId()];
             assert memoryMap != null;
             assert memoryMap.getLoopEntryMap() != null;
-            memoryMap.mergeLoopEntryWith(map, begin);
+            memoryMap.mergeLoopEntryWith(map, begin, (EndNode) b.getEndNode());
         }
     }
 

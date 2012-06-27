@@ -23,33 +23,32 @@
 
 package com.oracle.graal.hotspot.bridge;
 
+import java.io.*;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.compiler.phases.PhasePlan.PhasePosition;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.Compiler;
-import com.oracle.graal.hotspot.ri.*;
-import com.oracle.graal.hotspot.server.*;
+import com.oracle.graal.hotspot.counters.*;
+import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.snippets.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.snippets.*;
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
 import com.oracle.max.criutils.*;
 
 /**
  * Exits from the HotSpot VM into Java code.
  */
-public class VMToCompilerImpl implements VMToCompiler, Remote {
+public class VMToCompilerImpl implements VMToCompiler {
 
-    private final Compiler compiler;
+    private final HotSpotGraalRuntime compiler;
     private IntrinsifyArrayCopyPhase intrinsifyArrayCopy;
 
     public final HotSpotTypePrimitive typeBoolean;
@@ -66,23 +65,33 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
     private ThreadPoolExecutor slowCompileQueue;
     private AtomicInteger compileTaskIds = new AtomicInteger();
 
-    public VMToCompilerImpl(Compiler compiler) {
+    private PrintStream log = System.out;
+
+    public VMToCompilerImpl(HotSpotGraalRuntime compiler) {
         this.compiler = compiler;
 
-        typeBoolean = new HotSpotTypePrimitive(compiler, CiKind.Boolean);
-        typeChar = new HotSpotTypePrimitive(compiler, CiKind.Char);
-        typeFloat = new HotSpotTypePrimitive(compiler, CiKind.Float);
-        typeDouble = new HotSpotTypePrimitive(compiler, CiKind.Double);
-        typeByte = new HotSpotTypePrimitive(compiler, CiKind.Byte);
-        typeShort = new HotSpotTypePrimitive(compiler, CiKind.Short);
-        typeInt = new HotSpotTypePrimitive(compiler, CiKind.Int);
-        typeLong = new HotSpotTypePrimitive(compiler, CiKind.Long);
-        typeVoid = new HotSpotTypePrimitive(compiler, CiKind.Void);
+        typeBoolean = new HotSpotTypePrimitive(Kind.Boolean);
+        typeChar = new HotSpotTypePrimitive(Kind.Char);
+        typeFloat = new HotSpotTypePrimitive(Kind.Float);
+        typeDouble = new HotSpotTypePrimitive(Kind.Double);
+        typeByte = new HotSpotTypePrimitive(Kind.Byte);
+        typeShort = new HotSpotTypePrimitive(Kind.Short);
+        typeInt = new HotSpotTypePrimitive(Kind.Int);
+        typeLong = new HotSpotTypePrimitive(Kind.Long);
+        typeVoid = new HotSpotTypePrimitive(Kind.Void);
     }
 
     public void startCompiler() throws Throwable {
-        // Make sure TTY is initialized here such that the correct System.out is used for TTY.
-        TTY.initialize();
+        if (GraalOptions.LogFile != null) {
+            try {
+                final boolean enableAutoflush = true;
+                log = new PrintStream(new FileOutputStream(GraalOptions.LogFile), enableAutoflush);
+            } catch (FileNotFoundException e) {
+                throw new RuntimeException("couldn't open log file: " + GraalOptions.LogFile, e);
+            }
+        }
+
+        TTY.initialize(log);
 
         if (GraalOptions.Log == null && GraalOptions.Meter == null && GraalOptions.Time == null && GraalOptions.Dump == null) {
             if (GraalOptions.MethodFilter != null) {
@@ -92,7 +101,7 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
 
         if (GraalOptions.Debug) {
             Debug.enable();
-            HotSpotDebugConfig hotspotDebugConfig = new HotSpotDebugConfig(GraalOptions.Log, GraalOptions.Meter, GraalOptions.Time, GraalOptions.Dump, GraalOptions.MethodFilter, GraalOptions.LogFile);
+            HotSpotDebugConfig hotspotDebugConfig = new HotSpotDebugConfig(GraalOptions.Log, GraalOptions.Meter, GraalOptions.Time, GraalOptions.Dump, GraalOptions.MethodFilter, log);
             Debug.setConfig(hotspotDebugConfig);
         }
         // Install intrinsics.
@@ -103,10 +112,9 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
                 @Override
                 public void run() {
                     VMToCompilerImpl.this.intrinsifyArrayCopy = new IntrinsifyArrayCopyPhase(runtime);
-                    GraalIntrinsics.installIntrinsics(runtime, runtime.getCompiler().getTarget());
-                    Snippets.install(runtime, runtime.getCompiler().getTarget(), new SystemSnippets());
-                    Snippets.install(runtime, runtime.getCompiler().getTarget(), new UnsafeSnippets());
-                    Snippets.install(runtime, runtime.getCompiler().getTarget(), new ArrayCopySnippets());
+                    SnippetInstaller installer = new SnippetInstaller(runtime, runtime.getCompiler().getTarget());
+                    GraalIntrinsics.installIntrinsics(installer);
+                    runtime.installSnippets(installer);
                 }
             });
 
@@ -203,47 +211,59 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
                 }
             }
         } while ((System.currentTimeMillis() - startTime) <= GraalOptions.TimedBootstrap);
-        CiCompilationStatistics.clear("bootstrap");
+        CompilationStatistics.clear("bootstrap");
 
         TTY.println(" in %d ms", System.currentTimeMillis() - startTime);
         if (compiler.getCache() != null) {
             compiler.getCache().clear();
-            compiler.getCache().enable();
         }
         System.gc();
-        CiCompilationStatistics.clear("bootstrap2");
+        CompilationStatistics.clear("bootstrap2");
+        MethodEntryCounters.printCounters(compiler);
     }
 
     private void enqueue(Method m) throws Throwable {
-        RiMethod riMethod = compiler.getRuntime().getRiMethod(m);
-        assert !Modifier.isAbstract(((HotSpotMethodResolved) riMethod).accessFlags()) && !Modifier.isNative(((HotSpotMethodResolved) riMethod).accessFlags()) : riMethod;
-        compileMethod((HotSpotMethodResolved) riMethod, 0, false, 10);
+        JavaMethod riMethod = compiler.getRuntime().getResolvedJavaMethod(m);
+        assert !Modifier.isAbstract(((HotSpotResolvedJavaMethod) riMethod).accessFlags()) && !Modifier.isNative(((HotSpotResolvedJavaMethod) riMethod).accessFlags()) : riMethod;
+        compileMethod((HotSpotResolvedJavaMethod) riMethod, 0, false, 10);
+    }
+
+    private static void shutdownCompileQueue(ThreadPoolExecutor queue) throws InterruptedException {
+        if (queue != null) {
+            queue.shutdown();
+            if (Debug.isEnabled() && GraalOptions.Dump != null) {
+                // Wait 2 seconds to flush out all graph dumps that may be of interest
+                queue.awaitTermination(2, TimeUnit.SECONDS);
+            }
+        }
     }
 
     public void shutdownCompiler() throws Throwable {
         try {
             assert !CompilationTask.withinEnqueue.get();
             CompilationTask.withinEnqueue.set(Boolean.TRUE);
-            compileQueue.shutdown();
-            if (slowCompileQueue != null) {
-                slowCompileQueue.shutdown();
-            }
+            shutdownCompileQueue(compileQueue);
+            shutdownCompileQueue(slowCompileQueue);
         } finally {
             CompilationTask.withinEnqueue.set(Boolean.FALSE);
         }
+
 
         if (Debug.isEnabled()) {
             List<DebugValueMap> topLevelMaps = DebugValueMap.getTopLevelMaps();
             List<DebugValue> debugValues = KeyRegistry.getDebugValues();
             if (debugValues.size() > 0) {
+                ArrayList<DebugValue> sortedValues = new ArrayList<>(debugValues);
+                Collections.sort(sortedValues, DebugValue.ORDER_BY_NAME);
+
                 if (GraalOptions.SummarizeDebugValues) {
-                    printSummary(topLevelMaps, debugValues);
+                    printSummary(topLevelMaps, sortedValues);
                 } else if (GraalOptions.PerThreadDebugValues) {
                     for (DebugValueMap map : topLevelMaps) {
                         TTY.println("Showing the results for thread: " + map.getName());
                         map.group();
                         map.normalize();
-                        printMap(map, debugValues, 0);
+                        printMap(map, sortedValues, 0);
                     }
                 } else {
                     DebugValueMap globalMap = new DebugValueMap("Global");
@@ -260,11 +280,14 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
                         globalMap.group();
                     }
                     globalMap.normalize();
-                    printMap(globalMap, debugValues, 0);
+                    printMap(globalMap, sortedValues, 0);
                 }
             }
         }
-        CiCompilationStatistics.clear("final");
+        CompilationStatistics.clear("final");
+        MethodEntryCounters.printCounters(compiler);
+        HotSpotXirGenerator.printCounters(TTY.out().out());
+        CheckCastSnippets.printCounters(TTY.out().out());
     }
 
     private void flattenChildren(DebugValueMap map, DebugValueMap globalMap) {
@@ -305,6 +328,7 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
 
         printIndent(level);
         TTY.println("%s", map.getName());
+
         for (DebugValue value : debugValues) {
             long l = map.getCurrentValue(value.getIndex());
             if (l != 0) {
@@ -326,7 +350,7 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
     }
 
     @Override
-    public boolean compileMethod(final HotSpotMethodResolved method, final int entryBCI, boolean blocking, int priority) throws Throwable {
+    public boolean compileMethod(final HotSpotResolvedJavaMethod method, final int entryBCI, boolean blocking, int priority) throws Throwable {
         if (CompilationTask.withinEnqueue.get()) {
             // This is required to avoid deadlocking a compiler thread. The issue is that a
             // java.util.concurrent.BlockingQueue is used to implement the compilation worker
@@ -350,7 +374,7 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
 
             final OptimisticOptimizations optimisticOpts = new OptimisticOptimizations(method);
             int id = compileTaskIds.incrementAndGet();
-            CompilationTask task = CompilationTask.create(compiler, createHotSpotSpecificPhasePlan(optimisticOpts), optimisticOpts, method, id, priority);
+            CompilationTask task = CompilationTask.create(compiler, createPhasePlan(optimisticOpts), optimisticOpts, method, id, priority);
             if (blocking) {
                 task.runCompilation();
             } else {
@@ -373,31 +397,26 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
     }
 
     @Override
-    public RiMethod createRiMethodUnresolved(String name, String signature, RiType holder) {
-        return new HotSpotMethodUnresolved(compiler, name, signature, holder);
+    public JavaMethod createJavaMethod(String name, String signature, JavaType holder) {
+        return new HotSpotMethodUnresolved(name, signature, holder);
     }
 
     @Override
-    public RiSignature createRiSignature(String signature) {
-        return new HotSpotSignature(compiler, signature);
+    public Signature createSignature(String signature) {
+        return new HotSpotSignature(signature);
     }
 
     @Override
-    public RiField createRiField(RiType holder, String name, RiType type, int offset, int flags) {
+    public JavaField createJavaField(JavaType holder, String name, JavaType type, int offset, int flags) {
         if (offset != -1) {
-            HotSpotTypeResolved resolved = (HotSpotTypeResolved) holder;
+            HotSpotResolvedJavaType resolved = (HotSpotResolvedJavaType) holder;
             return resolved.createRiField(name, type, offset, flags);
         }
         return new BaseUnresolvedField(holder, name, type);
     }
 
     @Override
-    public RiType createRiType(HotSpotConstantPool pool, String name) {
-        throw new RuntimeException("not implemented");
-    }
-
-    @Override
-    public RiType createRiTypePrimitive(int basicType) {
+    public ResolvedJavaType createPrimitiveJavaType(int basicType) {
         switch (basicType) {
             case 4:
                 return typeBoolean;
@@ -423,46 +442,46 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
     }
 
     @Override
-    public RiType createRiTypeUnresolved(String name) {
-        return new HotSpotTypeUnresolved(compiler, name);
+    public JavaType createJavaType(String name) {
+        return new HotSpotTypeUnresolved(name);
     }
 
     @Override
-    public CiConstant createCiConstant(CiKind kind, long value) {
-        if (kind == CiKind.Long) {
-            return CiConstant.forLong(value);
-        } else if (kind == CiKind.Int) {
-            return CiConstant.forInt((int) value);
-        } else if (kind == CiKind.Short) {
-            return CiConstant.forShort((short) value);
-        } else if (kind == CiKind.Char) {
-            return CiConstant.forChar((char) value);
-        } else if (kind == CiKind.Byte) {
-            return CiConstant.forByte((byte) value);
-        } else if (kind == CiKind.Boolean) {
-            return (value == 0) ? CiConstant.FALSE : CiConstant.TRUE;
+    public Constant createConstant(Kind kind, long value) {
+        if (kind == Kind.Long) {
+            return Constant.forLong(value);
+        } else if (kind == Kind.Int) {
+            return Constant.forInt((int) value);
+        } else if (kind == Kind.Short) {
+            return Constant.forShort((short) value);
+        } else if (kind == Kind.Char) {
+            return Constant.forChar((char) value);
+        } else if (kind == Kind.Byte) {
+            return Constant.forByte((byte) value);
+        } else if (kind == Kind.Boolean) {
+            return (value == 0) ? Constant.FALSE : Constant.TRUE;
         } else {
             throw new IllegalArgumentException();
         }
     }
 
     @Override
-    public CiConstant createCiConstantFloat(float value) {
-        return CiConstant.forFloat(value);
+    public Constant createConstantFloat(float value) {
+        return Constant.forFloat(value);
     }
 
     @Override
-    public CiConstant createCiConstantDouble(double value) {
-        return CiConstant.forDouble(value);
+    public Constant createConstantDouble(double value) {
+        return Constant.forDouble(value);
     }
 
     @Override
-    public CiConstant createCiConstantObject(Object object) {
-        return CiConstant.forObject(object);
+    public Constant createConstantObject(Object object) {
+        return Constant.forObject(object);
     }
 
 
-    private PhasePlan createHotSpotSpecificPhasePlan(OptimisticOptimizations optimisticOpts) {
+    public PhasePlan createPhasePlan(OptimisticOptimizations optimisticOpts) {
         PhasePlan phasePlan = new PhasePlan();
         GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(compiler.getRuntime(), GraphBuilderConfiguration.getDefault(), optimisticOpts);
         phasePlan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
@@ -470,5 +489,10 @@ public class VMToCompilerImpl implements VMToCompiler, Remote {
             phasePlan.addPhase(PhasePosition.HIGH_LEVEL, intrinsifyArrayCopy);
         }
         return phasePlan;
+    }
+
+    @Override
+    public PrintStream log() {
+        return log;
     }
 }

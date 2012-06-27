@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,49 +22,30 @@
  */
 package com.oracle.graal.nodes;
 
-import java.util.*;
-
 import com.oracle.graal.nodes.type.*;
 
 /**
- * The {@code AbstractStateSplit} class is the abstract base class of all instructions
- * that store an immutable copy of the frame state.
+ * Provides an implementation of {@link StateSplit}.
  */
 public abstract class AbstractStateSplit extends FixedWithNextNode implements StateSplit {
 
     @Input(notDataflow = true) private FrameState stateAfter;
 
-    @Override
     public FrameState stateAfter() {
         return stateAfter;
     }
 
-    @Override
     public void setStateAfter(FrameState x) {
         assert x == null || x.isAlive() : "frame state must be in a graph";
         updateUsages(stateAfter, x);
         stateAfter = x;
     }
 
-    /**
-     * Creates a new state split with the specified value type.
-     * @param kind the type of the value that this instruction produces
-     */
-    public AbstractStateSplit(Stamp stamp) {
-        super(stamp);
-    }
-
-    @Override
-    public boolean needsStateAfter() {
+    public boolean hasSideEffect() {
         return true;
     }
 
-    @Override
-    public Map<Object, Object> getDebugProperties() {
-        Map<Object, Object> debugProperties = super.getDebugProperties();
-        if (stateAfter() != null) {
-            debugProperties.put("stateAfter", stateAfter().toString(Verbosity.Debugger));
-        }
-        return debugProperties;
+    public AbstractStateSplit(Stamp stamp) {
+        super(stamp);
     }
 }

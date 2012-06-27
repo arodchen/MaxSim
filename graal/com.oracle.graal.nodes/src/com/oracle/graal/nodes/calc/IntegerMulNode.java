@@ -22,7 +22,8 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
@@ -30,7 +31,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo(shortName = "*")
 public final class IntegerMulNode extends IntegerArithmeticNode implements Canonicalizable, LIRLowerable {
 
-    public IntegerMulNode(CiKind kind, ValueNode x, ValueNode y) {
+    public IntegerMulNode(Kind kind, ValueNode x, ValueNode y) {
         super(kind, x, y);
     }
 
@@ -40,10 +41,10 @@ public final class IntegerMulNode extends IntegerArithmeticNode implements Canon
             return graph().unique(new IntegerMulNode(kind(), y(), x()));
         }
         if (x().isConstant()) {
-            if (kind() == CiKind.Int) {
+            if (kind() == Kind.Int) {
                 return ConstantNode.forInt(x().asConstant().asInt() * y().asConstant().asInt(), graph());
             } else {
-                assert kind() == CiKind.Long;
+                assert kind() == Kind.Long;
                 return ConstantNode.forLong(x().asConstant().asLong() * y().asConstant().asLong(), graph());
             }
         } else if (y().isConstant()) {
@@ -54,19 +55,27 @@ public final class IntegerMulNode extends IntegerArithmeticNode implements Canon
             if (c == 0) {
                 return ConstantNode.defaultForKind(kind(), graph());
             }
-            if (c > 0 && CiUtil.isPowerOf2(c)) {
-                return graph().unique(new LeftShiftNode(kind(), x(), ConstantNode.forInt(CiUtil.log2(c), graph())));
+            long abs = Math.abs(c);
+            if (abs > 0 && CodeUtil.isPowerOf2(abs)) {
+                LeftShiftNode shift = graph().unique(new LeftShiftNode(kind(), x(), ConstantNode.forInt(CodeUtil.log2(abs), graph())));
+                if (c < 0) {
+                    return graph().unique(new NegateNode(shift));
+                } else {
+                    return shift;
+                }
             }
+            // canonicalize expressions like "(a * 1) * 2"
+            return BinaryNode.reassociate(this, ValueNode.isConstantPredicate());
         }
         return this;
     }
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        CiValue op1 = gen.operand(x());
-        CiValue op2 = gen.operand(y());
+        Value op1 = gen.operand(x());
+        Value op2 = gen.operand(y());
         if (!y().isConstant() && !FloatAddNode.livesLonger(this, y(), gen)) {
-            CiValue op = op1;
+            Value op = op1;
             op1 = op2;
             op2 = op;
         }

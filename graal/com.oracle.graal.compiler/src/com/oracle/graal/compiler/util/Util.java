@@ -22,15 +22,13 @@
  */
 package com.oracle.graal.compiler.util;
 
-import java.lang.reflect.*;
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
-import com.oracle.max.criutils.*;
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
+import com.oracle.max.criutils.*;
 
 /**
  * The {@code Util} class contains a motley collection of utility methods used throughout the compiler.
@@ -134,31 +132,31 @@ public class Util {
     }
 
     static {
-        assert CiUtil.log2(2) == 1;
-        assert CiUtil.log2(4) == 2;
-        assert CiUtil.log2(8) == 3;
-        assert CiUtil.log2(16) == 4;
-        assert CiUtil.log2(32) == 5;
-        assert CiUtil.log2(0x40000000) == 30;
+        assert CodeUtil.log2(2) == 1;
+        assert CodeUtil.log2(4) == 2;
+        assert CodeUtil.log2(8) == 3;
+        assert CodeUtil.log2(16) == 4;
+        assert CodeUtil.log2(32) == 5;
+        assert CodeUtil.log2(0x40000000) == 30;
 
-        assert CiUtil.log2(2L) == 1;
-        assert CiUtil.log2(4L) == 2;
-        assert CiUtil.log2(8L) == 3;
-        assert CiUtil.log2(16L) == 4;
-        assert CiUtil.log2(32L) == 5;
-        assert CiUtil.log2(0x4000000000000000L) == 62;
+        assert CodeUtil.log2(2L) == 1;
+        assert CodeUtil.log2(4L) == 2;
+        assert CodeUtil.log2(8L) == 3;
+        assert CodeUtil.log2(16L) == 4;
+        assert CodeUtil.log2(32L) == 5;
+        assert CodeUtil.log2(0x4000000000000000L) == 62;
 
-        assert !CiUtil.isPowerOf2(3);
-        assert !CiUtil.isPowerOf2(5);
-        assert !CiUtil.isPowerOf2(7);
-        assert !CiUtil.isPowerOf2(-1);
+        assert !CodeUtil.isPowerOf2(3);
+        assert !CodeUtil.isPowerOf2(5);
+        assert !CodeUtil.isPowerOf2(7);
+        assert !CodeUtil.isPowerOf2(-1);
 
-        assert CiUtil.isPowerOf2(2);
-        assert CiUtil.isPowerOf2(4);
-        assert CiUtil.isPowerOf2(8);
-        assert CiUtil.isPowerOf2(16);
-        assert CiUtil.isPowerOf2(32);
-        assert CiUtil.isPowerOf2(64);
+        assert CodeUtil.isPowerOf2(2);
+        assert CodeUtil.isPowerOf2(4);
+        assert CodeUtil.isPowerOf2(8);
+        assert CodeUtil.isPowerOf2(16);
+        assert CodeUtil.isPowerOf2(32);
+        assert CodeUtil.isPowerOf2(64);
     }
 
     /**
@@ -188,7 +186,7 @@ public class Util {
 
     public static void guarantee(boolean b, String string) {
         if (!b) {
-            throw new CiBailout(string);
+            throw new BailoutException(string);
         }
     }
 
@@ -331,34 +329,11 @@ public class Util {
         return (short) v;
     }
 
-    /**
-     * Checks that two instructions are equivalent, optionally comparing constants.
-     * @param x the first instruction
-     * @param y the second instruction
-     * @param compareConstants {@code true} if equivalent constants should be considered equivalent
-     * @return {@code true} if the instructions are equivalent; {@code false} otherwise
-     */
-    public static boolean equivalent(FixedWithNextNode x, FixedWithNextNode y, boolean compareConstants) {
-        if (x == y) {
-            return true;
-        }
-        if (compareConstants && x != null && y != null) {
-            if (x.isConstant() && x.asConstant().equivalent(y.asConstant())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     public static boolean isFixed(Node n) {
         return n instanceof FixedNode;
     }
 
     public static boolean isFloating(Node n) {
         return n instanceof FloatingNode;
-    }
-
-    public static boolean isFinalClass(RiResolvedType type) {
-        return Modifier.isFinal(type.accessFlags()) || (type.isArrayClass() && Modifier.isFinal(type.componentType().accessFlags()));
     }
 }

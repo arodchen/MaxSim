@@ -25,25 +25,24 @@ package com.oracle.graal.compiler.types;
 import java.util.*;
 import java.util.Map.Entry;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.types.*;
-import com.oracle.graal.nodes.type.*;
 
 public class TypeFeedbackCache implements TypeFeedbackTool, Cloneable {
 
     public static final boolean NO_OBJECT_TYPES = false;
     public static final boolean NO_SCALAR_TYPES = false;
 
-    private final RiRuntime runtime;
+    private final CodeCacheProvider runtime;
     private final StructuredGraph graph;
     private final HashMap<ValueNode, ScalarTypeFeedbackStore> scalarTypeFeedback;
     private final HashMap<ValueNode, ObjectTypeFeedbackStore> objectTypeFeedback;
     private final TypeFeedbackChanged changed;
     private final boolean negated;
 
-    public TypeFeedbackCache(RiRuntime runtime, StructuredGraph graph, TypeFeedbackChanged changed) {
+    public TypeFeedbackCache(CodeCacheProvider runtime, StructuredGraph graph, TypeFeedbackChanged changed) {
         this.runtime = runtime;
         this.graph = graph;
         scalarTypeFeedback = new HashMap<>();
@@ -52,7 +51,8 @@ public class TypeFeedbackCache implements TypeFeedbackTool, Cloneable {
         this.changed = changed;
     }
 
-    public TypeFeedbackCache(RiRuntime runtime, StructuredGraph graph, HashMap<ValueNode, ScalarTypeFeedbackStore> scalarTypeFeedback, HashMap<ValueNode, ObjectTypeFeedbackStore> objectTypeFeedback, boolean negated, TypeFeedbackChanged changed) {
+    public TypeFeedbackCache(CodeCacheProvider runtime, StructuredGraph graph, HashMap<ValueNode, ScalarTypeFeedbackStore> scalarTypeFeedback, HashMap<ValueNode,
+                    ObjectTypeFeedbackStore> objectTypeFeedback, boolean negated, TypeFeedbackChanged changed) {
         this.runtime = runtime;
         this.graph = graph;
         this.scalarTypeFeedback = scalarTypeFeedback;
@@ -63,7 +63,7 @@ public class TypeFeedbackCache implements TypeFeedbackTool, Cloneable {
 
     @Override
     public ScalarTypeFeedbackTool addScalar(ValueNode value) {
-        assert value.kind() == CiKind.Int || value.kind() == CiKind.Long || value.kind() == CiKind.Float || value.kind() == CiKind.Double;
+        assert value.kind() == Kind.Int || value.kind() == Kind.Long || value.kind() == Kind.Float || value.kind() == Kind.Double;
         ScalarTypeFeedbackStore result = scalarTypeFeedback.get(value);
         if (result == null) {
             if (value.stamp().scalarType() != null) {
@@ -78,7 +78,7 @@ public class TypeFeedbackCache implements TypeFeedbackTool, Cloneable {
 
     @Override
     public ObjectTypeFeedbackTool addObject(ValueNode value) {
-        assert value.kind() == CiKind.Object;
+        assert value.kind() == Kind.Object;
         ObjectTypeFeedbackStore result = objectTypeFeedback.get(value);
         if (result == null) {
             if (value.stamp().objectType() != null) {
@@ -97,7 +97,7 @@ public class TypeFeedbackCache implements TypeFeedbackTool, Cloneable {
     }
 
     @Override
-    public RiRuntime runtime() {
+    public CodeCacheProvider runtime() {
         return runtime;
     }
 
@@ -169,7 +169,7 @@ public class TypeFeedbackCache implements TypeFeedbackTool, Cloneable {
         // meet the phi nodes
         for (PhiNode phi : phis) {
             assert phi.valueCount() == cacheList.length;
-            if (phi.kind() == CiKind.Int || phi.kind() == CiKind.Long) {
+            if (phi.kind() == Kind.Int || phi.kind() == Kind.Long) {
                 ScalarTypeFeedbackStore[] types = new ScalarTypeFeedbackStore[phi.valueCount()];
                 for (int i = 0; i < phi.valueCount(); i++) {
                     ScalarTypeFeedbackStore other = cacheList[i].scalarTypeFeedback.get(phi.valueAt(i));
@@ -181,9 +181,9 @@ public class TypeFeedbackCache implements TypeFeedbackTool, Cloneable {
                 ScalarTypeFeedbackStore scalar = ScalarTypeFeedbackStore.meet(types);
                 if (scalar != null && !scalar.isEmpty()) {
                     result.scalarTypeFeedback.put(phi, scalar);
-                    phi.setStamp(StampFactory.forKind(phi.kind(), scalar.query(), null));
+//                    phi.setStamp(StampFactory.forKind(phi.kind(), scalar.query(), null));
                 }
-            } else if (phi.kind() == CiKind.Object) {
+            } else if (phi.kind() == Kind.Object) {
                 ObjectTypeFeedbackStore[] types = new ObjectTypeFeedbackStore[phi.valueCount()];
                 for (int i = 0; i < phi.valueCount(); i++) {
                     ObjectTypeFeedbackStore other = cacheList[i].objectTypeFeedback.get(phi.valueAt(i));
@@ -195,7 +195,7 @@ public class TypeFeedbackCache implements TypeFeedbackTool, Cloneable {
                 ObjectTypeFeedbackStore object = ObjectTypeFeedbackStore.meet(types);
                 if (object != null && !object.isEmpty()) {
                     result.objectTypeFeedback.put(phi, object);
-                    phi.setStamp(StampFactory.forKind(phi.kind(), null, object.query()));
+//                    phi.setStamp(StampFactory.forKind(phi.kind(), null, object.query()));
                 }
             }
         }
@@ -204,7 +204,7 @@ public class TypeFeedbackCache implements TypeFeedbackTool, Cloneable {
 
     @Override
     public ScalarTypeQuery queryScalar(ValueNode value) {
-        assert value.kind() == CiKind.Int || value.kind() == CiKind.Long || value.kind() == CiKind.Float || value.kind() == CiKind.Double;
+        assert value.kind() == Kind.Int || value.kind() == Kind.Long || value.kind() == Kind.Float || value.kind() == Kind.Double;
         if (NO_SCALAR_TYPES) {
             return new ScalarTypeFeedbackStore(value.kind(), changed).query();
         }
@@ -222,7 +222,7 @@ public class TypeFeedbackCache implements TypeFeedbackTool, Cloneable {
     @Override
     public ObjectTypeQuery queryObject(ValueNode value) {
         assert value != null;
-        assert value.kind() == CiKind.Object;
+        assert value.kind() == Kind.Object;
         if (NO_OBJECT_TYPES) {
             return new ObjectTypeFeedbackStore(changed).query();
         }

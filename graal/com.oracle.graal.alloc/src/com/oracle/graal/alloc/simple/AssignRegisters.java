@@ -24,8 +24,10 @@ package com.oracle.graal.alloc.simple;
 
 import static com.oracle.graal.alloc.util.LocationUtil.*;
 
-import com.oracle.max.cri.ci.*;
+import java.util.*;
+
 import com.oracle.graal.alloc.util.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.*;
@@ -40,13 +42,13 @@ public abstract class AssignRegisters {
         this.frameMap = frameMap;
     }
 
-    private CiBitMap curRegisterRefMap;
-    private CiBitMap curFrameRefMap;
+    private BitSet curRegisterRefMap;
+    private BitSet curFrameRefMap;
 
     public void execute() {
-        ValueProcedure useProc =          new ValueProcedure() { @Override public CiValue doValue(CiValue value) { return use(value); } };
-        ValueProcedure defProc =          new ValueProcedure() { @Override public CiValue doValue(CiValue value) { return def(value); } };
-        ValueProcedure setReferenceProc = new ValueProcedure() { @Override public CiValue doValue(CiValue value) { return setReference(value); } };
+        ValueProcedure useProc =          new ValueProcedure() { @Override public Value doValue(Value value) { return use(value); } };
+        ValueProcedure defProc =          new ValueProcedure() { @Override public Value doValue(Value value) { return def(value); } };
+        ValueProcedure setReferenceProc = new ValueProcedure() { @Override public Value doValue(Value value) { return setReference(value); } };
 
         Debug.log("==== start assign registers ====");
         for (int i = lir.linearScanOrder().size() - 1; i >= 0; i--) {
@@ -70,12 +72,12 @@ public abstract class AssignRegisters {
 
                 if (op.info != null) {
                     Debug.log("    registerRefMap: %s  frameRefMap: %s", curRegisterRefMap, curFrameRefMap);
-                    op.info.finish(new CiBitMap(curRegisterRefMap), new CiBitMap(curFrameRefMap), frameMap);
+                    op.info.finish((BitSet) (curRegisterRefMap.clone()), (BitSet) (curFrameRefMap.clone()), frameMap);
 
                     if (op instanceof LIRXirInstruction) {
                         LIRXirInstruction xir = (LIRXirInstruction) op;
                         if (xir.infoAfter != null) {
-                            xir.infoAfter.finish(new CiBitMap(curRegisterRefMap), new CiBitMap(curFrameRefMap), frameMap);
+                            xir.infoAfter.finish((BitSet) (curRegisterRefMap.clone()), (BitSet) (curFrameRefMap.clone()), frameMap);
                         }
                     }
                 }
@@ -89,10 +91,10 @@ public abstract class AssignRegisters {
         Debug.log("==== end assign registers ====");
     }
 
-    private CiValue use(CiValue value) {
+    private Value use(Value value) {
         Debug.log("    use %s", value);
         if (isLocation(value)) {
-            CiValue location = asLocation(value).location;
+            Value location = asLocation(value).location;
             frameMap.setReference(location, curRegisterRefMap, curFrameRefMap);
             return location;
         } else {
@@ -101,10 +103,10 @@ public abstract class AssignRegisters {
         }
     }
 
-    private CiValue def(CiValue value) {
+    private Value def(Value value) {
         Debug.log("    def %s", value);
         if (isLocation(value)) {
-            CiValue location = asLocation(value).location;
+            Value location = asLocation(value).location;
             frameMap.clearReference(location, curRegisterRefMap, curFrameRefMap);
             return location;
         } else {
@@ -113,7 +115,7 @@ public abstract class AssignRegisters {
         }
     }
 
-    private CiValue setReference(CiValue value) {
+    private Value setReference(Value value) {
         Debug.log("    setReference %s", value);
         frameMap.setReference(asLocation(value).location, curRegisterRefMap, curFrameRefMap);
         return value;

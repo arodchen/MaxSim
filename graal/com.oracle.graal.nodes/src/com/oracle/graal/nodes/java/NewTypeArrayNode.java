@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -32,15 +32,15 @@ import com.oracle.graal.nodes.type.*;
  */
 public final class NewTypeArrayNode extends NewArrayNode implements LIRLowerable {
 
-    private final RiResolvedType elementType;
+    private final ResolvedJavaType elementType;
 
-    public NewTypeArrayNode(ValueNode length, RiResolvedType elementType) {
+    public NewTypeArrayNode(ValueNode length, ResolvedJavaType elementType) {
         super(StampFactory.exactNonNull(elementType.arrayOf()), length);
         this.elementType = elementType;
     }
 
     @Override
-    public RiResolvedType elementType() {
+    public ResolvedJavaType elementType() {
         return elementType;
     }
 

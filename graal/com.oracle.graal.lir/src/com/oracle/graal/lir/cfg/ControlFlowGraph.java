@@ -68,6 +68,31 @@ public class ControlFlowGraph {
         return reversePostOrder[0];
     }
 
+    public Iterable<Block> postOrder() {
+        return new Iterable<Block>() {
+            @Override
+            public Iterator<Block> iterator() {
+                return new Iterator<Block>() {
+                    private int nextIndex = reversePostOrder.length - 1;
+                    @Override
+                    public boolean hasNext() {
+                        return nextIndex >= 0;
+                    }
+
+                    @Override
+                    public Block next() {
+                        return reversePostOrder[nextIndex--];
+                    }
+
+                    @Override
+                    public void remove() {
+                        throw new UnsupportedOperationException();
+                    }
+                };
+            }
+        };
+    }
+
     public NodeMap<Block> getNodeToBlock() {
         return nodeToBlock;
     }
@@ -93,9 +118,9 @@ public class ControlFlowGraph {
 
                 block.beginNode = (BeginNode) node;
                 Node cur = node;
+                Node last;
                 do {
                     assert !cur.isDeleted();
-                    block.endNode = cur;
 
                     assert nodeToBlock.get(cur) == null;
                     nodeToBlock.set(cur, block);
@@ -112,15 +137,11 @@ public class ControlFlowGraph {
                         }
                     }
 
-                    Node next = null;
-                    for (Node sux : cur.successors()) {
-                        if (sux != null && !(sux instanceof BeginNode)) {
-                            assert next == null;
-                            next = sux;
-                        }
-                    }
-                    cur = next;
-                } while (cur != null);
+                    last = cur;
+                    cur = cur.successors().first();
+                } while (cur != null && !(cur instanceof BeginNode));
+
+                block.endNode = (FixedNode) last;
             }
         }
 
@@ -304,7 +325,7 @@ public class ControlFlowGraph {
     }
 
     private void computePostdominators() {
-        for (Block block : reversePostOrder) {
+        for (Block block : postOrder()) {
             if (block.isLoopEnd()) {
                 // We do not want the loop header registered as the postdominator of the loop end.
                 continue;

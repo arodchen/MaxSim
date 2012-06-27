@@ -22,7 +22,8 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -39,13 +40,13 @@ public final class UnwindNode extends FixedNode implements LIRLowerable, Node.It
     }
 
     public UnwindNode(ValueNode exception) {
-        super(StampFactory.forKind(CiKind.Object));
-        assert exception == null || exception.kind() == CiKind.Object;
+        super(StampFactory.forVoid());
+        assert exception == null || exception.kind() == Kind.Object;
         this.exception = exception;
     }
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        gen.emitCallToRuntime(CiRuntimeCall.UnwindException, false, gen.operand(exception()));
+        gen.emitCall(RuntimeCall.UnwindException, false, gen.operand(exception()));
     }
 }

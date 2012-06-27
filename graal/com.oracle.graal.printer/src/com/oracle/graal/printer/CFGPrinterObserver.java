@@ -25,10 +25,9 @@ package com.oracle.graal.printer;
 import java.io.*;
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
-import com.oracle.max.criutils.*;
 import com.oracle.graal.alloc.util.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.alloc.*;
 import com.oracle.graal.compiler.gen.*;
@@ -38,6 +37,7 @@ import com.oracle.graal.java.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.cfg.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.max.criutils.*;
 
 /**
  * Observes compilation events and uses {@link CFGPrinter} to produce a control flow graph for the <a
@@ -46,7 +46,8 @@ import com.oracle.graal.nodes.*;
 public class CFGPrinterObserver implements DebugDumpHandler {
 
     private CFGPrinter cfgPrinter;
-    private RiResolvedMethod curMethod;
+    private ResolvedJavaMethod curMethod;
+    private List<String> curDecorators = Collections.emptyList();
 
     @Override
     public void dump(Object object, String message) {
@@ -57,14 +58,37 @@ public class CFGPrinterObserver implements DebugDumpHandler {
         }
     }
 
-    private static RiResolvedMethod lookupMethod() {
-        RiResolvedMethod method = Debug.contextLookup(RiResolvedMethod.class);
-        if (method != null) {
-            return method;
+    /**
+     * Looks for the outer most method and its {@link DebugDumpScope#decorator}s
+     * in the current debug scope and opens a new compilation scope if this pair
+     * does not match the current method and decorator pair.
+     */
+    private void checkMethodScope() {
+        ResolvedJavaMethod method = null;
+        ArrayList<String> decorators = new ArrayList<>();
+        for (Object o : Debug.context()) {
+            if (o instanceof ResolvedJavaMethod) {
+                method = (ResolvedJavaMethod) o;
+                decorators.clear();
+            } else if (o instanceof StructuredGraph) {
+                StructuredGraph graph = (StructuredGraph) o;
+                assert graph != null && graph.method() != null : "cannot find method context for CFG dump";
+                method = graph.method();
+                decorators.clear();
+            } else if (o instanceof DebugDumpScope) {
+                DebugDumpScope debugDumpScope = (DebugDumpScope) o;
+                if (debugDumpScope.decorator) {
+                    decorators.add(debugDumpScope.name);
+                }
+            }
         }
-        StructuredGraph graph = Debug.contextLookup(StructuredGraph.class);
-        assert graph != null && graph.method() != null : "cannot find method context for CFG dump";
-        return graph.method();
+
+        if (method != curMethod || !curDecorators.equals(decorators)) {
+            cfgPrinter.printCompilation(method);
+            TTY.println("CFGPrinter: Dumping method %s", method);
+            curMethod = method;
+            curDecorators = decorators;
+        }
     }
 
     public void dumpSandboxed(Object object, String message) {
@@ -84,13 +108,7 @@ public class CFGPrinterObserver implements DebugDumpHandler {
             TTY.println("CFGPrinter: Output to file %s", file);
         }
 
-        RiResolvedMethod newMethod = lookupMethod();
-
-        if (newMethod != curMethod) {
-            cfgPrinter.printCompilation(newMethod);
-            TTY.println("CFGPrinter: Dumping method %s", newMethod);
-            curMethod = newMethod;
-        }
+        checkMethodScope();
 
         cfgPrinter.target = compiler.target;
         if (object instanceof LIR) {
@@ -103,7 +121,7 @@ public class CFGPrinterObserver implements DebugDumpHandler {
             cfgPrinter.cfg = cfgPrinter.lir.cfg;
         }
 
-        RiRuntime runtime = compiler.runtime;
+        CodeCacheProvider runtime = compiler.runtime;
 
         if (object instanceof BciBlockMapping) {
             BciBlockMapping blockMap = (BciBlockMapping) object;
@@ -119,26 +137,24 @@ public class CFGPrinterObserver implements DebugDumpHandler {
             }
             cfgPrinter.printCFG(message, Arrays.asList(cfgPrinter.cfg.getBlocks()));
 
-        } else if (object instanceof CiTargetMethod) {
-            final CiTargetMethod tm = (CiTargetMethod) object;
+        } else if (object instanceof CompilationResult) {
+            final CompilationResult tm = (CompilationResult) object;
             final byte[] code = Arrays.copyOf(tm.targetCode(), tm.targetCodeSize());
-            RiCodeInfo info = new RiCodeInfo() {
-                public CiTargetMethod targetMethod() {
-                    return tm;
+            CodeInfo info = new CodeInfo() {
+                public ResolvedJavaMethod method() {
+                    return null;
                 }
                 public long start() {
                     return 0L;
-                }
-                public RiResolvedMethod method() {
-                    return null;
                 }
                 public byte[] code() {
                     return code;
                 }
             };
-            cfgPrinter.printMachineCode(runtime.disassemble(info), message);
-        } else if (object instanceof RiCodeInfo) {
-            cfgPrinter.printMachineCode(runtime.disassemble((RiCodeInfo) object), message);
+            cfgPrinter.printMachineCode(runtime.disassemble(info, tm), message);
+        } else if (isCompilationResultAndCodeInfo(object)) {
+            Object[] tuple = (Object[]) object;
+            cfgPrinter.printMachineCode(runtime.disassemble((CodeInfo) tuple[1], (CompilationResult) tuple[0]), message);
         } else if (object instanceof Interval[]) {
             cfgPrinter.printIntervals(message, (Interval[]) object);
 
@@ -151,5 +167,15 @@ public class CFGPrinterObserver implements DebugDumpHandler {
         cfgPrinter.lirGenerator = null;
         cfgPrinter.cfg = null;
         cfgPrinter.flush();
+    }
+
+    private static boolean isCompilationResultAndCodeInfo(Object object) {
+        if (object instanceof Object[]) {
+            Object[] tuple = (Object[]) object;
+            if (tuple.length == 2 && tuple[0] instanceof CompilationResult && tuple[1] instanceof CodeInfo) {
+                return true;
+            }
+        }
+        return false;
     }
 }

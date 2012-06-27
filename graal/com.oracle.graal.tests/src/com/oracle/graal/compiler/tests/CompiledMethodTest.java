@@ -26,21 +26,20 @@ import java.lang.reflect.*;
 
 import org.junit.*;
 
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.meta.InstalledCode.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
-import com.oracle.max.cri.ri.RiCompiledMethod.MethodInvalidatedException;
 
 /**
  * In the following tests, the usages of local variable "a" are replaced with the integer constant 0. Then
  * canonicalization is applied and it is verified that the resulting graph is equal to the graph of the method that just
  * has a "return 1" statement in it.
  */
-public class CompiledMethodTest extends GraphTest {
+public class CompiledMethodTest extends GraalCompilerTest {
 
     public static Object testMethod(Object arg1, Object arg2, Object arg3) {
         return arg1 + " " + arg2 + " " + arg3;
@@ -61,15 +60,14 @@ public class CompiledMethodTest extends GraphTest {
         for (Node node : graph.getNodes()) {
             if (node instanceof ConstantNode) {
                 ConstantNode constant = (ConstantNode) node;
-                if (constant.kind() == CiKind.Object && " ".equals(constant.value.asObject())) {
+                if (constant.kind() == Kind.Object && " ".equals(constant.value.asObject())) {
                     graph.replaceFloating(constant, ConstantNode.forObject("-", runtime, graph));
                 }
             }
         }
 
-        final RiResolvedMethod riMethod = runtime.getRiMethod(method);
-        CiTargetMethod targetMethod = runtime.compile(riMethod, graph);
-        RiCompiledMethod compiledMethod = runtime.addMethod(riMethod, targetMethod);
+        final ResolvedJavaMethod riMethod = runtime.getResolvedJavaMethod(method);
+        InstalledCode compiledMethod = getCode(riMethod, graph);
         try {
             Object result = compiledMethod.execute("1", "2", "3");
             Assert.assertEquals("1-2-3", result);
@@ -82,9 +80,8 @@ public class CompiledMethodTest extends GraphTest {
     public void test3() {
         Method method = getMethod("testMethod");
         final StructuredGraph graph = parse(method);
-        final RiResolvedMethod riMethod = runtime.getRiMethod(method);
-        CiTargetMethod targetMethod = runtime.compile(riMethod, graph);
-        RiCompiledMethod compiledMethod = runtime.addMethod(riMethod, targetMethod);
+        final ResolvedJavaMethod riMethod = runtime.getResolvedJavaMethod(method);
+        InstalledCode compiledMethod = getCode(riMethod, graph);
         try {
             Object result = compiledMethod.executeVarargs("1", "2", "3");
             Assert.assertEquals("1 2 3", result);
@@ -97,9 +94,8 @@ public class CompiledMethodTest extends GraphTest {
     public void test4() {
         Method method = getMethod("testMethodVirtual");
         final StructuredGraph graph = parse(method);
-        final RiResolvedMethod riMethod = runtime.getRiMethod(method);
-        CiTargetMethod targetMethod = runtime.compile(riMethod, graph);
-        RiCompiledMethod compiledMethod = runtime.addMethod(riMethod, targetMethod);
+        final ResolvedJavaMethod riMethod = runtime.getResolvedJavaMethod(method);
+        InstalledCode compiledMethod = getCode(riMethod, graph);
         try {
             f1 = "0";
             Object result = compiledMethod.executeVarargs(this, "1", "2", "3");
@@ -112,7 +108,7 @@ public class CompiledMethodTest extends GraphTest {
     @Test
     public void test2() throws NoSuchMethodException, SecurityException {
         Method method = CompilableObjectImpl.class.getDeclaredMethod("executeHelper", ObjectCompiler.class, String.class);
-        RiResolvedMethod riMethod = runtime.getRiMethod(method);
+        ResolvedJavaMethod riMethod = runtime.getResolvedJavaMethod(method);
         StructuredGraph graph = new StructuredGraph(riMethod);
         new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getSnippetDefault(), OptimisticOptimizations.NONE).apply(graph);
         new CanonicalizerPhase(null, runtime, null).apply(graph);
@@ -121,15 +117,13 @@ public class CompiledMethodTest extends GraphTest {
         for (Node node : graph.getNodes()) {
             if (node instanceof ConstantNode) {
                 ConstantNode constant = (ConstantNode) node;
-                if (constant.kind() == CiKind.Object && "1 ".equals(constant.value.asObject())) {
+                if (constant.kind() == Kind.Object && "1 ".equals(constant.value.asObject())) {
                     graph.replaceFloating(constant, ConstantNode.forObject("1-", runtime, graph));
                 }
             }
         }
 
-        CiTargetMethod targetMethod = runtime.compile(riMethod, graph);
-        final RiCompiledMethod compiledMethod = runtime.addMethod(riMethod, targetMethod);
-
+        InstalledCode compiledMethod = getCode(riMethod, graph);
         final CompilableObject compilableObject = new CompilableObjectImpl(0);
 
         Object result;
@@ -181,9 +175,9 @@ public class CompiledMethodTest extends GraphTest {
 
     private final class ObjectCompilerImpl implements ObjectCompiler {
 
-        private final RiCompiledMethod compiledMethod;
+        private final InstalledCode compiledMethod;
 
-        private ObjectCompilerImpl(RiCompiledMethod compiledMethod) {
+        private ObjectCompilerImpl(InstalledCode compiledMethod) {
             this.compiledMethod = compiledMethod;
         }
 

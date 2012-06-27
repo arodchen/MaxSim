@@ -24,54 +24,39 @@ package com.oracle.graal.hotspot;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ci.CiTargetMethod.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.CompilationResult.*;
 import com.oracle.graal.hotspot.logging.*;
-import com.oracle.graal.hotspot.ri.*;
+import com.oracle.graal.hotspot.meta.*;
 
 /**
  * CiTargetMethod augmented with HotSpot-specific information.
  */
 public final class HotSpotTargetMethod extends CompilerObject {
 
-    /**
-     *
-     */
     private static final long serialVersionUID = 7807321392203253218L;
-    public final CiTargetMethod targetMethod;
-    public final HotSpotMethodResolved method; // used only for methods
+    public final CompilationResult targetMethod;
+    public final HotSpotResolvedJavaMethod method; // used only for methods
     public final String name; // used only for stubs
 
     public final Site[] sites;
     public final ExceptionHandler[] exceptionHandlers;
 
-    public HotSpotTargetMethod(Compiler compiler, HotSpotMethodResolved method, CiTargetMethod targetMethod) {
-        super(compiler);
+    public HotSpotTargetMethod(HotSpotResolvedJavaMethod method, CompilationResult targetMethod) {
         this.method = method;
         this.targetMethod = targetMethod;
         this.name = null;
 
         sites = getSortedSites(targetMethod);
-        if (targetMethod.exceptionHandlers == null) {
+        if (targetMethod.getExceptionHandlers() == null) {
             exceptionHandlers = null;
         } else {
-            exceptionHandlers = targetMethod.exceptionHandlers.toArray(new ExceptionHandler[targetMethod.exceptionHandlers.size()]);
+            exceptionHandlers = targetMethod.getExceptionHandlers().toArray(new ExceptionHandler[targetMethod.getExceptionHandlers().size()]);
         }
     }
 
-    private HotSpotTargetMethod(Compiler compiler, CiTargetMethod targetMethod, String name) {
-        super(compiler);
-        this.method = null;
-        this.targetMethod = targetMethod;
-        this.name = name;
-
-        sites = getSortedSites(targetMethod);
-        assert targetMethod.exceptionHandlers == null || targetMethod.exceptionHandlers.size() == 0;
-        exceptionHandlers = null;
-    }
-
-    private static Site[] getSortedSites(CiTargetMethod target) {
-        List<?>[] lists = new List<?>[] {target.safepoints, target.dataReferences, target.marks};
+    private static Site[] getSortedSites(CompilationResult target) {
+        List<?>[] lists = new List<?>[] {target.getSafepoints(), target.getDataReferences(), target.getMarks()};
         int count = 0;
         for (List<?> list : lists) {
             count += list.size();
@@ -99,9 +84,4 @@ public final class HotSpotTargetMethod extends CompilerObject {
         }
         return result;
     }
-
-    public static Object installStub(Compiler compiler, CiTargetMethod targetMethod, String name, HotSpotCodeInfo info) {
-        return compiler.getCompilerToVM().installStub(new HotSpotTargetMethod(compiler, targetMethod, name), info);
-    }
-
 }

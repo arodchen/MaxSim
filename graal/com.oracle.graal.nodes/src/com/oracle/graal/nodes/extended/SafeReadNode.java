@@ -24,11 +24,8 @@ package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.cri.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.max.cri.ri.*;
-
 
 public class SafeReadNode extends SafeAccessNode implements Lowerable {
 
@@ -40,9 +37,9 @@ public class SafeReadNode extends SafeAccessNode implements Lowerable {
     @Override
     public void lower(CiLoweringTool tool) {
         StructuredGraph graph = (StructuredGraph) graph();
-        GuardNode guard = (GuardNode) tool.createGuard(graph.unique(new NullCheckNode(object(), false)), RiDeoptReason.NullCheckException, RiDeoptAction.InvalidateReprofile, StructuredGraph.INVALID_GRAPH_ID);
+        ValueNode guard = tool.createNullCheckGuard(object(), leafGraphId());
         ReadNode read = graph.add(new ReadNode(object(), location(), stamp()));
-        read.setGuard(guard);
+        read.dependencies().add(guard);
 
         graph.replaceFixedWithFixed(this, read);
     }

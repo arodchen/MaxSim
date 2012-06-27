@@ -25,11 +25,11 @@ package com.oracle.graal.compiler.types;
 import java.io.*;
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.compiler.schedule.*;
 import com.oracle.graal.debug.*;
+import com.oracle.graal.graph.Graph.InputChangedListener;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.cfg.*;
 import com.oracle.graal.nodes.*;
@@ -41,11 +41,10 @@ public class PropagateTypeCachePhase extends Phase {
 
     private static final boolean DUMP = false;
 
-    private final CiTarget target;
-    private final RiRuntime runtime;
-    private final CiAssumptions assumptions;
+    private final TargetDescription target;
+    private final CodeCacheProvider runtime;
+    private final Assumptions assumptions;
 
-    private NodeWorkList changedNodes;
     private StructuredGraph currentGraph;
     private SchedulePhase schedule;
 
@@ -65,7 +64,7 @@ public class PropagateTypeCachePhase extends Phase {
 //        });
 //    }
 
-    public PropagateTypeCachePhase(CiTarget target, RiRuntime runtime, CiAssumptions assumptions) {
+    public PropagateTypeCachePhase(TargetDescription target, CodeCacheProvider runtime, Assumptions assumptions) {
         this.target = target;
         this.runtime = runtime;
         this.assumptions = assumptions;
@@ -99,24 +98,31 @@ public class PropagateTypeCachePhase extends Phase {
             }
         }
         for (FixedGuardNode guard : graph.getNodes(FixedGuardNode.class)) {
-            for (int i = 0; i < guard.conditions().size(); i++) {
-                BooleanNode condition = guard.conditions().get(i);
-                if (condition != null && condition.usages().size() > 1) {
-                    BooleanNode clone = (BooleanNode) condition.copyWithInputs();
-                    if (DUMP) {
-                        out.println("replaced!! " + clone);
-                    }
-                    guard.conditions().set(i, clone);
+            BooleanNode condition = guard.condition();
+            if (condition != null && condition.usages().size() > 1) {
+                BooleanNode clone = (BooleanNode) condition.copyWithInputs();
+                if (DUMP) {
+                    out.println("replaced!! " + clone);
                 }
+                guard.setCondition(clone);
             }
         }
 
-        changedNodes = graph.createNodeWorkList(false, 10);
 
         schedule = new SchedulePhase();
         schedule.apply(graph);
 
+        final NodeBitMap changedNodes = graph.createNodeBitMap(true);
+        graph.trackInputChange(new InputChangedListener() {
+            @Override
+            public void inputChanged(Node node) {
+                changedNodes.mark(node);
+            }
+        });
+
         new Iterator().apply(schedule.getCFG().getStartBlock());
+
+        graph.stopTrackingInputChange();
 
         Debug.dump(graph, "After PropagateType iteration");
         if (changes > 0) {
@@ -124,7 +130,8 @@ public class PropagateTypeCachePhase extends Phase {
 //            out.println(graph.method() + ": " + changes + " changes");
         }
 
-        CanonicalizerPhase.canonicalize(graph, changedNodes, runtime, target, assumptions);
+        new CanonicalizerPhase(target, runtime, assumptions, changedNodes, null).apply(graph);
+
 // outputGraph(graph);
     }
 
@@ -218,7 +225,7 @@ public class PropagateTypeCachePhase extends Phase {
                             if (canonical.dependencies.length > 0) {
                                 for (Node usage : node.usages()) {
                                     if (usage instanceof ValueNode) {
-                                        for (Node dependency : canonical.dependencies) {
+                                        for (ValueNode dependency : canonical.dependencies) {
                                             // TODO(lstadler) dead dependencies should be handled differently
                                             if (dependency.isAlive()) {
                                                 ((ValueNode) usage).dependencies().add(dependency);
@@ -228,12 +235,16 @@ public class PropagateTypeCachePhase extends Phase {
                                 }
                             }
                             ValueNode replacement = canonical.replacement;
-                            currentGraph.replaceFloating((FloatingNode) node, replacement);
-                            changedNodes.addAll(replacement.usages());
+                            if (node instanceof FloatingNode) {
+                                currentGraph.replaceFloating((FloatingNode) node, replacement);
+                            } else {
+                                assert node instanceof FixedWithNextNode;
+                                currentGraph.replaceFixed((FixedWithNextNode) node, replacement);
+                            }
                         }
                     }
                     if (node.isAlive() && node instanceof TypeFeedbackProvider) {
-                        changed.node = node;
+                        changed.node = (ValueNode) node;
                         ((TypeFeedbackProvider) node).typeFeedback(cache);
                         if (DUMP) {
                             out.println("  " + cache);

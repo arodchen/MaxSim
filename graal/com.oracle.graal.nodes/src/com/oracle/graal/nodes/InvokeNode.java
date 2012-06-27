@@ -24,7 +24,8 @@ package com.oracle.graal.nodes;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
@@ -34,12 +35,11 @@ import com.oracle.graal.nodes.util.*;
 /**
  * The {@code InvokeNode} represents all kinds of method calls.
  */
-public final class InvokeNode extends AbstractStateSplit implements Node.IterableNodeType, Invoke, LIRLowerable, MemoryCheckpoint  {
+public final class InvokeNode extends AbstractStateSplit implements StateSplit, Node.IterableNodeType, Invoke, LIRLowerable, MemoryCheckpoint  {
 
     @Input private final MethodCallTargetNode callTarget;
     private final int bci;
-    // megamorph should only be true when the compiler is sure that the call site is megamorph, and false when in doubt
-    private boolean megamorph;
+    private boolean megamorphic;
     private boolean useForInlining;
     private final long leafGraphId;
 
@@ -56,7 +56,7 @@ public final class InvokeNode extends AbstractStateSplit implements Node.Iterabl
         this.callTarget = callTarget;
         this.bci = bci;
         this.leafGraphId = leafGraphId;
-        this.megamorph = false;
+        this.megamorphic = false;
         this.useForInlining = true;
     }
 
@@ -65,13 +65,13 @@ public final class InvokeNode extends AbstractStateSplit implements Node.Iterabl
     }
 
     @Override
-    public boolean megamorph() {
-        return megamorph;
+    public boolean isMegamorphic() {
+        return megamorphic;
     }
 
     @Override
-    public void setMegamorph(boolean megamorph) {
-        this.megamorph = megamorph;
+    public void setMegamorphic(boolean value) {
+        this.megamorphic = value;
     }
 
     public boolean useForInlining() {
@@ -92,7 +92,7 @@ public final class InvokeNode extends AbstractStateSplit implements Node.Iterabl
     public Map<Object, Object> getDebugProperties() {
         Map<Object, Object> debugProperties = super.getDebugProperties();
         if (callTarget != null && callTarget.targetMethod() != null) {
-            debugProperties.put("targetMethod", CiUtil.format("%h.%n(%p)", callTarget.targetMethod()));
+            debugProperties.put("targetMethod", CodeUtil.format("%h.%n(%p)", callTarget.targetMethod()));
         }
         return debugProperties;
     }
@@ -128,13 +128,14 @@ public final class InvokeNode extends AbstractStateSplit implements Node.Iterabl
     @Override
     public FrameState stateDuring() {
         FrameState stateAfter = stateAfter();
-        FrameState stateDuring = stateAfter.duplicateModified(bci(), stateAfter.rethrowException(), this.callTarget.targetMethod().signature().returnKind(false));
+        FrameState stateDuring = stateAfter.duplicateModified(bci(), stateAfter.rethrowException(), this.callTarget.targetMethod().signature().returnKind());
         stateDuring.setDuringCall(true);
         return stateDuring;
     }
 
     @Override
     public void intrinsify(Node node) {
+        assert !(node instanceof ValueNode) || ((ValueNode) node).kind().isVoid() == kind().isVoid();
         MethodCallTargetNode call = callTarget;
         FrameState stateAfter = stateAfter();
         if (node instanceof StateSplit) {
@@ -142,13 +143,13 @@ public final class InvokeNode extends AbstractStateSplit implements Node.Iterabl
             stateSplit.setStateAfter(stateAfter);
         }
         if (node == null) {
-            assert kind() == CiKind.Void && usages().isEmpty();
+            assert kind() == Kind.Void && usages().isEmpty();
             ((StructuredGraph) graph()).removeFixed(this);
         } else {
             if (node instanceof FixedWithNextNode) {
                 ((StructuredGraph) graph()).replaceFixedWithFixed(this, (FixedWithNextNode) node);
             } else if (node instanceof DeoptimizeNode) {
-                this.replaceAtPredecessors(node);
+                this.replaceAtPredecessor(node);
                 this.replaceAtUsages(null);
                 GraphUtil.killCFG(this);
                 return;

@@ -22,8 +22,7 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.max.cri.ri.*;
-import com.oracle.graal.cri.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
@@ -32,37 +31,76 @@ import com.oracle.graal.nodes.type.*;
 /**
  * The {@code UnsafeCastNode} produces the same value as its input, but with a different type.
  */
-public final class UnsafeCastNode extends FloatingNode implements Canonicalizable, Lowerable {
+public final class UnsafeCastNode extends FloatingNode implements Canonicalizable, LIRLowerable {
 
     @Input private ValueNode object;
-    private RiResolvedType toType;
+    private ResolvedJavaType toType;
 
     public ValueNode object() {
         return object;
     }
 
-    public UnsafeCastNode(ValueNode object, RiResolvedType toType) {
-        super(StampFactory.declared(toType));
+    public UnsafeCastNode(ValueNode object, ResolvedJavaType toType, boolean exactType, boolean nonNull) {
+        super(toType.kind().isObject() ? new ObjectStamp(toType, exactType, nonNull) : StampFactory.forKind(toType.kind()));
+        this.object = object;
+        this.toType = toType;
+    }
+
+    public UnsafeCastNode(ValueNode object, ResolvedJavaType toType) {
+        super(toType.kind().isObject() ? StampFactory.declared(toType, object.stamp().nonNull()) : StampFactory.forKind(toType.kind()));
         this.object = object;
         this.toType = toType;
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
-        if (object != null && object.declaredType() != null && object.declaredType().isSubtypeOf(toType)) {
-            return object;
+        if (object != null) {
+            if (object.kind().isObject()) {
+                if (object.objectStamp().type() != null && object.objectStamp().type().isSubtypeOf(toType)) {
+                    if (!isNarrower(objectStamp(), object.objectStamp())) {
+                        return object;
+                    }
+                }
+            } else if (object.kind() == kind()) {
+                // Removes redundant casts introduced by WordTypeRewriterPhase
+                return object;
+            }
         }
         return this;
     }
 
-    @Override
-    public void lower(CiLoweringTool tool) {
-        ((StructuredGraph) graph()).replaceFloating(this, object);
+    /**
+     * Determines if one object stamp is narrower than another in terms of nullness and exactness.
+     *
+     * @return true if x is definitely non-null and y's nullness is unknown OR
+     *                  x's type is exact and the exactness of y's type is unknown
+     */
+    private static boolean isNarrower(ObjectStamp x, ObjectStamp y) {
+        if (x.nonNull() && !y.nonNull()) {
+            return true;
+        }
+        if (x.isExactType() && !y.isExactType()) {
+            return true;
+        }
+        return false;
     }
 
     @SuppressWarnings("unused")
     @NodeIntrinsic
     public static <T> T cast(Object object, @ConstantNodeParameter Class<?> toType) {
         throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
+    }
+
+    @SuppressWarnings("unused")
+    @NodeIntrinsic
+    public static <T> T cast(Object object, @ConstantNodeParameter Class<?> toType, @ConstantNodeParameter boolean exactType, @ConstantNodeParameter boolean nonNull) {
+        throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
+    }
+
+    @Override
+    public void generate(LIRGeneratorTool generator) {
+        Value result = generator.newVariable(kind());
+        generator.emitMove(generator.operand(object), result);
+        generator.setResult(this, result);
     }
 }

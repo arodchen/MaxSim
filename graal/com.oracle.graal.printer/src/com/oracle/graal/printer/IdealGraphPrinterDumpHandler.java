@@ -26,9 +26,9 @@ import java.io.*;
 import java.net.*;
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
 import com.oracle.max.criutils.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 
@@ -123,7 +123,7 @@ public class IdealGraphPrinterDumpHandler implements DebugDumpHandler {
                 for (int i = 0; i < inlineContext.size(); ++i) {
                     if (i >= previousInlineContext.size() || !inlineContext.get(i).equals(previousInlineContext.get(i))) {
                         for (int j = i; j < inlineContext.size(); ++j) {
-                            openScope(inlineContext.get(j));
+                            openScope(inlineContext.get(j), j == 0);
                         }
                         break;
                     }
@@ -148,19 +148,24 @@ public class IdealGraphPrinterDumpHandler implements DebugDumpHandler {
     private static List<String> getInlineContext() {
         List<String> result = new ArrayList<>();
         for (Object o : Debug.context()) {
-            if (o instanceof RiResolvedMethod) {
-                RiResolvedMethod method = (RiResolvedMethod) o;
-                result.add(CiUtil.format("%H::%n(%p)", method));
+            if (o instanceof ResolvedJavaMethod) {
+                ResolvedJavaMethod method = (ResolvedJavaMethod) o;
+                result.add(CodeUtil.format("%H::%n(%p)", method));
             } else if (o instanceof DebugDumpScope) {
                 DebugDumpScope debugDumpScope = (DebugDumpScope) o;
-                result.add(debugDumpScope.getName());
+                if (debugDumpScope.decorator && !result.isEmpty()) {
+                    result.set(result.size() - 1, debugDumpScope.name + ":" + result.get(result.size() - 1));
+                } else {
+                    result.add(debugDumpScope.name);
+                }
             }
         }
         return result;
     }
 
-    private void openScope(String name) {
-        printer.beginGroup(name, name, Debug.contextLookup(RiResolvedMethod.class), -1);
+    private void openScope(String name, boolean showThread) {
+        String prefix = showThread ? Thread.currentThread().getName() + ":" : "";
+        printer.beginGroup(prefix + name, name, Debug.contextLookup(ResolvedJavaMethod.class), -1);
     }
 
     private void closeScope() {

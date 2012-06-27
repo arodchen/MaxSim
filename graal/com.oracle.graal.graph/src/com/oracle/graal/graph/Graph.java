@@ -34,7 +34,7 @@ import com.oracle.graal.graph.iterators.*;
  */
 public class Graph {
 
-    protected final String name;
+    public final String name;
 
     private static final boolean TIME_TRAVEL = false;
 
@@ -45,11 +45,10 @@ public class Graph {
     private final ArrayList<Node> nodeCacheFirst;
     private final ArrayList<Node> nodeCacheLast;
     private int deletedNodeCount;
-    private int mark;
     private GraphEventLog eventLog;
 
     ArrayList<Node> usagesDropped = new ArrayList<>();
-    NodeWorkList inputChanged;
+    InputChangedListener inputChanged;
     private final HashMap<CacheEntry, Node> cachedNodes = new HashMap<>();
 
     private static final class CacheEntry {
@@ -160,8 +159,12 @@ public class Graph {
         return result;
     }
 
-    public void trackInputChange(NodeWorkList worklist) {
-        this.inputChanged = worklist;
+    public interface InputChangedListener {
+        void inputChanged(Node node);
+    }
+
+    public void trackInputChange(InputChangedListener inputChangedListener) {
+        this.inputChanged = inputChangedListener;
     }
 
     public void stopTrackingInputChange() {
@@ -206,11 +209,22 @@ public class Graph {
                             return usage;
                         }
                     }
-                    break;
+                    return null;
                 }
             }
         }
-        return null;
+        CacheEntry key = new CacheEntry(node);
+        Node cachedNode = cachedNodes.get(key);
+        if (cachedNode != null) {
+            if (!cachedNode.isAlive()) {
+                cachedNodes.remove(key);
+                return null;
+            }
+            return cachedNode != node ? cachedNode : null;
+        } else {
+            cachedNodes.put(key, node);
+            return null;
+        }
     }
 
     private static boolean checkValueNumberable(Node node) {
@@ -220,8 +234,11 @@ public class Graph {
         return true;
     }
 
-    public void mark() {
-        this.mark = nodeIdCount();
+    /**
+     * Gets a mark that can be used with {@link #getNewNodes()}.
+     */
+    public int getMark() {
+        return nodeIdCount();
     }
 
     private class NodeIterator implements Iterator<Node> {
@@ -274,12 +291,11 @@ public class Graph {
     }
 
     /**
-     * Returns an {@link Iterable} providing all nodes added since the last {@link Graph#mark() mark}.
-     * @return an {@link Iterable} providing the new nodes
+     * Returns an {@link Iterable} providing all nodes added since the last {@link Graph#getMark() mark}.
      */
-    public NodeIterable<Node> getNewNodes() {
-        final int index = this.mark;
-        return new NodeIterable<Node>() {
+    public NodeIterable<Node> getNewNodes(int mark) {
+        final int index = mark;
+        return new AbstractNodeIterable<Node>() {
             @Override
             public Iterator<Node> iterator() {
                 return new NodeIterator(index);
@@ -292,10 +308,19 @@ public class Graph {
      * @return an {@link Iterable} providing all the live nodes.
      */
     public NodeIterable<Node> getNodes() {
-        return new NodeIterable<Node>() {
+        return new AbstractNodeIterable<Node>() {
             @Override
             public Iterator<Node> iterator() {
                 return new NodeIterator();
+            }
+
+            @SuppressWarnings("unchecked")
+            @Override
+            public <F extends Node> NodeIterable<F> filter(Class<F> clazz) {
+                if (IterableNodeType.class.isAssignableFrom(clazz)) {
+                    return getNodes((Class) clazz);
+                }
+                return super.filter(clazz);
             }
         };
     }
@@ -360,7 +385,7 @@ public class Graph {
      */
     public <T extends Node & IterableNodeType> NodeIterable<T> getNodes(final Class<T> type) {
         final Node start = getStartNode(type);
-        return new NodeIterable<T>() {
+        return new AbstractNodeIterable<T>() {
             @Override
             public Iterator<T> iterator() {
                 return new TypedNodeIterator<>(start);
@@ -385,7 +410,11 @@ public class Graph {
     }
 
     public NodeBitMap createNodeBitMap() {
-        return new NodeBitMap(this);
+        return createNodeBitMap(false);
+    }
+
+    public NodeBitMap createNodeBitMap(boolean autoGrow) {
+        return new NodeBitMap(this, autoGrow);
     }
 
     public <T> NodeMap<T> createNodeMap() {
@@ -500,7 +529,45 @@ public class Graph {
      * @param replacements the replacement map (can be null if no replacement is to be performed)
      * @return a map which associates the original nodes from {@code nodes} to their duplicates
      */
-    public Map<Node, Node> addDuplicates(Iterable<Node> newNodes, Map<Node, Node> replacements) {
+    public Map<Node, Node> addDuplicates(Iterable<Node> newNodes, Map<Node, Node> replacementsMap) {
+        DuplicationReplacement replacements;
+        if (replacementsMap == null) {
+            replacements = null;
+        } else {
+            replacements = new MapReplacement(replacementsMap);
+        }
+        return addDuplicates(newNodes, replacements);
+    }
+
+    public interface DuplicationReplacement {
+        Node replacement(Node original);
+    }
+
+    private static final class MapReplacement implements DuplicationReplacement {
+        private final Map<Node, Node> map;
+        public MapReplacement(Map<Node, Node> map) {
+            this.map = map;
+        }
+        @Override
+        public Node replacement(Node original) {
+            Node replacement = map.get(original);
+            return replacement != null ? replacement : original;
+        }
+
+    }
+
+    private static final DuplicationReplacement NO_REPLACEMENT = new DuplicationReplacement() {
+        @Override
+        public Node replacement(Node original) {
+            return original;
+        }
+    };
+
+    @SuppressWarnings("all")
+    public Map<Node, Node> addDuplicates(Iterable<Node> newNodes, DuplicationReplacement replacements) {
+        if (replacements == null) {
+            replacements = NO_REPLACEMENT;
+        }
         return NodeClass.addGraphDuplicate(this, newNodes, replacements);
     }
 }

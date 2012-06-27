@@ -25,7 +25,7 @@ package com.oracle.graal.lir;
 import java.util.*;
 
 import com.oracle.max.asm.*;
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.asm.*;
 
@@ -35,7 +35,16 @@ import com.oracle.graal.lir.asm.*;
  */
 public class StandardOp {
 
-    private static CiValue[] EMPTY = new CiValue[0];
+    private static Value[] EMPTY = new Value[0];
+
+    /**
+     * Marker interface for LIR ops that can fall through to the next operation, like a switch statement.
+     * setFallThroughTarget(null) can be used to make the operation fall through to the next one.
+     */
+    public interface FallThroughOp {
+        LabelRef fallThroughTarget();
+        void setFallThroughTarget(LabelRef target);
+    }
 
     /**
      * LIR operation that defines the position of a label.
@@ -45,7 +54,7 @@ public class StandardOp {
         private final Label label;
         private final boolean align;
 
-        protected LabelOp(Object opcode, CiValue[] outputs, LIRDebugInfo info, CiValue[] inputs, CiValue[] alives, CiValue[] temps, Label label, boolean align) {
+        protected LabelOp(Object opcode, Value[] outputs, LIRDebugInfo info, Value[] inputs, Value[] alives, Value[] temps, Label label, boolean align) {
             super(opcode, outputs, info, inputs, alives, temps);
             this.label = label;
             this.align = align;
@@ -79,7 +88,7 @@ public class StandardOp {
     }
 
     public static class PhiLabelOp extends LabelOp {
-        public PhiLabelOp(Label label, boolean align, CiValue[] phiDefinitions) {
+        public PhiLabelOp(Label label, boolean align, Value[] phiDefinitions) {
             super("PHI_LABEL", phiDefinitions, null, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS, label, align);
         }
 
@@ -95,7 +104,7 @@ public class StandardOp {
             outputs = EMPTY;
         }
 
-        public CiValue[] getPhiDefinitions() {
+        public Value[] getPhiDefinitions() {
             return outputs;
         }
     }
@@ -110,7 +119,7 @@ public class StandardOp {
     public static class JumpOp extends LIRInstruction {
         private final LabelRef destination;
 
-        protected JumpOp(Object opcode, CiValue[] outputs, LIRDebugInfo info, CiValue[] inputs, CiValue[] alives, CiValue[] temps, LabelRef destination) {
+        protected JumpOp(Object opcode, Value[] outputs, LIRDebugInfo info, Value[] inputs, Value[] alives, Value[] temps, LabelRef destination) {
             super(opcode, outputs, info, inputs, alives, temps);
             this.destination = destination;
         }
@@ -140,7 +149,7 @@ public class StandardOp {
     }
 
     public static class PhiJumpOp extends JumpOp {
-        public PhiJumpOp(LabelRef destination, CiValue[] phiInputs) {
+        public PhiJumpOp(LabelRef destination, Value[] phiInputs) {
             super("PHI_JUMP", LIRInstruction.NO_OPERANDS, null, LIRInstruction.NO_OPERANDS, phiInputs, LIRInstruction.NO_OPERANDS, destination);
         }
 
@@ -156,7 +165,7 @@ public class StandardOp {
             alives = EMPTY;
         }
 
-        public CiValue[] getPhiInputs() {
+        public Value[] getPhiInputs() {
             return alives;
         }
     }
@@ -174,8 +183,8 @@ public class StandardOp {
      * Marker interface for a LIR operation that moves a value from {@link #getInput()} to {@link #getResult()}.
      */
     public interface MoveOp {
-        CiValue getInput();
-        CiValue getResult();
+        Value getInput();
+        Value getResult();
     }
 
     /**
@@ -191,7 +200,7 @@ public class StandardOp {
      * In particular, it is not the actual method prologue.
      */
     public static final class ParametersOp extends LIRInstruction {
-        public ParametersOp(CiValue[] params) {
+        public ParametersOp(Value[] params) {
             super("PARAMS", params, null, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS, LIRInstruction.NO_OPERANDS);
         }
 

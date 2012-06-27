@@ -24,8 +24,7 @@ package com.oracle.graal.compiler.phases;
 
 import java.lang.reflect.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
@@ -48,18 +47,18 @@ public class IdentifyBoxingPhase extends Phase {
 
     public void tryIntrinsify(Invoke invoke) {
         MethodCallTargetNode callTarget = invoke.callTarget();
-        RiResolvedMethod targetMethod = callTarget.targetMethod();
+        ResolvedJavaMethod targetMethod = callTarget.targetMethod();
         if (pool.isSpecialMethod(targetMethod)) {
             assert callTarget.arguments().size() == 1 : "boxing/unboxing method must have exactly one argument";
-            CiKind returnKind = callTarget.returnKind();
+            Kind returnKind = callTarget.returnKind();
             ValueNode sourceValue = callTarget.arguments().get(0);
 
             // Check whether this is a boxing or an unboxing.
             Node newNode = null;
-            if (returnKind == CiKind.Object) {
+            if (returnKind == Kind.Object) {
                 // We have a boxing method here.
                 assert Modifier.isStatic(targetMethod.accessFlags()) : "boxing method must be static";
-                CiKind sourceKind = targetMethod.signature().argumentKindAt(0, false);
+                Kind sourceKind = targetMethod.signature().argumentKindAt(0);
                 newNode = invoke.graph().add(new BoxNode(sourceValue, targetMethod.holder(), sourceKind, invoke.bci()));
             } else {
                 // We have an unboxing method here.

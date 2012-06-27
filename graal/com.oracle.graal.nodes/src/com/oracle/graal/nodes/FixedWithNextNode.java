@@ -41,4 +41,8 @@ public abstract class FixedWithNextNode extends FixedNode {
     public FixedWithNextNode(Stamp stamp) {
         super(stamp);
     }
+
+    public FixedWithNextNode(Stamp stamp, ValueNode... dependencies) {
+        super(stamp, dependencies);
+    }
 }

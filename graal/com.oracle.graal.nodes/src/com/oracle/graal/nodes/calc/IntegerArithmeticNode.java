@@ -22,16 +22,16 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 
 
 public abstract class IntegerArithmeticNode extends ArithmeticNode {
 
-    public IntegerArithmeticNode(CiKind kind, ValueNode x, ValueNode y) {
+    public IntegerArithmeticNode(Kind kind, ValueNode x, ValueNode y) {
         super(kind, x, y, false);
-        assert kind == CiKind.Int || kind == CiKind.Long;
+        assert kind == Kind.Int || kind == Kind.Long;
     }
 
     public static IntegerAddNode add(ValueNode v1, ValueNode v2) {
@@ -39,11 +39,11 @@ public abstract class IntegerArithmeticNode extends ArithmeticNode {
         Graph graph = v1.graph();
         switch(v1.kind()) {
             case Int:
-                return graph.unique(new IntegerAddNode(CiKind.Int, v1, v2));
+                return graph.unique(new IntegerAddNode(Kind.Int, v1, v2));
             case Long:
-                return graph.unique(new IntegerAddNode(CiKind.Long, v1, v2));
+                return graph.unique(new IntegerAddNode(Kind.Long, v1, v2));
             default:
-                throw ValueUtil.shouldNotReachHere();
+                throw ValueNodeUtil.shouldNotReachHere();
         }
     }
 
@@ -52,11 +52,37 @@ public abstract class IntegerArithmeticNode extends ArithmeticNode {
         Graph graph = v1.graph();
         switch(v1.kind()) {
             case Int:
-                return graph.unique(new IntegerMulNode(CiKind.Int, v1, v2));
+                return graph.unique(new IntegerMulNode(Kind.Int, v1, v2));
             case Long:
-                return graph.unique(new IntegerMulNode(CiKind.Long, v1, v2));
+                return graph.unique(new IntegerMulNode(Kind.Long, v1, v2));
             default:
-                throw ValueUtil.shouldNotReachHere();
+                throw ValueNodeUtil.shouldNotReachHere();
+        }
+    }
+
+    public static IntegerSubNode sub(ValueNode v1, ValueNode v2) {
+        assert v1.kind() == v2.kind() && v1.graph() == v2.graph();
+        Graph graph = v1.graph();
+        switch(v1.kind()) {
+            case Int:
+                return graph.unique(new IntegerSubNode(Kind.Int, v1, v2));
+            case Long:
+                return graph.unique(new IntegerSubNode(Kind.Long, v1, v2));
+            default:
+                throw ValueNodeUtil.shouldNotReachHere();
+        }
+    }
+
+    public static IntegerDivNode div(ValueNode v1, ValueNode v2) {
+        assert v1.kind() == v2.kind() && v1.graph() == v2.graph();
+        Graph graph = v1.graph();
+        switch(v1.kind()) {
+            case Int:
+                return graph.unique(new IntegerDivNode(Kind.Int, v1, v2));
+            case Long:
+                return graph.unique(new IntegerDivNode(Kind.Long, v1, v2));
+            default:
+                throw ValueNodeUtil.shouldNotReachHere();
         }
     }
 }

@@ -22,8 +22,7 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -31,7 +30,7 @@ import com.oracle.graal.nodes.type.*;
 /**
  * This node is used to perform the finalizer registration at the end of the java.lang.Object constructor.
  */
-public final class RegisterFinalizerNode extends AbstractStateSplit implements Canonicalizable, LIRLowerable {
+public final class RegisterFinalizerNode extends AbstractStateSplit implements StateSplit, Canonicalizable, LIRLowerable {
 
     @Input private ValueNode object;
 
@@ -40,33 +39,26 @@ public final class RegisterFinalizerNode extends AbstractStateSplit implements C
     }
 
     public RegisterFinalizerNode(ValueNode object) {
-        super(StampFactory.illegal());
+        super(StampFactory.forVoid());
         this.object = object;
     }
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        gen.emitCallToRuntime(CiRuntimeCall.RegisterFinalizer, true, gen.operand(object()));
+        gen.emitCall(RuntimeCall.RegisterFinalizer, true, gen.operand(object()));
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
-        RiResolvedType declaredType = object.declaredType();
-        RiResolvedType exactType = object.exactType();
-        if (exactType == null && declaredType != null) {
-            exactType = declaredType.exactType();
-        }
+        ObjectStamp stamp = object.objectStamp();
 
         boolean needsCheck = true;
-        if (exactType != null) {
-            // we have an exact type
-            needsCheck = exactType.hasFinalizer();
-        } else {
+        if (stamp.isExactType()) {
+            needsCheck = stamp.type().hasFinalizer();
+        } else if (stamp.type() != null && !stamp.type().hasFinalizableSubclass()) {
             // if either the declared type of receiver or the holder can be assumed to have no finalizers
-            if (declaredType != null && !declaredType.hasFinalizableSubclass()) {
-                if (tool.assumptions() != null && tool.assumptions().recordNoFinalizableSubclassAssumption(declaredType)) {
-                    needsCheck = false;
-                }
+            if (tool.assumptions() != null && tool.assumptions().recordNoFinalizableSubclassAssumption(stamp.type())) {
+                needsCheck = false;
             }
         }
 

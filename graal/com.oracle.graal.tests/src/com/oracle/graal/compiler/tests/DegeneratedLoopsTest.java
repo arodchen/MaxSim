@@ -22,13 +22,10 @@
  */
 package com.oracle.graal.compiler.tests;
 
-import static com.oracle.graal.graph.iterators.NodePredicates.*;
-
 import org.junit.*;
 
 import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 
 /**
@@ -36,13 +33,13 @@ import com.oracle.graal.nodes.*;
  * Then canonicalization is applied and it is verified that the resulting graph is equal to the
  * graph of the method that just has a "return 1" statement in it.
  */
-public class DegeneratedLoopsTest extends GraphTest {
+public class DegeneratedLoopsTest extends GraalCompilerTest {
 
     private static final String REFERENCE_SNIPPET = "referenceSnippet";
 
     @SuppressWarnings("all")
     public static int referenceSnippet(int a) {
-        return 1;
+        return a;
     }
 
     @Test
@@ -76,19 +73,19 @@ public class DegeneratedLoopsTest extends GraphTest {
 
     }
 
-    private void test(String snippet) {
-        StructuredGraph graph = parse(snippet);
-        Debug.dump(graph, "Graph");
-        LocalNode local = graph.getNodes(LocalNode.class).iterator().next();
-        ConstantNode constant = ConstantNode.forInt(0, graph);
-        for (Node n : local.usages().filter(isNotA(FrameState.class)).snapshot()) {
-            n.replaceFirstInput(local, constant);
-        }
-        for (Invoke invoke : graph.getInvokes()) {
-            invoke.intrinsify(null);
-        }
-        new CanonicalizerPhase(null, runtime(), null).apply(graph);
-        StructuredGraph referenceGraph = parse(REFERENCE_SNIPPET); Debug.dump(referenceGraph, "Graph");
-        assertEquals(referenceGraph, graph);
+    private void test(final String snippet) {
+        Debug.scope("DegeneratedLoopsTest", new DebugDumpScope(snippet), new Runnable() {
+            public void run() {
+                StructuredGraph graph = parse(snippet);
+                Debug.dump(graph, "Graph");
+                for (Invoke invoke : graph.getInvokes()) {
+                    invoke.intrinsify(null);
+                }
+                new CanonicalizerPhase(null, runtime(), null).apply(graph);
+                StructuredGraph referenceGraph = parse(REFERENCE_SNIPPET);
+                Debug.dump(referenceGraph, "Graph");
+                assertEquals(referenceGraph, graph);
+            }
+        });
     }
 }

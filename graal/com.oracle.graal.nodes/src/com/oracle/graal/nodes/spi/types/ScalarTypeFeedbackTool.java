@@ -22,15 +22,15 @@
  */
 package com.oracle.graal.nodes.spi.types;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 
 public interface ScalarTypeFeedbackTool {
 
-    void constantBound(Condition condition, CiConstant constant);
+    void constantBound(Condition condition, Constant constant);
 
     void valueBound(Condition condition, ValueNode otherValue, ScalarTypeQuery type);
 
-    void setTranslated(CiConstant delta, ScalarTypeQuery old);
+    void setTranslated(Constant delta, ScalarTypeQuery old);
 }

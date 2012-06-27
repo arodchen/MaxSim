@@ -22,17 +22,21 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.ValueNumberable;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
+/**
+ * A location for a memory access in terms of the kind of value accessed and the displacement
+ * (in bytes) from a base object or address.
+ */
 public class LocationNode extends FloatingNode implements LIRLowerable, ValueNumberable {
 
     private int displacement;
-    private CiKind valueKind;
+    private Kind valueKind;
     private Object locationIdentity;
 
     public static final Object ANY_LOCATION = new Object() {
@@ -48,7 +52,7 @@ public class LocationNode extends FloatingNode implements LIRLowerable, ValueNum
         }
     };
 
-    public static Object getArrayLocation(CiKind elementKind) {
+    public static Object getArrayLocation(Kind elementKind) {
         return elementKind;
     }
 
@@ -56,19 +60,19 @@ public class LocationNode extends FloatingNode implements LIRLowerable, ValueNum
         return displacement;
     }
 
-    public static LocationNode create(Object identity, CiKind kind, int displacement, Graph graph) {
+    public static LocationNode create(Object identity, Kind kind, int displacement, Graph graph) {
         return graph.unique(new LocationNode(identity, kind, displacement));
     }
 
-    protected LocationNode(Object identity, CiKind kind, int displacement) {
-        super(StampFactory.illegal());
-        assert kind != CiKind.Illegal && kind != CiKind.Void;
+    protected LocationNode(Object identity, Kind kind, int displacement) {
+        super(StampFactory.extension());
+        assert kind != Kind.Illegal && kind != Kind.Void;
         this.displacement = displacement;
         this.valueKind = kind;
         this.locationIdentity = identity;
     }
 
-    public CiKind getValueKind() {
+    public Kind getValueKind() {
         return valueKind;
     }
 

@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.max.cri.ci.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.type.*;
@@ -43,7 +42,7 @@ import com.oracle.graal.nodes.type.*;
  * {@link MonitorEnterNode}. Optimization phases are free to throw {@link CiBailout} if they detect such cases.
  * Otherwise, they are detected during LIR construction.
  */
-public abstract class AccessMonitorNode extends AbstractStateSplit implements MemoryCheckpoint {
+public abstract class AccessMonitorNode extends AbstractStateSplit implements StateSplit, MemoryCheckpoint {
 
     @Input private ValueNode object;
     private boolean eliminated;
@@ -66,7 +65,7 @@ public abstract class AccessMonitorNode extends AbstractStateSplit implements Me
      * @param object the instruction producing the object
      */
     public AccessMonitorNode(ValueNode object) {
-        super(StampFactory.illegal());
+        super(StampFactory.forVoid());
         this.object = object;
     }
 }

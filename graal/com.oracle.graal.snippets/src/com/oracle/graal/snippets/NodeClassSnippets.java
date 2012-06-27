@@ -22,32 +22,35 @@
  */
 package com.oracle.graal.snippets;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.extended.*;
 
 /**
- * Snippets for {@link NodeClass} methods.
+ * Snippets for improving the performance of some critical methods in {@link NodeClass} methods.
+ * These snippets improve the performance by forcing the relevant methods to be inlined
+ * (intrinsification being a special form of inlining) and removing a checked cast.
+ * The latter cannot be done directly in Java code as {@link UnsafeCastNode}
+ * is not available to the project containing {@link NodeClass}.
  */
 @SuppressWarnings("unused")
 @ClassSubstitution(NodeClass.class)
 public class NodeClassSnippets implements SnippetsInterface {
 
-
     private static Node getNode(Node node, long offset) {
-        return UnsafeCastNode.cast(UnsafeLoadNode.load(node, 0, offset, CiKind.Object), Node.class);
+        return UnsafeCastNode.cast(UnsafeLoadNode.load(node, 0, offset, Kind.Object), Node.class);
     }
 
     private static NodeList<Node> getNodeList(Node node, long offset) {
-        return UnsafeCastNode.cast(UnsafeLoadNode.load(node, 0, offset, CiKind.Object), NodeList.class);
+        return UnsafeCastNode.cast(UnsafeLoadNode.load(node, 0, offset, Kind.Object), NodeList.class);
     }
 
     private static void putNode(Node node, long offset, Node value) {
-        UnsafeStoreNode.store(node, 0, offset, value, CiKind.Object);
+        UnsafeStoreNode.store(node, 0, offset, value, Kind.Object);
     }
 
     private static void putNodeList(Node node, long offset, NodeList value) {
-        UnsafeStoreNode.store(node, 0, offset, value, CiKind.Object);
+        UnsafeStoreNode.store(node, 0, offset, value, Kind.Object);
     }
 
 }

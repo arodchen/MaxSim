@@ -22,8 +22,7 @@
  */
 package com.oracle.graal.compiler.types;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.types.*;
@@ -38,7 +37,7 @@ public class NegateObjectTypeFeedback implements ObjectTypeFeedbackTool {
     }
 
     @Override
-    public void constantBound(Condition condition, CiConstant constant) {
+    public void constantBound(Condition condition, Constant constant) {
         delegate.constantBound(condition.negate(), constant);
     }
 
@@ -48,22 +47,22 @@ public class NegateObjectTypeFeedback implements ObjectTypeFeedbackTool {
     }
 
     @Override
-    public void declaredType(RiResolvedType type, boolean nonNull) {
+    public void declaredType(ResolvedJavaType type, boolean nonNull) {
         delegate.notDeclaredType(type, nonNull);
     }
 
     @Override
-    public void exactType(RiResolvedType type) {
+    public void exactType(ResolvedJavaType type) {
         delegate.notExactType(type);
     }
 
     @Override
-    public void notDeclaredType(RiResolvedType type, boolean includesNull) {
+    public void notDeclaredType(ResolvedJavaType type, boolean includesNull) {
         delegate.declaredType(type, includesNull);
     }
 
     @Override
-    public void notExactType(RiResolvedType type) {
+    public void notExactType(ResolvedJavaType type) {
         delegate.exactType(type);
     }
 

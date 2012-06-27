@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.snippets;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.snippets.nodes.*;
 import com.oracle.graal.snippets.nodes.MathIntrinsicNode.Operation;
@@ -61,7 +61,7 @@ public class MathSnippetsX86 implements SnippetsInterface {
         if (abs(x) < PI_4) {
             return MathIntrinsicNode.compute(x, Operation.SIN);
         } else {
-            return RuntimeCallNode.performCall(CiRuntimeCall.ArithmeticSin, x);
+            return RuntimeCallNode.callDouble(RuntimeCall.ArithmeticSin, x);
         }
     }
 
@@ -69,7 +69,7 @@ public class MathSnippetsX86 implements SnippetsInterface {
         if (abs(x) < PI_4) {
             return MathIntrinsicNode.compute(x, Operation.COS);
         } else {
-            return RuntimeCallNode.performCall(CiRuntimeCall.ArithmeticCos, x);
+            return RuntimeCallNode.callDouble(RuntimeCall.ArithmeticCos, x);
         }
     }
 
@@ -77,7 +77,7 @@ public class MathSnippetsX86 implements SnippetsInterface {
         if (abs(x) < PI_4) {
             return MathIntrinsicNode.compute(x, Operation.TAN);
         } else {
-            return RuntimeCallNode.performCall(CiRuntimeCall.ArithmeticTan, x);
+            return RuntimeCallNode.callDouble(RuntimeCall.ArithmeticTan, x);
         }
     }
 

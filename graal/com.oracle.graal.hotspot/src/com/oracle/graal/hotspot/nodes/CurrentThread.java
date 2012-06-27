@@ -23,7 +23,8 @@
 package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.max.asm.target.amd64.*;
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -32,19 +33,19 @@ public final class CurrentThread extends FloatingNode implements LIRLowerable {
 
     private int threadObjectOffset;
 
-    public CurrentThread(int threadObjectOffset) {
-        super(StampFactory.forKind(CiKind.Object));
+    public CurrentThread(int threadObjectOffset, CodeCacheProvider runtime) {
+        super(StampFactory.declaredNonNull(runtime.getResolvedJavaType(Thread.class)));
         this.threadObjectOffset = threadObjectOffset;
     }
 
     @Override
     public void generate(LIRGeneratorTool generator) {
-        generator.setResult(this, generator.emitLoad(new CiAddress(CiKind.Object, AMD64.r15.asValue(generator.target().wordKind), threadObjectOffset), false));
+        generator.setResult(this, generator.emitLoad(new Address(Kind.Object, AMD64.r15.asValue(generator.target().wordKind), threadObjectOffset), false));
     }
 
     @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static Object get(int threadObjectOffset) {
+    public static Object get(@ConstantNodeParameter int threadObjectOffset) {
         throw new UnsupportedOperationException();
     }
 }

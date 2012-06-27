@@ -26,8 +26,9 @@ import static com.oracle.graal.alloc.util.LocationUtil.*;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.criutils.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.util.*;
 import com.oracle.graal.graph.*;
@@ -399,30 +400,30 @@ public final class Interval {
     }
 
     /**
-     * The {@linkplain CiRegisterValue register} or {@linkplain Variable variable} for this interval prior to register allocation.
+     * The {@linkplain RegisterValue register} or {@linkplain Variable variable} for this interval prior to register allocation.
      */
-    public final CiValue operand;
+    public final Value operand;
 
     /**
-     * The {@linkplain OperandPool#operandNumber(CiValue) operand number} for this interval's {@linkplain #operand operand}.
+     * The {@linkplain OperandPool#operandNumber(Value) operand number} for this interval's {@linkplain #operand operand}.
      */
     public final int operandNumber;
 
     /**
-     * The {@linkplain CiRegisterValue register}, {@linkplain CiStackSlot spill slot} or {@linkplain CiAddress address} assigned to this interval.
+     * The {@linkplain RegisterValue register}, {@linkplain StackSlot spill slot} or {@linkplain Address address} assigned to this interval.
      */
-    private CiValue location;
+    private Value location;
 
     /**
      * The stack slot to which all splits of this interval are spilled if necessary.
      */
-    private CiStackSlot spillSlot;
+    private StackSlot spillSlot;
 
     /**
      * The kind of this interval.
      * Only valid if this is a {@linkplain #xxisVariable() variable}.
      */
-    private CiKind kind;
+    private Kind kind;
 
     /**
      * The head of the list of ranges describing this interval. This list is sorted by {@linkplain LIRInstruction#id instruction ids}.
@@ -486,37 +487,37 @@ public final class Interval {
      */
     private Interval locationHint;
 
-    void assignLocation(CiValue newLocation) {
+    void assignLocation(Value newLocation) {
         if (isRegister(newLocation)) {
             assert this.location == null : "cannot re-assign location for " + this;
-            if (newLocation.kind == CiKind.Illegal && kind != CiKind.Illegal) {
+            if (newLocation.kind == Kind.Illegal && kind != Kind.Illegal) {
                 this.location = asRegister(newLocation).asValue(kind);
                 return;
             }
         } else {
             assert this.location == null || isRegister(this.location) : "cannot re-assign location for " + this;
             assert isStackSlot(newLocation);
-            assert newLocation.kind != CiKind.Illegal;
+            assert newLocation.kind != Kind.Illegal;
             assert newLocation.kind == this.kind;
         }
         this.location = newLocation;
     }
 
     /**
-     * Gets the {@linkplain CiRegisterValue register}, {@linkplain CiStackSlot spill slot} or {@linkplain CiAddress address} assigned to this interval.
+     * Gets the {@linkplain RegisterValue register}, {@linkplain StackSlot spill slot} or {@linkplain Address address} assigned to this interval.
      */
-    public CiValue location() {
+    public Value location() {
         return location;
     }
 
-    public CiKind kind() {
+    public Kind kind() {
         assert !isRegister(operand) : "cannot access type for fixed interval";
         return kind;
     }
 
-    void setKind(CiKind kind) {
-        assert isRegister(operand) || this.kind() == CiKind.Illegal || this.kind() == kind : "overwriting existing type";
-        assert kind == kind.stackKind() || kind == CiKind.Short : "these kinds should have int type registers";
+    void setKind(Kind kind) {
+        assert isRegister(operand) || this.kind() == Kind.Illegal || this.kind() == kind : "overwriting existing type";
+        assert kind == kind.stackKind() || kind == Kind.Short : "these kinds should have int type registers";
         this.kind = kind;
     }
 
@@ -563,11 +564,11 @@ public final class Interval {
     /**
      * Gets the canonical spill slot for this interval.
      */
-    CiStackSlot spillSlot() {
+    StackSlot spillSlot() {
         return splitParent().spillSlot;
     }
 
-    void setSpillSlot(CiStackSlot slot) {
+    void setSpillSlot(StackSlot slot) {
         assert splitParent().spillSlot == null : "connot overwrite existing spill slot";
         splitParent().spillSlot = slot;
     }
@@ -658,9 +659,9 @@ public final class Interval {
     /**
      * Sentinel interval to denote the end of an interval list.
      */
-    static final Interval EndMarker = new Interval(CiValue.IllegalValue, -1);
+    static final Interval EndMarker = new Interval(Value.IllegalValue, -1);
 
-    Interval(CiValue operand, int operandNumber) {
+    Interval(Value operand, int operandNumber) {
         assert operand != null;
         this.operand = operand;
         this.operandNumber = operandNumber;
@@ -669,7 +670,7 @@ public final class Interval {
         } else {
             assert isIllegal(operand) || isVariable(operand);
         }
-        this.kind = CiKind.Illegal;
+        this.kind = Kind.Illegal;
         this.first = Range.EndMarker;
         this.usePosList = new UsePosList(4);
         this.current = Range.EndMarker;
@@ -800,7 +801,7 @@ public final class Interval {
                     TTY.println(String.format("two valid result intervals found for opId %d: %d and %d", opId, result.operandNumber, interval.operandNumber));
                     TTY.println(result.logString(allocator));
                     TTY.println(interval.logString(allocator));
-                    throw new CiBailout("two valid result intervals found");
+                    throw new BailoutException("two valid result intervals found");
                 }
             }
         }

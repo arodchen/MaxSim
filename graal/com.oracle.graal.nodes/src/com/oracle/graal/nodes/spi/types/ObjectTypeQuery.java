@@ -22,24 +22,23 @@
  */
 package com.oracle.graal.nodes.spi.types;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 
 public interface ObjectTypeQuery extends TypeQuery {
 
-    boolean constantBound(Condition condition, CiConstant constant);
+    boolean constantBound(Condition condition, Constant constant);
 
     boolean valueBound(Condition condition, ValueNode otherValue);
 
-    boolean declaredType(RiResolvedType type);
+    boolean declaredType(ResolvedJavaType type);
 
-    boolean exactType(RiResolvedType type);
+    boolean exactType(ResolvedJavaType type);
 
-    boolean notDeclaredType(RiResolvedType type);
+    boolean notDeclaredType(ResolvedJavaType type);
 
-    boolean notExactType(RiResolvedType type);
+    boolean notExactType(ResolvedJavaType type);
 
     ObjectTypeFeedbackStore store();
 }

@@ -24,8 +24,7 @@ package com.oracle.graal.nodes.spi.types;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -45,7 +44,7 @@ public class ObjectTypeFeedbackStore extends TypeFeedbackStore<ObjectTypeFeedbac
         }
 
         @Override
-        public boolean constantBound(Condition condition, final CiConstant constant) {
+        public boolean constantBound(Condition condition, final Constant constant) {
             assert condition == Condition.EQ || condition == Condition.NE;
             if (condition == Condition.EQ) {
                 return store.prove(Equals.class, new BooleanPredicate<Equals>() {
@@ -85,7 +84,7 @@ public class ObjectTypeFeedbackStore extends TypeFeedbackStore<ObjectTypeFeedbac
         }
 
         @Override
-        public boolean declaredType(final RiResolvedType type) {
+        public boolean declaredType(final ResolvedJavaType type) {
             return store.prove(Info.class, new BooleanPredicate<Info>() {
                 @Override
                 public boolean evaluate(Info element) {
@@ -99,7 +98,7 @@ public class ObjectTypeFeedbackStore extends TypeFeedbackStore<ObjectTypeFeedbac
         }
 
         @Override
-        public boolean exactType(final RiResolvedType type) {
+        public boolean exactType(final ResolvedJavaType type) {
             return store.prove(ObjectTypeExact.class, new BooleanPredicate<ObjectTypeExact>() {
                 @Override
                 public boolean evaluate(ObjectTypeExact element) {
@@ -109,12 +108,12 @@ public class ObjectTypeFeedbackStore extends TypeFeedbackStore<ObjectTypeFeedbac
         }
 
         @Override
-        public boolean notDeclaredType(RiResolvedType type) {
+        public boolean notDeclaredType(ResolvedJavaType type) {
             return false;
         }
 
         @Override
-        public boolean notExactType(final RiResolvedType type) {
+        public boolean notExactType(final ResolvedJavaType type) {
             return store.prove(Info.class, new BooleanPredicate<Info>() {
                 @Override
                 public boolean evaluate(Info element) {
@@ -138,7 +137,7 @@ public class ObjectTypeFeedbackStore extends TypeFeedbackStore<ObjectTypeFeedbac
         }
 
         @Override
-        public Node dependency() {
+        public ValueNode dependency() {
             return store.dependency;
         }
     }
@@ -150,9 +149,9 @@ public class ObjectTypeFeedbackStore extends TypeFeedbackStore<ObjectTypeFeedbac
     }
 
     private static final class Equals extends Info {
-        public final CiConstant constant;
+        public final Constant constant;
 
-        public Equals(CiConstant constant) {
+        public Equals(Constant constant) {
             this.constant = constant;
         }
 
@@ -163,9 +162,9 @@ public class ObjectTypeFeedbackStore extends TypeFeedbackStore<ObjectTypeFeedbac
     }
 
     private static final class NotEquals extends Info {
-        public final CiConstant constant;
+        public final Constant constant;
 
-        public NotEquals(CiConstant constant) {
+        public NotEquals(Constant constant) {
             this.constant = constant;
         }
 
@@ -176,16 +175,16 @@ public class ObjectTypeFeedbackStore extends TypeFeedbackStore<ObjectTypeFeedbac
     }
 
     private static class ObjectType extends Info {
-        public final RiResolvedType type;
+        public final ResolvedJavaType type;
 
-        public ObjectType(RiResolvedType type) {
+        public ObjectType(ResolvedJavaType type) {
             this.type = type;
         }
     }
 
     private static final class ObjectTypeDeclared extends ObjectType {
 
-        public ObjectTypeDeclared(RiResolvedType type) {
+        public ObjectTypeDeclared(ResolvedJavaType type) {
             super(type);
         }
 
@@ -197,7 +196,7 @@ public class ObjectTypeFeedbackStore extends TypeFeedbackStore<ObjectTypeFeedbac
 
     private static final class ObjectTypeExact extends ObjectType {
 
-        public ObjectTypeExact(RiResolvedType type) {
+        public ObjectTypeExact(ResolvedJavaType type) {
             super(type);
         }
 
@@ -225,7 +224,7 @@ public class ObjectTypeFeedbackStore extends TypeFeedbackStore<ObjectTypeFeedbac
 
     private final TypeFeedbackChanged changed;
 
-    private Node dependency;
+    private ValueNode dependency;
 
     private void updateDependency() {
         dependency = changed.node;
@@ -291,7 +290,7 @@ public class ObjectTypeFeedbackStore extends TypeFeedbackStore<ObjectTypeFeedbac
     }
 
     @Override
-    public void constantBound(Condition condition, CiConstant constant) {
+    public void constantBound(Condition condition, Constant constant) {
         assert condition == Condition.EQ || condition == Condition.NE;
 
         if (condition == Condition.EQ) {
@@ -347,7 +346,7 @@ public class ObjectTypeFeedbackStore extends TypeFeedbackStore<ObjectTypeFeedbac
     }
 
     @Override
-    public void declaredType(RiResolvedType type, boolean nonNull) {
+    public void declaredType(ResolvedJavaType type, boolean nonNull) {
         assert type != null;
 
         for (ListIterator<Info> iter = infos.listIterator(); iter.hasNext();) {
@@ -358,7 +357,7 @@ public class ObjectTypeFeedbackStore extends TypeFeedbackStore<ObjectTypeFeedbac
                 if (typeInfo.type == type && index == 0) {
                     if (index == 0) {
                         if (nonNull) {
-                            constantBound(Condition.NE, CiConstant.NULL_OBJECT);
+                            constantBound(Condition.NE, Constant.NULL_OBJECT);
                         }
                         return;
                     } else {
@@ -370,12 +369,12 @@ public class ObjectTypeFeedbackStore extends TypeFeedbackStore<ObjectTypeFeedbac
         infos.add(new ObjectTypeDeclared(type));
         updateDependency();
         if (nonNull) {
-            constantBound(Condition.NE, CiConstant.NULL_OBJECT);
+            constantBound(Condition.NE, Constant.NULL_OBJECT);
         }
     }
 
     @Override
-    public void exactType(RiResolvedType type) {
+    public void exactType(ResolvedJavaType type) {
         assert type != null;
 
         for (ListIterator<Info> iter = infos.listIterator(); iter.hasNext();) {
@@ -385,7 +384,7 @@ public class ObjectTypeFeedbackStore extends TypeFeedbackStore<ObjectTypeFeedbac
                 ObjectTypeExact typeInfo = (ObjectTypeExact) info;
                 if (typeInfo.type == type && index == 0) {
                     if (index == 0) {
-                        constantBound(Condition.NE, CiConstant.NULL_OBJECT);
+                        constantBound(Condition.NE, Constant.NULL_OBJECT);
                         return;
                     } else {
                         iter.remove();
@@ -395,15 +394,15 @@ public class ObjectTypeFeedbackStore extends TypeFeedbackStore<ObjectTypeFeedbac
         }
         infos.add(new ObjectTypeExact(type));
         updateDependency();
-        constantBound(Condition.NE, CiConstant.NULL_OBJECT);
+        constantBound(Condition.NE, Constant.NULL_OBJECT);
     }
 
     @Override
-    public void notDeclaredType(RiResolvedType type, boolean includesNull) {
+    public void notDeclaredType(ResolvedJavaType type, boolean includesNull) {
     }
 
     @Override
-    public void notExactType(RiResolvedType type) {
+    public void notExactType(ResolvedJavaType type) {
     }
 
     public static ObjectTypeFeedbackStore meet(ObjectTypeFeedbackStore[] others) {

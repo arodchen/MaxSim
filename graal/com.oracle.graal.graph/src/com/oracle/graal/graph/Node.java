@@ -25,6 +25,7 @@ package com.oracle.graal.graph;
 import java.lang.annotation.*;
 import java.util.*;
 
+import com.oracle.graal.graph.Graph.InputChangedListener;
 import com.oracle.graal.graph.NodeClass.*;
 
 
@@ -89,27 +90,6 @@ public abstract class Node implements Cloneable, Formattable {
         Class value() default NodeIntrinsic.class;
     }
 
-
-    /**
-     * Annotates a method replaced by a compile-time constant.
-     * A (resolved) call to the annotated method is replaced
-     * with a constant obtained by calling the annotated method via reflection.
-     *
-     * All arguments to such a method (including the receiver if applicable)
-     * must be compile-time constants.
-     */
-    @Retention(RetentionPolicy.RUNTIME)
-    @Target(ElementType.METHOD)
-    public static @interface Fold {
-    }
-
-
-    @Retention(RetentionPolicy.RUNTIME)
-    @Target(ElementType.METHOD)
-    public static @interface NodePhase {
-        Class value() default NodePhase.class;
-    }
-
     public interface ValueNumberable {}
 
     public interface IterableNodeType {}
@@ -123,7 +103,7 @@ public abstract class Node implements Cloneable, Formattable {
     private NodeUsagesList usages;
     private Node predecessor;
     private int modCount;
-    private NodeClass nodeClass;
+    private final NodeClass nodeClass;
 
     public Node() {
         this.graph = null;
@@ -191,9 +171,9 @@ public abstract class Node implements Cloneable, Formattable {
                 assert assertTrue(result, "not found in usages, old input: %s", oldInput);
             }
             if (newInput != null) {
-                NodeWorkList inputChanged = graph.inputChanged;
+                InputChangedListener inputChanged = graph.inputChanged;
                 if (inputChanged != null) {
-                    inputChanged.addAgain(this);
+                    inputChanged.inputChanged(this);
                 }
                 newInput.usages.add(this);
             }
@@ -201,10 +181,10 @@ public abstract class Node implements Cloneable, Formattable {
     }
 
     /**
-     * Updates the predecessor sets of the given nodes after a successor slot is changed from oldSuccessor to newSuccessor:
+     * Updates the predecessor of the given nodes after a successor slot is changed from oldSuccessor to newSuccessor:
      * removes this node from oldSuccessor's predecessors and adds this node to newSuccessor's predecessors.
      */
-    protected void updatePredecessors(Node oldSuccessor, Node newSuccessor) {
+    protected void updatePredecessor(Node oldSuccessor, Node newSuccessor) {
         assert assertTrue(usages != null, "usages == null while adding %s to %s", newSuccessor, this);
         if (oldSuccessor != newSuccessor) {
             if (oldSuccessor != null) {
@@ -227,7 +207,7 @@ public abstract class Node implements Cloneable, Formattable {
             updateUsages(null, input);
         }
         for (Node successor : successors()) {
-            updatePredecessors(null, successor);
+            updatePredecessor(null, successor);
         }
     }
 
@@ -251,9 +231,9 @@ public abstract class Node implements Cloneable, Formattable {
             boolean result = usage.getNodeClass().replaceFirstInput(usage, this, other);
             assert assertTrue(result, "not found in inputs, usage: %s", usage);
             if (other != null) {
-                NodeWorkList inputChanged = graph.inputChanged;
+                InputChangedListener inputChanged = graph.inputChanged;
                 if (inputChanged != null) {
-                    inputChanged.addAgain(usage);
+                    inputChanged.inputChanged(usage);
                 }
                 other.usages.add(usage);
             }
@@ -261,12 +241,12 @@ public abstract class Node implements Cloneable, Formattable {
         usages.clear();
     }
 
-    public void replaceAtPredecessors(Node other) {
+    public void replaceAtPredecessor(Node other) {
         assert checkReplaceWith(other);
         if (predecessor != null) {
             boolean result = predecessor.getNodeClass().replaceFirstSuccessor(predecessor, this, other);
             assert assertTrue(result, "not found in successors, predecessor: %s", predecessor);
-            predecessor.updatePredecessors(this, other);
+            predecessor.updatePredecessor(this, other);
         }
     }
 
@@ -275,14 +255,14 @@ public abstract class Node implements Cloneable, Formattable {
         if (other != null) {
             clearSuccessors();
             replaceAtUsages(other);
-            replaceAtPredecessors(other);
+            replaceAtPredecessor(other);
         }
         safeDelete();
     }
 
     public void replaceFirstSuccessor(Node oldSuccessor, Node newSuccessor) {
         if (getNodeClass().replaceFirstSuccessor(this, oldSuccessor, newSuccessor)) {
-            updatePredecessors(oldSuccessor, newSuccessor);
+            updatePredecessor(oldSuccessor, newSuccessor);
         }
     }
 

@@ -22,12 +22,13 @@
  */
 package com.oracle.graal.compiler.alloc;
 
-import static com.oracle.max.cri.ci.CiValueUtil.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.criutils.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.lir.*;
 
@@ -41,7 +42,7 @@ final class MoveResolver {
     private LIRInsertionBuffer insertionBuffer; // buffer where moves are inserted
 
     private final List<Interval> mappingFrom;
-    private final List<CiValue> mappingFromOpr;
+    private final List<Value> mappingFromOpr;
     private final List<Interval> mappingTo;
     private boolean multipleReadsAllowed;
     private final int[] registerBlocked;
@@ -106,7 +107,7 @@ final class MoveResolver {
             }
         }
 
-        HashSet<CiValue> usedRegs = new HashSet<>();
+        HashSet<Value> usedRegs = new HashSet<>();
         if (!multipleReadsAllowed) {
             for (i = 0; i < mappingFrom.size(); i++) {
                 Interval interval = mappingFrom.get(i);
@@ -141,7 +142,7 @@ final class MoveResolver {
 
     // mark assignedReg and assignedRegHi of the interval as blocked
     private void blockRegisters(Interval interval) {
-        CiValue location = interval.location();
+        Value location = interval.location();
         if (isRegister(location)) {
             int reg = asRegister(location).number;
             assert multipleReadsAllowed || registerBlocked(reg) == 0 : "register already marked as used";
@@ -151,7 +152,7 @@ final class MoveResolver {
 
     // mark assignedReg and assignedRegHi of the interval as unblocked
     private void unblockRegisters(Interval interval) {
-        CiValue location = interval.location();
+        Value location = interval.location();
         if (isRegister(location)) {
             int reg = asRegister(location).number;
             assert registerBlocked(reg) > 0 : "register already marked as unused";
@@ -164,9 +165,9 @@ final class MoveResolver {
      * or is only blocked by {@code from}.
      */
     private boolean safeToProcessMove(Interval from, Interval to) {
-        CiValue fromReg = from != null ? from.location() : null;
+        Value fromReg = from != null ? from.location() : null;
 
-        CiValue reg = to.location();
+        Value reg = to.location();
         if (isRegister(reg)) {
             if (registerBlocked(asRegister(reg).number) > 1 || (registerBlocked(asRegister(reg).number) == 1 && reg != fromReg)) {
                 return false;
@@ -195,8 +196,8 @@ final class MoveResolver {
         assert fromInterval.kind() == toInterval.kind() : "move between different types";
         assert insertIdx != -1 : "must setup insert position first";
 
-        CiValue fromOpr = fromInterval.operand;
-        CiValue toOpr = toInterval.operand;
+        Value fromOpr = fromInterval.operand;
+        Value toOpr = toInterval.operand;
 
         insertionBuffer.append(insertIdx, allocator.ir.spillMoveFactory.createMove(toOpr, fromOpr));
 
@@ -205,11 +206,11 @@ final class MoveResolver {
         }
     }
 
-    private void insertMove(CiValue fromOpr, Interval toInterval) {
+    private void insertMove(Value fromOpr, Interval toInterval) {
         assert fromOpr.kind == toInterval.kind() : "move between different types";
         assert insertIdx != -1 : "must setup insert position first";
 
-        CiValue toOpr = toInterval.operand;
+        Value toOpr = toInterval.operand;
         insertionBuffer.append(insertIdx, allocator.ir.spillMoveFactory.createMove(toOpr, fromOpr));
 
         if (GraalOptions.TraceLinearScanLevel >= 4) {
@@ -276,7 +277,7 @@ final class MoveResolver {
                 // do not allocate a new spill slot for temporary interval, but
                 // use spill slot assigned to fromInterval. Otherwise moves from
                 // one stack slot to another can happen (not allowed by LIRAssembler
-                CiStackSlot spillSlot = fromInterval.spillSlot();
+                StackSlot spillSlot = fromInterval.spillSlot();
                 if (spillSlot == null) {
                     spillSlot = allocator.frameMap.allocateSpillSlot(spillInterval.kind());
                     fromInterval.setSpillSlot(spillSlot);
@@ -332,11 +333,11 @@ final class MoveResolver {
         assert fromInterval.operand != toInterval.operand : "from and to interval equal: " + fromInterval;
         assert fromInterval.kind() == toInterval.kind();
         mappingFrom.add(fromInterval);
-        mappingFromOpr.add(CiValue.IllegalValue);
+        mappingFromOpr.add(Value.IllegalValue);
         mappingTo.add(toInterval);
     }
 
-    void addMapping(CiValue fromOpr, Interval toInterval) {
+    void addMapping(Value fromOpr, Interval toInterval) {
         if (GraalOptions.TraceLinearScanLevel >= 4) {
             TTY.println("MoveResolver: adding mapping from %s to %d (%s)", fromOpr, toInterval.operandNumber, toInterval.location());
         }

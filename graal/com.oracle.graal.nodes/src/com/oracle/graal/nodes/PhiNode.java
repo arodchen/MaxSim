@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
@@ -33,18 +33,41 @@ import com.oracle.graal.nodes.type.*;
  * and a variable.
  */
 public final class PhiNode extends FloatingNode implements Canonicalizable, Node.IterableNodeType {
+
     public static enum PhiType {
-        Value, // normal value phis
-        Memory, // memory phis
-        Virtual // phis used for VirtualObjectField merges
+        Value(null), // normal value phis
+        Memory(StampFactory.dependency());
+
+        public final Stamp stamp;
+
+        PhiType(Stamp stamp) {
+            this.stamp = stamp;
+        }
     }
 
     @Input(notDataflow = true) private MergeNode merge;
     @Input private final NodeInputList<ValueNode> values = new NodeInputList<>(this);
     private final PhiType type;
 
-    public PhiNode(CiKind kind, MergeNode merge, PhiType type) {
+    /**
+     * Create a value phi ({@link PhiType#Value}) with the specified kind.
+     * @param kind the kind of the value
+     * @param merge the merge that the new phi belongs to
+     */
+    public PhiNode(Kind kind, MergeNode merge) {
         super(StampFactory.forKind(kind));
+        this.type = PhiType.Value;
+        this.merge = merge;
+    }
+
+    /**
+     * Create a non-value phi ({@link PhiType#Memory} or {@link PhiType#Virtual}) with the specified kind.
+     * @param type the type of the new phi
+     * @param merge the merge that the new phi belongs to
+     */
+    public PhiNode(PhiType type, MergeNode merge) {
+        super(type.stamp);
+        assert type.stamp != null : merge + " " + type;
         this.type = type;
         this.merge = merge;
     }
@@ -61,14 +84,17 @@ public final class PhiNode extends FloatingNode implements Canonicalizable, Node
         return values;
     }
 
+    @Override
     public boolean inferStamp() {
-        Stamp newStamp = StampFactory.or(values());
-        if (stamp().equals(newStamp)) {
-            return false;
+        if (type == PhiType.Value) {
+            return inferPhiStamp();
         } else {
-            setStamp(newStamp);
-            return true;
+            return false;
         }
+    }
+
+    public boolean inferPhiStamp() {
+        return updateStamp(StampTool.meet(values()));
     }
 
     @Override
@@ -91,6 +117,18 @@ public final class PhiNode extends FloatingNode implements Canonicalizable, Node
      */
     public ValueNode valueAt(int i) {
         return values.get(i);
+    }
+
+    /**
+     * Sets the value at the given index and makes sure that the values list is large enough.
+     * @param i the index at which to set the value
+     * @param x the new phi input value for the given location
+     */
+    public void initializeValueAt(int i, ValueNode x) {
+        while (values().size() <= i) {
+            values.add(null);
+        }
+        values.set(i, x);
     }
 
     public void setValueAt(int i, ValueNode x) {
@@ -151,6 +189,19 @@ public final class PhiNode extends FloatingNode implements Canonicalizable, Node
                 } else if (differentValue != n) {
                     return null;
                 }
+            }
+        }
+        return differentValue;
+    }
+
+    public ValueNode singleBackValue() {
+        assert merge() instanceof LoopBeginNode;
+        ValueNode differentValue = null;
+        for (ValueNode n : values().subList(merge().forwardEndCount(), values().size())) {
+            if (differentValue == null) {
+                differentValue = n;
+            } else if (differentValue != n) {
+                return null;
             }
         }
         return differentValue;

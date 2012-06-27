@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.cri.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
@@ -31,9 +31,24 @@ import com.oracle.graal.nodes.type.*;
 /**
  * The {@code StoreIndexedNode} represents a write to an array element.
  */
-public final class StoreIndexedNode extends AccessIndexedNode implements Lowerable {
+public final class StoreIndexedNode extends AccessIndexedNode implements StateSplit, Lowerable {
 
     @Input private ValueNode value;
+    @Input(notDataflow = true) private FrameState stateAfter;
+
+    public FrameState stateAfter() {
+        return stateAfter;
+    }
+
+    public void setStateAfter(FrameState x) {
+        assert x == null || x.isAlive() : "frame state must be in a graph";
+        updateUsages(stateAfter, x);
+        stateAfter = x;
+    }
+
+    public boolean hasSideEffect() {
+        return true;
+    }
 
     public ValueNode value() {
         return value;
@@ -43,12 +58,11 @@ public final class StoreIndexedNode extends AccessIndexedNode implements Lowerab
      * Creates a new StoreIndexedNode.
      * @param array the node producing the array
      * @param index the node producing the index
-     * @param length the node producing the length
      * @param elementKind the element type
      * @param value the value to store into the array
      */
-    public StoreIndexedNode(ValueNode array, ValueNode index, ValueNode length, CiKind elementKind, ValueNode value, long leafGraphId) {
-        super(StampFactory.illegal(), array, index, length, elementKind, leafGraphId);
+    public StoreIndexedNode(ValueNode array, ValueNode index, Kind elementKind, ValueNode value, long leafGraphId) {
+        super(StampFactory.forVoid(), array, index, elementKind, leafGraphId);
         this.value = value;
     }
 

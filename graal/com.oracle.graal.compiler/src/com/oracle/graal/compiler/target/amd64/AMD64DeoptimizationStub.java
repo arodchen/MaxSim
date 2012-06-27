@@ -24,23 +24,23 @@ package com.oracle.graal.compiler.target.amd64;
 
 import java.util.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.amd64.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.max.asm.*;
 import com.oracle.max.asm.target.amd64.*;
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
 
 public class AMD64DeoptimizationStub extends AMD64Code {
     public final Label label = new Label();
     public final LIRDebugInfo info;
-    public final RiDeoptAction action;
-    public final RiDeoptReason reason;
+    public final DeoptimizationAction action;
+    public final DeoptimizationReason reason;
     public final Object deoptInfo;
 
-    public AMD64DeoptimizationStub(RiDeoptAction action, RiDeoptReason reason, LIRDebugInfo info, Object deoptInfo) {
+    public AMD64DeoptimizationStub(DeoptimizationAction action, DeoptimizationReason reason, LIRDebugInfo info, Object deoptInfo) {
         this.action = action;
         this.reason = reason;
         this.info = info;
@@ -52,20 +52,20 @@ public class AMD64DeoptimizationStub extends AMD64Code {
     @Override
     public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
         // TODO (cwimmer): we want to get rid of a generally reserved scratch register.
-        CiRegister scratch = tasm.frameMap.registerConfig.getScratchRegister();
+        Register scratch = tasm.frameMap.registerConfig.getScratchRegister();
 
         masm.bind(label);
         if (GraalOptions.CreateDeoptInfo && deoptInfo != null) {
             masm.nop();
             keepAlive.add(deoptInfo.toString());
-            AMD64Move.move(tasm, masm, scratch.asValue(), CiConstant.forObject(deoptInfo));
+            AMD64Move.move(tasm, masm, scratch.asValue(), Constant.forObject(deoptInfo));
             // TODO Make this an explicit calling convention instead of using a scratch register
-            AMD64Call.directCall(tasm, masm, CiRuntimeCall.SetDeoptInfo, info);
+            AMD64Call.directCall(tasm, masm, RuntimeCall.SetDeoptInfo, info);
         }
 
         masm.movl(scratch, tasm.runtime.encodeDeoptActionAndReason(action, reason));
         // TODO Make this an explicit calling convention instead of using a scratch register
-        AMD64Call.directCall(tasm, masm, CiRuntimeCall.Deoptimize, info);
+        AMD64Call.directCall(tasm, masm, RuntimeCall.Deoptimize, info);
         AMD64Call.shouldNotReachHere(tasm, masm);
     }
 

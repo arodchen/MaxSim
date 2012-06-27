@@ -22,7 +22,8 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
@@ -30,7 +31,7 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo(shortName = "%")
 public final class IntegerRemNode extends IntegerArithmeticNode implements Canonicalizable, LIRLowerable {
 
-    public IntegerRemNode(CiKind kind, ValueNode x, ValueNode y) {
+    public IntegerRemNode(Kind kind, ValueNode x, ValueNode y) {
         super(kind, x, y);
     }
 
@@ -41,16 +42,18 @@ public final class IntegerRemNode extends IntegerArithmeticNode implements Canon
             if (yConst == 0) {
                 return this; // this will trap, can not canonicalize
             }
-            if (kind() == CiKind.Int) {
+            if (kind() == Kind.Int) {
                 return ConstantNode.forInt(x().asConstant().asInt() % (int) yConst, graph());
             } else {
-                assert kind() == CiKind.Long;
+                assert kind() == Kind.Long;
                 return ConstantNode.forLong(x().asConstant().asLong() % yConst, graph());
             }
         } else if (y().isConstant()) {
             long c = y().asConstant().asLong();
             if (c == 1 || c == -1) {
                 return ConstantNode.forIntegerKind(kind(), 0, graph());
+            } else if (c > 0 && CodeUtil.isPowerOf2(c) && x().integerStamp().lowerBound() >= 0) {
+                return graph().unique(new AndNode(kind(), x(), ConstantNode.forIntegerKind(kind(), c - 1, graph())));
             }
         }
         return this;

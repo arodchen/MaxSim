@@ -25,7 +25,7 @@ package com.oracle.graal.nodes;
 import java.util.*;
 import java.util.concurrent.atomic.*;
 
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.java.*;
@@ -40,8 +40,8 @@ public class StructuredGraph extends Graph {
 
     public static final long INVALID_GRAPH_ID = -1;
     private static final AtomicLong uniqueGraphIds = new AtomicLong();
-    private final BeginNode start;
-    private final RiResolvedMethod method;
+    private final StartNode start;
+    private final ResolvedJavaMethod method;
     private final long graphId;
 
     /**
@@ -58,26 +58,47 @@ public class StructuredGraph extends Graph {
         this(name, null);
     }
 
-    public StructuredGraph(String name, RiResolvedMethod method) {
+    public StructuredGraph(String name, ResolvedJavaMethod method) {
         this(name, method, uniqueGraphIds.incrementAndGet());
     }
 
-    private StructuredGraph(String name, RiResolvedMethod method, long graphId) {
+    private StructuredGraph(String name, ResolvedJavaMethod method, long graphId) {
         super(name);
-        this.start = add(new BeginNode());
+        this.start = add(new StartNode());
         this.method = method;
         this.graphId = graphId;
     }
 
-    public StructuredGraph(RiResolvedMethod method) {
+    public StructuredGraph(ResolvedJavaMethod method) {
         this(null, method);
     }
 
-    public BeginNode start() {
+    @Override
+    public String toString() {
+        StringBuilder buf = new StringBuilder(getClass().getSimpleName() + ":" + graphId);
+        String sep = "{";
+        if (name != null) {
+            buf.append(sep);
+            buf.append(name);
+            sep = ", ";
+        }
+        if (method != null) {
+            buf.append(sep);
+            buf.append(method);
+            sep = ", ";
+        }
+
+        if (!sep.equals("{")) {
+            buf.append("}");
+        }
+        return buf.toString();
+    }
+
+    public StartNode start() {
         return start;
     }
 
-    public RiResolvedMethod method() {
+    public ResolvedJavaMethod method() {
         return method;
     }
 
@@ -152,7 +173,7 @@ public class StructuredGraph extends Graph {
     }
 
     public boolean hasLoops() {
-        return getNodes(LoopBeginNode.class).iterator().hasNext();
+        return getNodes(LoopBeginNode.class).isNotEmpty();
     }
 
     public void removeFloating(FloatingNode node) {
@@ -180,7 +201,7 @@ public class StructuredGraph extends Graph {
         assert node.usages().isEmpty() : node + " " + node.usages();
         FixedNode next = node.next();
         node.setNext(null);
-        node.replaceAtPredecessors(next);
+        node.replaceAtPredecessor(next);
         node.safeDelete();
     }
 
@@ -207,7 +228,7 @@ public class StructuredGraph extends Graph {
         assert node != null && replacement != null && node.isAlive() && replacement.isAlive() : "cannot replace " + node + " with " + replacement;
         FixedNode next = node.next();
         node.setNext(null);
-        node.replaceAtPredecessors(next);
+        node.replaceAtPredecessor(next);
         node.replaceAtUsages(replacement);
         node.safeDelete();
     }
@@ -220,7 +241,7 @@ public class StructuredGraph extends Graph {
         for (int i = 0; i < node.blockSuccessorCount(); i++) {
             node.setBlockSuccessor(i, null);
         }
-        node.replaceAtPredecessors(begin);
+        node.replaceAtPredecessor(begin);
         node.safeDelete();
     }
 
@@ -232,15 +253,15 @@ public class StructuredGraph extends Graph {
         for (int i = 0; i < node.blockSuccessorCount(); i++) {
             BeginNode successor = node.blockSuccessor(i);
             node.setBlockSuccessor(i, null);
-            if (successor != begin && successor.isAlive()) {
+            if (successor != null && successor != begin && successor.isAlive()) {
                 GraphUtil.killCFG(successor);
             }
         }
         if (begin.isAlive()) {
-            node.replaceAtPredecessors(begin);
+            node.replaceAtPredecessor(begin);
             node.safeDelete();
         } else {
-            assert node.isDeleted();
+            assert node.isDeleted() : node + " " + begin;
         }
     }
 
@@ -272,7 +293,7 @@ public class StructuredGraph extends Graph {
         for (int i = 0; i < node.blockSuccessorCount(); i++) {
             node.setBlockSuccessor(i, null);
         }
-        node.replaceAtPredecessors(begin);
+        node.replaceAtPredecessor(begin);
         node.replaceAtUsages(replacement);
         node.safeDelete();
     }
@@ -302,6 +323,7 @@ public class StructuredGraph extends Graph {
             reduceTrivialMerge(begin);
         } else { // convert to merge
             MergeNode merge = this.add(new MergeNode());
+            merge.setProbability(begin.probability());
             this.replaceFixedWithFixed(begin, merge);
         }
     }
@@ -328,11 +350,11 @@ public class StructuredGraph extends Graph {
         // evacuateGuards
         merge.prepareDelete((FixedNode) singleEnd.predecessor());
         merge.safeDelete();
-        if (stateAfter != null && stateAfter.usages().isEmpty()) {
-            stateAfter.safeDelete();
+        if (stateAfter != null && stateAfter.isAlive() && stateAfter.usages().isEmpty()) {
+            GraphUtil.killWithUnusedFloatingInputs(stateAfter);
         }
         if (sux == null) {
-            singleEnd.replaceAtPredecessors(null);
+            singleEnd.replaceAtPredecessor(null);
             singleEnd.safeDelete();
         } else {
             singleEnd.replaceAndDelete(sux);

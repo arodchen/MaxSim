@@ -32,6 +32,10 @@ public abstract class FixedNode extends ValueNode {
         super(stamp);
     }
 
+    public FixedNode(Stamp stamp, ValueNode... dependencies) {
+        super(stamp, dependencies);
+    }
+
     public double probability() {
         return probability;
     }

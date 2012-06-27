@@ -22,70 +22,84 @@
  */
 package com.oracle.graal.nodes;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.cri.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.max.cri.ri.*;
 
-public final class FixedGuardNode extends FixedWithNextNode implements Simplifiable, Lowerable, LIRLowerable, Node.IterableNodeType {
+public final class FixedGuardNode extends FixedWithNextNode implements Simplifiable, Lowerable, LIRLowerable, Node.IterableNodeType, Negatable {
 
-    @Input private final NodeInputList<BooleanNode> conditions;
-    private final RiDeoptReason deoptReason;
-    private final RiDeoptAction action;
+    @Input private BooleanNode condition;
+    private final DeoptimizationReason deoptReason;
+    private final DeoptimizationAction action;
+    private boolean negated;
     private final long leafGraphId;
 
-    public FixedGuardNode(BooleanNode condition, RiDeoptReason deoptReason, RiDeoptAction action, long leafGraphId) {
-        super(StampFactory.illegal());
+    public BooleanNode condition() {
+        return condition;
+    }
+
+    public void setCondition(BooleanNode x) {
+        updateUsages(condition, x);
+        condition = x;
+    }
+
+    public FixedGuardNode(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, long leafGraphId) {
+        this(condition, deoptReason, action, false, leafGraphId);
+    }
+
+    public FixedGuardNode(BooleanNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated, long leafGraphId) {
+        super(StampFactory.forVoid());
         this.action = action;
+        this.negated = negated;
         this.leafGraphId = leafGraphId;
-        this.conditions = new NodeInputList<>(this, new BooleanNode[] {condition});
+        this.condition = condition;
         this.deoptReason = deoptReason;
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
-        for (BooleanNode condition : conditions()) {
-            gen.emitGuardCheck(condition, deoptReason, action, leafGraphId);
+    public String toString(Verbosity verbosity) {
+        if (verbosity == Verbosity.Name && negated) {
+            return "!" + super.toString(verbosity);
+        } else {
+            return super.toString(verbosity);
         }
     }
 
-    public void addCondition(BooleanNode x) {
-        conditions.add(x);
-    }
-
-    public NodeInputList<BooleanNode> conditions() {
-        return conditions;
+    @Override
+    public void generate(LIRGeneratorTool gen) {
+        gen.emitGuardCheck(condition, deoptReason, action, negated, leafGraphId);
     }
 
     @Override
     public void simplify(SimplifierTool tool) {
-        for (BooleanNode n : conditions.snapshot()) {
-            if (n instanceof ConstantNode) {
-                ConstantNode c = (ConstantNode) n;
-                if (c.asConstant().asBoolean()) {
-                    conditions.remove(n);
-                } else {
-                    FixedNode next = this.next();
-                    if (next != null) {
-                        tool.deleteBranch(next);
-                    }
-                    setNext(graph().add(new DeoptimizeNode(RiDeoptAction.InvalidateRecompile, deoptReason, leafGraphId)));
-                    return;
+        if (condition instanceof ConstantNode) {
+            ConstantNode c = (ConstantNode) condition;
+            if (c.asConstant().asBoolean() != negated) {
+                ((StructuredGraph) graph()).removeFixed(this);
+            } else {
+                FixedNode next = this.next();
+                if (next != null) {
+                    tool.deleteBranch(next);
                 }
+                setNext(graph().add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, deoptReason, leafGraphId)));
+                return;
             }
-        }
-        if (conditions.isEmpty()) {
-            ((StructuredGraph) graph()).removeFixed(this);
         }
     }
 
     @Override
     public void lower(CiLoweringTool tool) {
-        AnchorNode newAnchor = graph().add(new AnchorNode());
-        for (BooleanNode b : conditions) {
-            newAnchor.addGuard((GuardNode) tool.createGuard(b, deoptReason, action, leafGraphId));
-        }
+        ValueAnchorNode newAnchor = graph().add(new ValueAnchorNode(tool.createGuard(condition, deoptReason, action, negated, leafGraphId)));
         ((StructuredGraph) graph()).replaceFixedWithFixed(this, newAnchor);
+    }
+
+    @Override
+    public Negatable negate() {
+        negated = !negated;
+        return this;
     }
 }

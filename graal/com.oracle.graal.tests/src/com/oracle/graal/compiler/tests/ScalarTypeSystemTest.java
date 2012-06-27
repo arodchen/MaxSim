@@ -22,19 +22,16 @@
  */
 package com.oracle.graal.compiler.tests;
 
-import junit.framework.AssertionFailedError;
-
 import org.junit.*;
 
 import com.oracle.graal.compiler.phases.*;
-import com.oracle.graal.compiler.types.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.nodes.*;
 
 /**
  * In the following tests, the scalar type system of the compiler should be complete enough to see the relation between the different conditions.
  */
-public class ScalarTypeSystemTest extends GraphTest {
+public class ScalarTypeSystemTest extends GraalCompilerTest {
 
     public static int referenceSnippet1(int a) {
         if (a > 0) {
@@ -44,7 +41,7 @@ public class ScalarTypeSystemTest extends GraphTest {
         }
     }
 
-    @Test
+    @Test(expected = AssertionError.class)
     public void test1() {
         test("test1Snippet", "referenceSnippet1");
     }
@@ -61,7 +58,7 @@ public class ScalarTypeSystemTest extends GraphTest {
         }
     }
 
-    @Test
+    @Test(expected = AssertionError.class)
     public void test2() {
         test("test2Snippet", "referenceSnippet1");
     }
@@ -78,7 +75,7 @@ public class ScalarTypeSystemTest extends GraphTest {
         }
     }
 
-    @Test
+    @Test(expected = AssertionError.class)
     public void test3() {
         test("test3Snippet", "referenceSnippet2");
     }
@@ -145,7 +142,7 @@ public class ScalarTypeSystemTest extends GraphTest {
         }
     }
 
-    @Test(expected = AssertionFailedError.class)
+    @Test(expected = AssertionError.class)
     public void test6() {
         test("test6Snippet", "referenceSnippet3");
     }
@@ -162,13 +159,14 @@ public class ScalarTypeSystemTest extends GraphTest {
         }
     }
 
-    private void test(String snippet, String referenceSnippet) {
-
+    private void test(final String snippet, final String referenceSnippet) {
+        // No debug scope to reduce console noise for @Test(expected = ...) tests
         StructuredGraph graph = parse(snippet);
         Debug.dump(graph, "Graph");
-        System.out.println("==================== " + snippet);
+//        TypeSystemTest.outputGraph(graph);
         new CanonicalizerPhase(null, runtime(), null).apply(graph);
-        new PropagateTypeCachePhase(null, null, null).apply(graph);
+        new CheckCastEliminationPhase().apply(graph);
+        new CanonicalizerPhase(null, runtime(), null).apply(graph);
         StructuredGraph referenceGraph = parse(referenceSnippet);
         assertEquals(referenceGraph, graph);
     }

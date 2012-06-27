@@ -22,13 +22,13 @@
  */
 package com.oracle.max.criutils;
 
-import static com.oracle.max.cri.ci.CiValueUtil.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 
 import java.io.*;
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 
 /**
  * Utility for printing compilation related data structures at various compilation phases.
@@ -95,10 +95,10 @@ public class CompilationPrinter {
      *
      * @param method the method for which a timestamp will be printed
      */
-    public void printCompilation(RiMethod method) {
+    public void printCompilation(JavaMethod method) {
         begin("compilation");
-        out.print("name \" ").print(CiUtil.format("%H::%n", method)).println('"');
-        out.print("method \"").print(CiUtil.format("%f %r %H.%n(%p)", method)).println('"');
+        out.print("name \" ").print(CodeUtil.format("%H::%n", method)).println('"');
+        out.print("method \"").print(CodeUtil.format("%f %r %H.%n(%p)", method)).println('"');
         out.print("date ").println(System.currentTimeMillis());
         end("compilation");
     }
@@ -106,7 +106,7 @@ public class CompilationPrinter {
     /**
      * Formats a given {@linkplain FrameState JVM frame state} as a multi line string.
      */
-    protected String debugInfoToString(CiCodePos codePos, CiBitMap registerRefMap, CiBitMap frameRefMap, CiArchitecture arch) {
+    protected String debugInfoToString(BytecodePosition codePos, BitSet registerRefMap, BitSet frameRefMap, Architecture arch) {
         StringBuilder sb = new StringBuilder();
 
         if (registerRefMap != null) {
@@ -126,13 +126,13 @@ public class CompilationPrinter {
         }
 
         if (codePos != null) {
-            CiCodePos curCodePos = codePos;
-            List<CiVirtualObject> virtualObjects = new ArrayList<>();
+            BytecodePosition curCodePos = codePos;
+            List<VirtualObject> virtualObjects = new ArrayList<>();
             do {
-                sb.append(CiUtil.toLocation(curCodePos.method, curCodePos.bci));
+                sb.append(CodeUtil.toLocation(curCodePos.getMethod(), curCodePos.getBCI()));
                 sb.append('\n');
-                if (curCodePos instanceof CiFrame) {
-                    CiFrame frame = (CiFrame) curCodePos;
+                if (curCodePos instanceof BytecodeFrame) {
+                    BytecodeFrame frame = (BytecodeFrame) curCodePos;
                     if (frame.numStack > 0) {
                         sb.append("stack: ");
                         for (int i = 0; i < frame.numStack; i++) {
@@ -154,11 +154,11 @@ public class CompilationPrinter {
                     }
 
                 }
-                curCodePos = curCodePos.caller;
+                curCodePos = curCodePos.getCaller();
             } while (curCodePos != null);
 
             for (int i = 0; i < virtualObjects.size(); i++) {
-                CiVirtualObject obj = virtualObjects.get(i);
+                VirtualObject obj = virtualObjects.get(i);
                 sb.append(obj).append(" ").append(obj.type().name()).append(" ");
                 for (int j = 0; j < obj.values().length; j++) {
                     sb.append(valueToString(obj.values()[j], virtualObjects)).append(' ');
@@ -170,7 +170,7 @@ public class CompilationPrinter {
         return sb.toString();
     }
 
-    protected String valueToString(CiValue value, List<CiVirtualObject> virtualObjects) {
+    protected String valueToString(Value value, List<VirtualObject> virtualObjects) {
         if (value == null) {
             return "-";
         }

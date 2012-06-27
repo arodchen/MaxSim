@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.hotspot.snippets;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.snippets.*;
 
@@ -33,11 +33,11 @@ import com.oracle.graal.snippets.*;
 public class SystemSnippets implements SnippetsInterface {
 
     public static long currentTimeMillis() {
-        return RuntimeCallNode.performCall(CiRuntimeCall.JavaTimeMillis);
+        return RuntimeCallNode.callLong(RuntimeCall.JavaTimeMillis);
     }
 
     public static long nanoTime() {
-        return RuntimeCallNode.performCall(CiRuntimeCall.JavaTimeNanos);
+        return RuntimeCallNode.callLong(RuntimeCall.JavaTimeNanos);
     }
 
 }

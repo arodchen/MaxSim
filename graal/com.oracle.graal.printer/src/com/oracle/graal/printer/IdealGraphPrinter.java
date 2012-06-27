@@ -26,13 +26,13 @@ import java.io.*;
 import java.util.*;
 import java.util.Map.Entry;
 
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.bytecode.*;
 import com.oracle.graal.compiler.schedule.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.Verbosity;
 import com.oracle.graal.graph.NodeClass.NodeClassIterator;
 import com.oracle.graal.graph.NodeClass.Position;
-import com.oracle.graal.java.bytecode.*;
 import com.oracle.graal.lir.cfg.*;
 import com.oracle.graal.nodes.*;
 
@@ -51,7 +51,7 @@ class IdealGraphPrinter extends BasicIdealGraphPrinter {
     /**
      * Starts a new group of graphs with the given name, short name and method byte code index (BCI) as properties.
      */
-    public void beginGroup(String name, String shortName, RiResolvedMethod method, int bci) {
+    public void beginGroup(String name, String shortName, ResolvedJavaMethod method, int bci) {
         beginGroup();
         beginProperties();
         printProperty("name", name);

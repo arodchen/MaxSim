@@ -22,11 +22,12 @@
  */
 package com.oracle.graal.lir;
 
-import static com.oracle.max.cri.ci.CiValueUtil.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.asm.*;
 
@@ -35,7 +36,7 @@ import com.oracle.graal.lir.asm.*;
  */
 public abstract class LIRInstruction {
 
-    public static final CiValue[] NO_OPERANDS = {};
+    public static final Value[] NO_OPERANDS = {};
 
     /**
      * Iterator for iterating over a list of values. Subclasses must overwrite one of the doValue methods.
@@ -49,7 +50,7 @@ public abstract class LIRInstruction {
          * @param value The value that is iterated.
          * @return The new value to replace the value that was passed in.
          */
-        protected CiValue doValue(CiValue value) {
+        protected Value doValue(Value value) {
             throw GraalInternalError.shouldNotReachHere("One of the doValue() methods must be overwritten");
         }
 
@@ -62,7 +63,7 @@ public abstract class LIRInstruction {
          * @param flags A set of flags for the value.
          * @return The new value to replace the value that was passed in.
          */
-        public CiValue doValue(CiValue value, OperandMode mode, EnumSet<OperandFlag> flags) {
+        public Value doValue(Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
             return doValue(value);
         }
     }
@@ -105,22 +106,22 @@ public abstract class LIRInstruction {
      */
     public enum OperandFlag {
         /**
-         * The value can be a {@link CiRegisterValue}.
+         * The value can be a {@link RegisterValue}.
          */
         Register,
 
         /**
-         * The value can be a {@link CiStackSlot}.
+         * The value can be a {@link StackSlot}.
          */
         Stack,
 
         /**
-         * The value can be a {@link CiAddress}.
+         * The value can be a {@link Address}.
          */
         Address,
 
         /**
-         * The value can be a {@link CiConstant}.
+         * The value can be a {@link Constant}.
          */
         Constant,
 
@@ -163,22 +164,22 @@ public abstract class LIRInstruction {
     /**
      * The output operands for this instruction (modified by the register allocator).
      */
-    protected CiValue[] outputs;
+    protected Value[] outputs;
 
     /**
      * The input operands for this instruction (modified by the register allocator).
      */
-    protected CiValue[] inputs;
+    protected Value[] inputs;
 
     /**
      * The alive operands for this instruction (modified by the register allocator).
      */
-    protected CiValue[] alives;
+    protected Value[] alives;
 
     /**
      * The temp operands for this instruction (modified by the register allocator).
      */
-    protected CiValue[] temps;
+    protected Value[] temps;
 
     /**
      * Used to emit debug information.
@@ -199,7 +200,7 @@ public abstract class LIRInstruction {
      * @param inputs the input operands for the instruction.
      * @param temps the temp operands for the instruction.
      */
-    public LIRInstruction(Object opcode, CiValue[] outputs, LIRDebugInfo info, CiValue[] inputs, CiValue[] alives, CiValue[] temps) {
+    public LIRInstruction(Object opcode, Value[] outputs, LIRDebugInfo info, Value[] inputs, Value[] alives, Value[] temps) {
         this.code = opcode;
         this.outputs = outputs;
         this.inputs = inputs;
@@ -226,7 +227,7 @@ public abstract class LIRInstruction {
      * @param index the index of the operand requested.
      * @return the {@code index}'th input operand.
      */
-    protected final CiValue input(int index) {
+    protected final Value input(int index) {
         return inputs[index];
     }
 
@@ -236,7 +237,7 @@ public abstract class LIRInstruction {
      * @param index the index of the operand requested.
      * @return the {@code index}'th alive operand.
      */
-    protected final CiValue alive(int index) {
+    protected final Value alive(int index) {
         return alives[index];
     }
 
@@ -246,7 +247,7 @@ public abstract class LIRInstruction {
      * @param index the index of the operand requested.
      * @return the {@code index}'th temp operand.
      */
-    protected final CiValue temp(int index) {
+    protected final Value temp(int index) {
         return temps[index];
     }
 
@@ -255,7 +256,7 @@ public abstract class LIRInstruction {
      *
      * @return return the result operand
      */
-    protected final CiValue output(int index) {
+    protected final Value output(int index) {
         return outputs[index];
     }
 
@@ -272,16 +273,16 @@ public abstract class LIRInstruction {
 
     private static final EnumSet<OperandFlag> ADDRESS_FLAGS = EnumSet.of(OperandFlag.Register, OperandFlag.Illegal);
 
-    private void forEach(CiValue[] values, OperandMode mode, ValueProcedure proc) {
+    private void forEach(Value[] values, OperandMode mode, ValueProcedure proc) {
         for (int i = 0; i < values.length; i++) {
             assert ALLOWED_FLAGS.get(mode).containsAll(flagsFor(mode, i));
 
-            CiValue value = values[i];
+            Value value = values[i];
             if (isAddress(value)) {
                 assert flagsFor(mode, i).contains(OperandFlag.Address);
-                CiAddress address = asAddress(value);
-                address.base = proc.doValue(address.base, mode, ADDRESS_FLAGS);
-                address.index = proc.doValue(address.index, mode, ADDRESS_FLAGS);
+                Address address = asAddress(value);
+                address.setBase(proc.doValue(address.getBase(), mode, ADDRESS_FLAGS));
+                address.setIndex(proc.doValue(address.getIndex(), mode, ADDRESS_FLAGS));
             } else {
                 values[i] = proc.doValue(values[i], mode, flagsFor(mode, i));
             }
@@ -337,8 +338,8 @@ public abstract class LIRInstruction {
      *             and the value is returned by this method, i.e., clients can stop the iteration once a suitable hint has been found.
      * @return The non-null value returned by the procedure, or null.
      */
-    public CiValue forEachRegisterHint(CiValue value, OperandMode mode, ValueProcedure proc) {
-        CiValue[] hints;
+    public Value forEachRegisterHint(Value value, OperandMode mode, ValueProcedure proc) {
+        Value[] hints;
         if (mode == OperandMode.Input) {
             hints = outputs;
         } else if (mode == OperandMode.Output) {
@@ -348,7 +349,7 @@ public abstract class LIRInstruction {
         }
 
         for (int i = 0; i < hints.length; i++) {
-            CiValue result = proc.doValue(hints[i], null, null);
+            Value result = proc.doValue(hints[i], null, null);
             if (result != null) {
                 return result;
             }
@@ -385,7 +386,7 @@ public abstract class LIRInstruction {
         if (outputs.length > 1) {
             buf.append("(");
         }
-        for (CiValue output : outputs) {
+        for (Value output : outputs) {
             buf.append(sep).append(output);
             sep = ", ";
         }
@@ -400,11 +401,11 @@ public abstract class LIRInstruction {
             buf.append("(");
         }
         sep = "";
-        for (CiValue input : inputs) {
+        for (Value input : inputs) {
             buf.append(sep).append(input);
             sep = ", ";
         }
-        for (CiValue input : alives) {
+        for (Value input : alives) {
             buf.append(sep).append(input).append(" ~");
             sep = ", ";
         }
@@ -416,7 +417,7 @@ public abstract class LIRInstruction {
             buf.append(" [");
         }
         sep = "";
-        for (CiValue temp : temps) {
+        for (Value temp : temps) {
             buf.append(sep).append(temp);
             sep = ", ";
         }
@@ -430,8 +431,8 @@ public abstract class LIRInstruction {
         if (info != null) {
             buf.append(" [bci:");
             String sep = "";
-            for (CiFrame cur = info.topFrame; cur != null; cur = cur.caller()) {
-                buf.append(sep).append(cur.bci);
+            for (BytecodeFrame cur = info.topFrame; cur != null; cur = cur.caller()) {
+                buf.append(sep).append(cur.getBCI());
                 sep = ",";
             }
             buf.append("]");

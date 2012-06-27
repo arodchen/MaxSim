@@ -22,17 +22,17 @@
  */
 package com.oracle.graal.lir.asm;
 
-import static com.oracle.max.cri.ci.CiValueUtil.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 
 import java.util.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIR.Code;
 import com.oracle.max.asm.*;
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
 
 public class TargetMethodAssembler {
 
@@ -47,9 +47,9 @@ public class TargetMethodAssembler {
     }
 
     public final AbstractAssembler asm;
-    public final CiTargetMethod targetMethod;
-    public final CiTarget target;
-    public final RiRuntime runtime;
+    public final CompilationResult targetMethod;
+    public final TargetDescription target;
+    public final CodeCacheProvider runtime;
     public final FrameMap frameMap;
 
     /**
@@ -66,13 +66,13 @@ public class TargetMethodAssembler {
     private List<ExceptionInfo> exceptionInfoList;
     private int lastSafepointPos;
 
-    public TargetMethodAssembler(CiTarget target, RiRuntime runtime, FrameMap frameMap, AbstractAssembler asm, FrameContext frameContext, List<Code> stubs) {
+    public TargetMethodAssembler(TargetDescription target, CodeCacheProvider runtime, FrameMap frameMap, AbstractAssembler asm, FrameContext frameContext, List<Code> stubs) {
         this.target = target;
         this.runtime = runtime;
         this.frameMap = frameMap;
         this.stubs = stubs;
         this.asm = asm;
-        this.targetMethod = new CiTargetMethod();
+        this.targetMethod = new CompilationResult();
         this.frameContext = frameContext;
         // 0 is a valid pc for safepoints in template methods
         this.lastSafepointPos = -1;
@@ -82,19 +82,19 @@ public class TargetMethodAssembler {
         targetMethod.setFrameSize(frameSize);
     }
 
-    public CiTargetMethod.Mark recordMark(Object id) {
+    public CompilationResult.Mark recordMark(Object id) {
         return targetMethod.recordMark(asm.codeBuffer.position(), id, null);
     }
 
-    public CiTargetMethod.Mark recordMark(Object id, CiTargetMethod.Mark[] references) {
+    public CompilationResult.Mark recordMark(Object id, CompilationResult.Mark[] references) {
         return targetMethod.recordMark(asm.codeBuffer.position(), id, references);
     }
 
     public void blockComment(String s) {
-        targetMethod.addAnnotation(new CiTargetMethod.CodeComment(asm.codeBuffer.position(), s));
+        targetMethod.addAnnotation(new CompilationResult.CodeComment(asm.codeBuffer.position(), s));
     }
 
-    public CiTargetMethod finishTargetMethod(Object name, boolean isStub) {
+    public CompilationResult finishTargetMethod(Object name, boolean isStub) {
         // Install code, data and frame size
         targetMethod.setTargetCode(asm.codeBuffer.close(false), asm.codeBuffer.position());
 
@@ -108,9 +108,9 @@ public class TargetMethodAssembler {
 
         Debug.metric("TargetMethods").increment();
         Debug.metric("CodeBytesEmitted").add(targetMethod.targetCodeSize());
-        Debug.metric("SafepointsEmitted").add(targetMethod.safepoints.size());
-        Debug.metric("DataPatches").add(targetMethod.dataReferences.size());
-        Debug.metric("ExceptionHandlersEmitted").add(targetMethod.exceptionHandlers.size());
+        Debug.metric("SafepointsEmitted").add(targetMethod.getSafepoints().size());
+        Debug.metric("DataPatches").add(targetMethod.getDataReferences().size());
+        Debug.metric("ExceptionHandlersEmitted").add(targetMethod.getExceptionHandlers().size());
 
         Debug.log("Finished target method %s, isStub %b", name, isStub);
 /*
@@ -181,14 +181,14 @@ public class TargetMethodAssembler {
     }
 
     public void recordDirectCall(int posBefore, int posAfter, Object callTarget, LIRDebugInfo info) {
-        CiDebugInfo debugInfo = info != null ? info.debugInfo() : null;
+        DebugInfo debugInfo = info != null ? info.debugInfo() : null;
         assert lastSafepointPos < posAfter;
         lastSafepointPos = posAfter;
         targetMethod.recordCall(posBefore, posAfter - posBefore, callTarget, debugInfo, true);
     }
 
     public void recordIndirectCall(int posBefore, int posAfter, Object callTarget, LIRDebugInfo info) {
-        CiDebugInfo debugInfo = info != null ? info.debugInfo() : null;
+        DebugInfo debugInfo = info != null ? info.debugInfo() : null;
         assert lastSafepointPos < posAfter;
         lastSafepointPos = posAfter;
         targetMethod.recordCall(posBefore, posAfter - posBefore, callTarget, debugInfo, false);
@@ -196,18 +196,18 @@ public class TargetMethodAssembler {
 
     public void recordSafepoint(int pos, LIRDebugInfo info) {
         // safepoints always need debug info
-        CiDebugInfo debugInfo = info.debugInfo();
+        DebugInfo debugInfo = info.debugInfo();
         assert lastSafepointPos < pos;
         lastSafepointPos = pos;
         targetMethod.recordSafepoint(pos, debugInfo);
     }
 
-    public CiAddress recordDataReferenceInCode(CiConstant data, int alignment) {
+    public Address recordDataReferenceInCode(Constant data, int alignment) {
         assert data != null;
         int pos = asm.codeBuffer.position();
         Debug.log("Data reference in code: pos = %d, data = %s", pos, data.toString());
         targetMethod.recordDataReference(pos, data, alignment);
-        return CiAddress.Placeholder;
+        return Address.Placeholder;
     }
 
     public int lastSafepointPos() {
@@ -219,9 +219,9 @@ public class TargetMethodAssembler {
      * Returns the integer value of any constants that can be represented by a 32-bit integer value,
      * including long constants that fit into the 32-bit range.
      */
-    public int asIntConst(CiValue value) {
-        assert (value.kind.stackKind() == CiKind.Int || value.kind == CiKind.Jsr || value.kind == CiKind.Long) && isConstant(value);
-        long c = ((CiConstant) value).asLong();
+    public int asIntConst(Value value) {
+        assert (value.kind.stackKind() == Kind.Int || value.kind == Kind.Jsr || value.kind == Kind.Long) && isConstant(value);
+        long c = ((Constant) value).asLong();
         if (!(NumUtil.isInt(c))) {
             throw GraalInternalError.shouldNotReachHere();
         }
@@ -231,65 +231,65 @@ public class TargetMethodAssembler {
     /**
      * Returns the address of a float constant that is embedded as a data references into the code.
      */
-    public CiAddress asFloatConstRef(CiValue value) {
+    public Address asFloatConstRef(Value value) {
         return asFloatConstRef(value, 4);
     }
 
-    public CiAddress asFloatConstRef(CiValue value, int alignment) {
-        assert value.kind == CiKind.Float && isConstant(value);
-        return recordDataReferenceInCode((CiConstant) value, alignment);
+    public Address asFloatConstRef(Value value, int alignment) {
+        assert value.kind == Kind.Float && isConstant(value);
+        return recordDataReferenceInCode((Constant) value, alignment);
     }
 
     /**
      * Returns the address of a double constant that is embedded as a data references into the code.
      */
-    public CiAddress asDoubleConstRef(CiValue value) {
+    public Address asDoubleConstRef(Value value) {
         return asDoubleConstRef(value, 8);
     }
 
-    public CiAddress asDoubleConstRef(CiValue value, int alignment) {
-        assert value.kind == CiKind.Double && isConstant(value);
-        return recordDataReferenceInCode((CiConstant) value, alignment);
+    public Address asDoubleConstRef(Value value, int alignment) {
+        assert value.kind == Kind.Double && isConstant(value);
+        return recordDataReferenceInCode((Constant) value, alignment);
     }
 
     /**
      * Returns the address of a long constant that is embedded as a data references into the code.
      */
-    public CiAddress asLongConstRef(CiValue value) {
-        assert value.kind == CiKind.Long && isConstant(value);
-        return recordDataReferenceInCode((CiConstant) value, 8);
+    public Address asLongConstRef(Value value) {
+        assert value.kind == Kind.Long && isConstant(value);
+        return recordDataReferenceInCode((Constant) value, 8);
     }
 
-    public CiAddress asIntAddr(CiValue value) {
-        assert value.kind == CiKind.Int;
+    public Address asIntAddr(Value value) {
+        assert value.kind == Kind.Int;
         return asAddress(value);
     }
 
-    public CiAddress asLongAddr(CiValue value) {
-        assert value.kind == CiKind.Long;
+    public Address asLongAddr(Value value) {
+        assert value.kind == Kind.Long;
         return asAddress(value);
     }
 
-    public CiAddress asObjectAddr(CiValue value) {
-        assert value.kind == CiKind.Object;
+    public Address asObjectAddr(Value value) {
+        assert value.kind == Kind.Object;
         return asAddress(value);
     }
 
-    public CiAddress asFloatAddr(CiValue value) {
-        assert value.kind == CiKind.Float;
+    public Address asFloatAddr(Value value) {
+        assert value.kind == Kind.Float;
         return asAddress(value);
     }
 
-    public CiAddress asDoubleAddr(CiValue value) {
-        assert value.kind == CiKind.Double;
+    public Address asDoubleAddr(Value value) {
+        assert value.kind == Kind.Double;
         return asAddress(value);
     }
 
-    public CiAddress asAddress(CiValue value) {
+    public Address asAddress(Value value) {
         if (isStackSlot(value)) {
-            CiStackSlot slot = (CiStackSlot) value;
-            return new CiAddress(slot.kind, frameMap.registerConfig.getFrameRegister().asValue(), frameMap.offsetForStackSlot(slot));
+            StackSlot slot = (StackSlot) value;
+            return new Address(slot.kind, frameMap.registerConfig.getFrameRegister().asValue(), frameMap.offsetForStackSlot(slot));
         }
-        return (CiAddress) value;
+        return (Address) value;
     }
 }

@@ -22,8 +22,7 @@
  */
 package com.oracle.graal.nodes.java;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
@@ -33,13 +32,12 @@ import com.oracle.graal.nodes.type.*;
 /**
  * The {@code InstanceOfNode} represents an instanceof test.
  */
-public final class InstanceOfNode extends TypeCheckNode implements Canonicalizable, LIRLowerable, ConditionalTypeFeedbackProvider, TypeCanonicalizable {
+public final class InstanceOfNode extends BooleanNode implements Canonicalizable, LIRLowerable, ConditionalTypeFeedbackProvider, TypeCanonicalizable {
 
-    private final boolean negated;
-
-    public boolean negated() {
-        return negated;
-    }
+    @Input private ValueNode object;
+    @Input private ValueNode targetClassInstruction;
+    private final ResolvedJavaType targetClass;
+    private final JavaTypeProfile profile;
 
     /**
      * Constructs a new InstanceOfNode.
@@ -48,13 +46,16 @@ public final class InstanceOfNode extends TypeCheckNode implements Canonicalizab
      * @param targetClass the class which is the target of the instanceof check
      * @param object the instruction producing the object input to this instruction
      */
-    public InstanceOfNode(ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object, boolean negated) {
-        this(targetClassInstruction, targetClass, object, EMPTY_HINTS, false, negated);
+    public InstanceOfNode(ValueNode targetClassInstruction, ResolvedJavaType targetClass, ValueNode object) {
+        this(targetClassInstruction, targetClass, object, null);
     }
 
-    public InstanceOfNode(ValueNode targetClassInstruction, RiResolvedType targetClass, ValueNode object, RiResolvedType[] hints, boolean hintsExact, boolean negated) {
-        super(targetClassInstruction, targetClass, object, hints, hintsExact, StampFactory.illegal());
-        this.negated = negated;
+    public InstanceOfNode(ValueNode targetClassInstruction, ResolvedJavaType targetClass, ValueNode object, JavaTypeProfile profile) {
+        super(StampFactory.condition());
+        this.targetClassInstruction = targetClassInstruction;
+        this.targetClass = targetClass;
+        this.object = object;
+        this.profile = profile;
         assert targetClass != null;
     }
 
@@ -65,64 +66,96 @@ public final class InstanceOfNode extends TypeCheckNode implements Canonicalizab
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
         assert object() != null : this;
-        RiResolvedType exact = object().exactType();
-        if (exact != null) {
-            boolean result = exact.isSubtypeOf(targetClass());
-            if (result != negated) {
-                // The instanceof check reduces to a null check.
-                return graph().unique(new NullCheckNode(object(), false));
+
+        ObjectStamp stamp = object().objectStamp();
+        ResolvedJavaType type = stamp.type();
+
+        if (stamp.isExactType()) {
+            boolean subType = type.isSubtypeOf(targetClass());
+
+            if (subType) {
+                if (stamp.nonNull()) {
+                    // the instanceOf matches, so return true
+                    return ConstantNode.forBoolean(true, graph());
+                } else {
+                    // the instanceof matches if the object is non-null, so return true depending on the null-ness.
+                    negateUsages();
+                    return graph().unique(new IsNullNode(object()));
+                }
             } else {
-                // The instanceof check can never succeed.
+                // since this type check failed for an exact type we know that it can never succeed at run time.
+                // we also don't care about null values, since they will also make the check fail.
                 return ConstantNode.forBoolean(false, graph());
             }
-        }
-        CiConstant constant = object().asConstant();
-        if (constant != null) {
-            assert constant.kind == CiKind.Object;
-            if (constant.isNull()) {
-                return ConstantNode.forBoolean(negated, graph());
+        } else if (type != null) {
+            boolean subType = type.isSubtypeOf(targetClass());
+
+            if (subType) {
+                if (stamp.nonNull()) {
+                    // the instanceOf matches, so return true
+                    return ConstantNode.forBoolean(true, graph());
+                } else {
+                    // the instanceof matches if the object is non-null, so return true depending on the null-ness.
+                    negateUsages();
+                    return graph().unique(new IsNullNode(object()));
+                }
             } else {
-                assert false : "non-null constants are always expected to provide an exactType";
+                // since the subtype comparison was only performed on a declared type we don't really know if it might be true at run time...
             }
         }
-        if (tool.assumptions() != null && hints() != null && targetClass() != null) {
-            if (!hintsExact() && hints().length == 1 && hints()[0] == targetClass().uniqueConcreteSubtype()) {
-                tool.assumptions().recordConcreteSubtype(targetClass(), hints()[0]);
-                return graph().unique(new InstanceOfNode(targetClassInstruction(), targetClass(), object(), hints(), true, negated));
+
+        Constant constant = object().asConstant();
+        if (constant != null) {
+            assert constant.kind == Kind.Object;
+            if (constant.isNull()) {
+                return ConstantNode.forBoolean(false, graph());
+            } else {
+                assert false : "non-null constants are always expected to provide an exact type";
             }
         }
         return this;
     }
 
     @Override
-    public BooleanNode negate() {
-        return graph().unique(new InstanceOfNode(targetClassInstruction(), targetClass(), object(), hints(), hintsExact(), !negated));
-    }
-
-    @Override
     public void typeFeedback(TypeFeedbackTool tool) {
-        if (negated) {
-            tool.addObject(object()).notDeclaredType(targetClass(), true);
-        } else {
-            tool.addObject(object()).declaredType(targetClass(), true);
-        }
+        tool.addObject(object()).declaredType(targetClass(), true);
     }
 
     @Override
     public Result canonical(TypeFeedbackTool tool) {
         ObjectTypeQuery query = tool.queryObject(object());
-        if (query.constantBound(Condition.EQ, CiConstant.NULL_OBJECT)) {
-            return new Result(ConstantNode.forBoolean(negated, graph()), query);
+        if (query.constantBound(Condition.EQ, Constant.NULL_OBJECT)) {
+            return new Result(ConstantNode.forBoolean(false, graph()), query);
         } else if (targetClass() != null) {
             if (query.notDeclaredType(targetClass())) {
-                return new Result(ConstantNode.forBoolean(negated, graph()), query);
+                return new Result(ConstantNode.forBoolean(false, graph()), query);
             }
-            if (query.constantBound(Condition.NE, CiConstant.NULL_OBJECT)) {
+            if (query.constantBound(Condition.NE, Constant.NULL_OBJECT)) {
                 if (query.declaredType(targetClass())) {
-                    return new Result(ConstantNode.forBoolean(!negated, graph()), query);
+                    return new Result(ConstantNode.forBoolean(true, graph()), query);
                 }
             }
         }
         return null;
+    }
+
+    public ValueNode object() {
+        return object;
+    }
+
+    public ValueNode targetClassInstruction() {
+        return targetClassInstruction;
+    }
+
+    /**
+     * Gets the target class, i.e. the class being cast to, or the class being tested against.
+     * @return the target class
+     */
+    public ResolvedJavaType targetClass() {
+        return targetClass;
+    }
+
+    public JavaTypeProfile profile() {
+        return profile;
     }
 }

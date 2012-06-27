@@ -22,28 +22,34 @@
  */
 package com.oracle.max.criutils;
 
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 
 
 /**
  * Dummy profiling information in case that a method was not executed frequently enough so that
  * no profiling information does exist yet, or in case that the profiling information should not be used.
  */
-public final class BaseProfilingInfo implements RiProfilingInfo {
-    private static final RiProfilingInfo[] NO_PROFILING_INFO = new RiProfilingInfo[] {
-        new BaseProfilingInfo(RiExceptionSeen.TRUE),
-        new BaseProfilingInfo(RiExceptionSeen.FALSE),
-        new BaseProfilingInfo(RiExceptionSeen.NOT_SUPPORTED)
+public final class BaseProfilingInfo implements ProfilingInfo {
+    private static final ProfilingInfo[] NO_PROFILING_INFO = new ProfilingInfo[] {
+        new BaseProfilingInfo(ExceptionSeen.TRUE),
+        new BaseProfilingInfo(ExceptionSeen.FALSE),
+        new BaseProfilingInfo(ExceptionSeen.NOT_SUPPORTED)
     };
 
-    private final RiExceptionSeen exceptionSeen;
+    private final ExceptionSeen exceptionSeen;
 
-    BaseProfilingInfo(RiExceptionSeen exceptionSeen) {
+    BaseProfilingInfo(ExceptionSeen exceptionSeen) {
         this.exceptionSeen = exceptionSeen;
     }
 
     @Override
-    public RiTypeProfile getTypeProfile(int bci) {
+    public int codeSize() {
+        return 0;
+    }
+
+    @Override
+    public JavaTypeProfile getTypeProfile(int bci) {
         return null;
     }
 
@@ -58,7 +64,7 @@ public final class BaseProfilingInfo implements RiProfilingInfo {
     }
 
     @Override
-    public RiExceptionSeen getExceptionSeen(int bci) {
+    public ExceptionSeen getExceptionSeen(int bci) {
         return exceptionSeen;
     }
 
@@ -67,12 +73,17 @@ public final class BaseProfilingInfo implements RiProfilingInfo {
         return -1;
     }
 
-    public static RiProfilingInfo get(RiExceptionSeen exceptionSeen) {
+    public static ProfilingInfo get(ExceptionSeen exceptionSeen) {
         return NO_PROFILING_INFO[exceptionSeen.ordinal()];
     }
 
     @Override
-    public int getDeoptimizationCount(RiDeoptReason reason) {
+    public int getDeoptimizationCount(DeoptimizationReason reason) {
         return 0;
+    }
+
+    @Override
+    public String toString() {
+        return "BaseProfilingInfo<" + CodeUtil.profileToString(this, null, "; ") + ">";
     }
 }

@@ -22,30 +22,31 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 public final class RuntimeCallNode extends AbstractCallNode implements LIRLowerable {
 
-    private final CiRuntimeCall call;
+    private final RuntimeCall call;
 
-    public CiRuntimeCall call() {
+    public RuntimeCall call() {
         return call;
     }
 
-    public RuntimeCallNode(CiRuntimeCall call) {
+    public RuntimeCallNode(RuntimeCall call) {
         this(call, new ValueNode[0]);
     }
 
-    public RuntimeCallNode(CiRuntimeCall call, ValueNode arg1) {
-        this(call, new ValueNode[] {arg1});
-    }
-
-    public RuntimeCallNode(CiRuntimeCall call, ValueNode[] arguments) {
+    public RuntimeCallNode(RuntimeCall call, ValueNode... arguments) {
         super(StampFactory.forKind(call.resultKind), arguments);
         this.call = call;
+    }
+
+    @Override
+    public boolean hasSideEffect() {
+        return call.hasSideEffect();
     }
 
     @Override
@@ -53,16 +54,24 @@ public final class RuntimeCallNode extends AbstractCallNode implements LIRLowera
         gen.emitRuntimeCall(this);
     }
 
+    @Override
+    public String toString(Verbosity verbosity) {
+        if (verbosity == Verbosity.Name) {
+            return super.toString(verbosity) + "#" + call;
+        }
+        return super.toString(verbosity);
+    }
+
     // specialized on return type (instead of public static <T> T performCall) until boxing/unboxing is sorted out in intrinsification
     @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static <S> double performCall(@ConstantNodeParameter CiRuntimeCall call, S arg1) {
+    public static <S> double callDouble(@ConstantNodeParameter RuntimeCall call, S arg1) {
         throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
     }
 
     @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static long performCall(@ConstantNodeParameter CiRuntimeCall call) {
+    public static long callLong(@ConstantNodeParameter RuntimeCall call) {
         throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
     }
 }

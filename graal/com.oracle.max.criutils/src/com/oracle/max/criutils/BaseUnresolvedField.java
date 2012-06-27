@@ -22,19 +22,19 @@
  */
 package com.oracle.max.criutils;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 
 /**
- * A implementation of {@link RiField} for an unresolved field.
+ * A implementation of {@link JavaField} for an unresolved field.
  */
-public class BaseUnresolvedField implements RiField {
+public class BaseUnresolvedField implements JavaField {
 
     public final String name;
-    public final RiType holder;
-    public final RiType type;
+    public final JavaType holder;
+    public final JavaType type;
 
-    public BaseUnresolvedField(RiType holder, String name, RiType type) {
+    public BaseUnresolvedField(JavaType holder, String name, JavaType type) {
         this.name = name;
         this.type = type;
         this.holder = holder;
@@ -44,15 +44,15 @@ public class BaseUnresolvedField implements RiField {
         return name;
     }
 
-    public RiType type() {
+    public JavaType type() {
         return type;
     }
 
-    public CiKind kind(boolean architecture) {
-        return type.kind(architecture);
+    public Kind kind() {
+        return type.kind();
     }
 
-    public RiType holder() {
+    public JavaType holder() {
         return holder;
     }
 
@@ -71,6 +71,6 @@ public class BaseUnresolvedField implements RiField {
      */
     @Override
     public String toString() {
-        return CiUtil.format("%H.%n [unresolved]", this);
+        return CodeUtil.format("%H.%n [unresolved]", this);
     }
 }

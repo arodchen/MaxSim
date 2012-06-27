@@ -26,22 +26,22 @@ import junit.framework.Assert;
 
 import org.junit.Test;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.max.cri.ci.*;
 
 /**
  * In these test cases the probability of all invokes is set to a high value, such that an InliningPhase should inline them all.
  * After that, the EscapeAnalysisPhase is expected to remove all allocations and return the correct values.
  */
-public class EscapeAnalysisTest extends GraphTest {
+public class EscapeAnalysisTest extends GraalCompilerTest {
 
     @Test
     public void test1() {
-        test("test1Snippet", CiConstant.forInt(101));
+        test("test1Snippet", Constant.forInt(101));
     }
 
     @SuppressWarnings("all")
@@ -52,7 +52,7 @@ public class EscapeAnalysisTest extends GraphTest {
 
     @Test
     public void test2() {
-        test("test2Snippet", CiConstant.forInt(0));
+        test("test2Snippet", Constant.forInt(0));
     }
 
     @SuppressWarnings("all")
@@ -63,7 +63,7 @@ public class EscapeAnalysisTest extends GraphTest {
 
     @Test
     public void test3() {
-        test("test3Snippet", CiConstant.forObject(null));
+        test("test3Snippet", Constant.forObject(null));
     }
 
     @SuppressWarnings("all")
@@ -74,7 +74,7 @@ public class EscapeAnalysisTest extends GraphTest {
 
     @Test
     public void testMonitor() {
-        test("testMonitorSnippet", CiConstant.forInt(0));
+        test("testMonitorSnippet", Constant.forInt(0));
     }
 
     private static native void notInlineable();
@@ -95,7 +95,7 @@ public class EscapeAnalysisTest extends GraphTest {
     }
 
     public void testMonitor2() {
-        test("testMonitor2Snippet", CiConstant.forInt(0));
+        test("testMonitor2Snippet", Constant.forInt(0));
     }
 
     /**
@@ -116,31 +116,35 @@ public class EscapeAnalysisTest extends GraphTest {
         }
     }
 
-    private void test(String snippet, CiConstant expectedResult) {
-        StructuredGraph graph = parse(snippet);
-        for (Invoke n : graph.getInvokes()) {
-            n.node().setProbability(100000);
-        }
+    private void test(final String snippet, final Constant expectedResult) {
+        Debug.scope("EscapeAnalysisTest", new DebugDumpScope(snippet), new Runnable() {
+            public void run() {
+                StructuredGraph graph = parse(snippet);
+                for (Invoke n : graph.getInvokes()) {
+                    n.node().setProbability(100000);
+                }
 
-        new InliningPhase(null, runtime(), null, null, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
-        new DeadCodeEliminationPhase().apply(graph);
-        Debug.dump(graph, "Graph");
-        new EscapeAnalysisPhase(null, runtime(), null, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
-        Debug.dump(graph, "Graph");
-        int retCount = 0;
-        for (ReturnNode ret : graph.getNodes(ReturnNode.class)) {
-            Assert.assertTrue(ret.result().isConstant());
-            Assert.assertEquals(ret.result().asConstant(), expectedResult);
-            retCount++;
-        }
-        Assert.assertEquals(1, retCount);
-        int newInstanceCount = 0;
-        for (@SuppressWarnings("unused") NewInstanceNode n : graph.getNodes(NewInstanceNode.class)) {
-            newInstanceCount++;
-        }
-        for (@SuppressWarnings("unused") NewObjectArrayNode n : graph.getNodes(NewObjectArrayNode.class)) {
-            newInstanceCount++;
-        }
-        Assert.assertEquals(0, newInstanceCount);
+                new InliningPhase(null, runtime(), null, null, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
+                new DeadCodeEliminationPhase().apply(graph);
+                Debug.dump(graph, "Graph");
+                new EscapeAnalysisPhase(null, runtime(), null, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
+                Debug.dump(graph, "Graph");
+                int retCount = 0;
+                for (ReturnNode ret : graph.getNodes(ReturnNode.class)) {
+                    Assert.assertTrue(ret.result().isConstant());
+                    Assert.assertEquals(ret.result().asConstant(), expectedResult);
+                    retCount++;
+                }
+                Assert.assertEquals(1, retCount);
+                int newInstanceCount = 0;
+                for (@SuppressWarnings("unused") NewInstanceNode n : graph.getNodes(NewInstanceNode.class)) {
+                    newInstanceCount++;
+                }
+                for (@SuppressWarnings("unused") NewObjectArrayNode n : graph.getNodes(NewObjectArrayNode.class)) {
+                    newInstanceCount++;
+                }
+                Assert.assertEquals(0, newInstanceCount);
+            }
+        });
     }
 }

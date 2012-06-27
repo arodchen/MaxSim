@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.compiler;
 
+import com.oracle.max.criutils.TTY.Filter;
+
 /**
  * This class encapsulates options that control the behavior of the Graal compiler.
  * The help message for each option is specified by a {@linkplain #helpMap help map}.
@@ -35,7 +37,6 @@ public final class GraalOptions {
     // Checkstyle: resume
 
     public static int     Threads                            = 4;
-    public static boolean Lower                              = true;
 
     // inlining settings
     public static boolean Inline                             = true;
@@ -99,7 +100,11 @@ public final class GraalOptions {
     public static float   MinimumUsageProbability            = 0.95f;
 
     //loop transform settings
-    public static float   MinimumPeelProbability             = 0.25f;
+    public static float   MinimumPeelProbability             = 0.35f;
+    public static boolean ReassociateInvariants              = true;
+    public static boolean FullUnroll                         = true;
+    public static int     FullUnrollMaxNodes                 = 150; // TODO (gd) tune
+    public static boolean LoopUnswitch                       = ____;
 
     // debugging settings
     public static int     MethodEndBreakpointGuards          = 0;
@@ -162,6 +167,8 @@ public final class GraalOptions {
 
     // Code generator settings
     public static boolean PropagateTypes                     = ____;
+    public static boolean CheckCastElimination               = true;
+    public static boolean CullFrameStates                    = ____;
     public static boolean UseProfilingInformation            = true;
            static boolean RemoveNeverExecutedCode            = true;
            static boolean UseExceptionProbability            = true;
@@ -180,6 +187,7 @@ public final class GraalOptions {
     // Translating tableswitch instructions
     public static int     SequentialSwitchLimit              = 4;
     public static int     RangeTestsSwitchDensity            = 5;
+    public static double  MinTableSwitchDensity              = 0.5;
 
     public static boolean DetailedAsserts                    = ____;
 
@@ -197,7 +205,6 @@ public final class GraalOptions {
     public static boolean OptReadElimination                 = true;
     public static boolean OptGVN                             = true;
     public static boolean OptCanonicalizer                   = true;
-    public static boolean OptLoops                           = true;
     public static boolean ScheduleOutOfLoops                 = true;
     public static boolean OptReorderLoops                    = true;
     public static boolean OptEliminateGuards                 = true;
@@ -205,6 +212,15 @@ public final class GraalOptions {
     public static boolean OptLivenessAnalysis                = true;
     public static boolean OptLoopTransform                   = true;
     public static boolean OptSafepointElimination            = true;
+
+    /**
+     * Insert a counter in the method prologue to track the most frequently called methods that were compiled by Graal.
+     */
+    public static boolean MethodEntryCounters               = false;
+    /**
+     * Number of caller program counters to distinguish when counting methods.
+     */
+    public static int     MethodEntryCountersCallers        = 20;
 
     /**
      * Flag to turn on SSA-based register allocation, which is currently under development.
@@ -215,6 +231,51 @@ public final class GraalOptions {
      * Prints all the available GraalOptions.
      */
     public static boolean PrintFlags                           = false;
+
+    /**
+     * Counts the various paths taken through a compiled checkcast.
+     */
+    public static boolean CheckcastCounters = false;
+
+    /**
+     * If the probability that a checkcast will hit one the profiled types (up to {@link #CheckcastMaxHints})
+     * is below this value, the checkcast will be compiled without hints.
+     */
+    public static double CheckcastMinHintHitProbability = 0.5;
+
+    /**
+     * The maximum number of hint types that will be used when compiling a checkcast for which
+     * profiling information is available. Note that {@link #CheckcastMinHintHitProbability}
+     * also influences whether hints are used.
+     */
+    public static int CheckcastMaxHints = 2;
+
+    /**
+     * @see #CheckcastMinHintHitProbability
+     */
+    public static double InstanceOfMinHintHitProbability = 0.5;
+
+    /**
+     * @see #CheckcastMaxHints
+     */
+    public static int InstanceOfMaxHints = 1;
+
+    /**
+     * Use HIR lowering instead of LIR lowering for certain instructions.
+     * Only instructions in methods whose fully qualified name contains this option will be HIR lowered.
+     */
+    public static String HIRLowerCheckcast = "";
+    public static String HIRLowerNewInstance = "";
+
+    /**
+     * The profiling info cache directory.
+     */
+    public static String PICache = null;
+
+    /**
+     * Filters the methods for which profiling info is loaded from/saved to the {@link #PICache}.
+     */
+    public static String PIFilter = null;
 
     static {
         // turn detailed assertions on when the general assertions are on (misusing the assert keyword for this)

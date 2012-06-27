@@ -23,7 +23,7 @@
 package com.oracle.graal.lir.amd64;
 
 import com.oracle.max.asm.target.amd64.*;
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 
@@ -32,7 +32,7 @@ import com.oracle.graal.lir.asm.*;
  */
 public abstract class AMD64LIRInstruction extends LIRInstruction {
 
-    public AMD64LIRInstruction(Object opcode, CiValue[] outputs, LIRDebugInfo info, CiValue[] inputs, CiValue[] alives, CiValue[] temps) {
+    public AMD64LIRInstruction(Object opcode, Value[] outputs, LIRDebugInfo info, Value[] inputs, Value[] alives, Value[] temps) {
         super(opcode, outputs, info, inputs, alives, temps);
     }
 

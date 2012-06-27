@@ -22,34 +22,34 @@
  */
 package com.oracle.graal.hotspot;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.meta.*;
 
 /**
  * Used to communicate configuration details, runtime offsets, etc. to graal upon compileMethod.
  */
 public final class HotSpotVMConfig extends CompilerObject {
 
-    /**
-     *
-     */
     private static final long serialVersionUID = -4744897993263044184L;
 
     private HotSpotVMConfig() {
-        super(null);
     }
 
     // os information, register layout, code generation, ...
     public boolean windowsOs;
     public int codeEntryAlignment;
-    public boolean verifyPointers;
+    public boolean verifyOops;
     public boolean useFastLocking;
     public boolean useFastNewObjectArray;
     public boolean useFastNewTypeArray;
+    public boolean useTLAB;
 
     // offsets, ...
     public int vmPageSize;
     public int stackShadowPages;
     public int hubOffset;
+    public int superCheckOffsetOffset;
+    public int secondarySuperCacheOffset;
+    public int secondarySupersOffset;
     public int arrayLengthOffset;
     public int klassStateOffset;
     public int klassStateFullyInitialized;
@@ -90,7 +90,6 @@ public final class HotSpotVMConfig extends CompilerObject {
     public long debugStub;
     public long instanceofStub;
     public long newInstanceStub;
-    public long unresolvedNewInstanceStub;
     public long newTypeArrayStub;
     public long newObjectArrayStub;
     public long newMultiArrayStub;
@@ -104,7 +103,7 @@ public final class HotSpotVMConfig extends CompilerObject {
     public long monitorExitStub;
     public long fastMonitorEnterStub;
     public long fastMonitorExitStub;
-    public long verifyPointerStub;
+    public long verifyOopStub;
 
     public void check() {
         assert vmPageSize >= 16;
@@ -112,7 +111,7 @@ public final class HotSpotVMConfig extends CompilerObject {
         assert stackShadowPages > 0;
     }
 
-    public int getArrayOffset(CiKind kind) {
+    public int getArrayOffset(Kind kind) {
         return arrayOffsets[kind.ordinal()];
     }
 }

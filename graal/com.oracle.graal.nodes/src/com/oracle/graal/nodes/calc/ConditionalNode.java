@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.nodes.calc;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
@@ -29,7 +30,7 @@ import com.oracle.graal.nodes.spi.*;
  * The {@code ConditionalNode} class represents a comparison that yields one of two values. Note that these nodes are not
  * built directly from the bytecode but are introduced by canonicalization.
  */
-public class ConditionalNode extends BinaryNode implements Canonicalizable, LIRLowerable {
+public class ConditionalNode extends BinaryNode implements Canonicalizable, LIRLowerable, Negatable {
 
     @Input private BooleanNode condition;
 
@@ -53,6 +54,17 @@ public class ConditionalNode extends BinaryNode implements Canonicalizable, LIRL
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
+        // this optimizes the case where a value that can only be 0 or 1 is materialized to 0 or 1
+        if (x().isConstant() && y().isConstant() && condition instanceof IntegerEqualsNode) {
+            IntegerEqualsNode equals = (IntegerEqualsNode) condition;
+            if (equals.y().isConstant() && equals.y().asConstant().equals(Constant.INT_0)) {
+                if (equals.x().integerStamp().mask() == 1) {
+                    if (x().asConstant().equals(Constant.INT_0) && y().asConstant().equals(Constant.INT_1)) {
+                        return equals.x();
+                    }
+                }
+            }
+        }
         if (condition instanceof ConstantNode) {
             ConstantNode c = (ConstantNode) condition;
             if (c.asConstant().asBoolean()) {
@@ -71,5 +83,12 @@ public class ConditionalNode extends BinaryNode implements Canonicalizable, LIRL
     @Override
     public void generate(LIRGeneratorTool generator) {
         generator.emitConditional(this);
+    }
+
+    @Override
+    public Negatable negate() {
+        ConditionalNode replacement = graph().unique(new ConditionalNode(condition, falseValue(), trueValue()));
+        ((StructuredGraph) graph()).replaceFloating(this, replacement);
+        return replacement;
     }
 }

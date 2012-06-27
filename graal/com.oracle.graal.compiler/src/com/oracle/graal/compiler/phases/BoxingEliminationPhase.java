@@ -26,13 +26,12 @@ import static com.oracle.graal.graph.iterators.NodePredicates.*;
 
 import java.util.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.PhiNode.*;
 import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.virtual.*;
 
 public class BoxingEliminationPhase extends Phase {
@@ -63,16 +62,17 @@ public class BoxingEliminationPhase extends Phase {
         }
     }
 
-    private PhiNode getReplacementPhi(PhiNode phiNode, CiKind kind, Map<PhiNode, PhiNode> phiReplacements) {
+    private PhiNode getReplacementPhi(PhiNode phiNode, Kind kind, Map<PhiNode, PhiNode> phiReplacements) {
         if (!phiReplacements.containsKey(phiNode)) {
             PhiNode result = null;
-            if (phiNode.stamp().nonNull()) {
-                RiResolvedType exactType = phiNode.stamp().exactType();
-                if (exactType != null && exactType.toJava() == kind.toUnboxedJavaClass()) {
+            ObjectStamp stamp = phiNode.objectStamp();
+            if (stamp.nonNull() && stamp.isExactType()) {
+                ResolvedJavaType type = stamp.type();
+                if (type != null && type.toJava() == kind.toBoxedJavaClass()) {
                     StructuredGraph graph = (StructuredGraph) phiNode.graph();
-                    result = graph.add(new PhiNode(kind, phiNode.merge(), PhiType.Value));
+                    result = graph.add(new PhiNode(kind, phiNode.merge()));
                     phiReplacements.put(phiNode, result);
-                    virtualizeUsages(phiNode, result, exactType);
+                    virtualizeUsages(phiNode, result, type);
                     int i = 0;
                     for (ValueNode n : phiNode.values()) {
                         ValueNode unboxedValue = unboxedValue(n, kind, phiReplacements);
@@ -93,7 +93,7 @@ public class BoxingEliminationPhase extends Phase {
         return phiReplacements.get(phiNode);
     }
 
-    private ValueNode unboxedValue(ValueNode n, CiKind kind, Map<PhiNode, PhiNode> phiReplacements) {
+    private ValueNode unboxedValue(ValueNode n, Kind kind, Map<PhiNode, PhiNode> phiReplacements) {
         if (n instanceof BoxNode) {
             BoxNode boxNode = (BoxNode) n;
             return boxNode.source();
@@ -107,9 +107,10 @@ public class BoxingEliminationPhase extends Phase {
 
     private static void tryEliminate(BoxNode boxNode) {
 
-        virtualizeUsages(boxNode, boxNode.source(), boxNode.exactType());
+        assert boxNode.objectStamp().isExactType();
+        virtualizeUsages(boxNode, boxNode.source(), boxNode.objectStamp().type());
 
-        if (boxNode.usages().filter(isNotA(FrameState.class).nor(VirtualObjectFieldNode.class)).isNotEmpty()) {
+        if (boxNode.usages().filter(isNotA(VirtualState.class)).isNotEmpty()) {
             // Elimination failed, because boxing object escapes.
             return;
         }
@@ -121,10 +122,10 @@ public class BoxingEliminationPhase extends Phase {
         ((StructuredGraph) boxNode.graph()).removeFixed(boxNode);
     }
 
-    private static void virtualizeUsages(ValueNode boxNode, ValueNode replacement, RiResolvedType exactType) {
+    private static void virtualizeUsages(ValueNode boxNode, ValueNode replacement, ResolvedJavaType exactType) {
         ValueNode virtualValueNode = null;
         VirtualObjectNode virtualObjectNode = null;
-        for (Node n : boxNode.usages().filter(NodePredicates.isA(FrameState.class).or(VirtualObjectFieldNode.class)).snapshot()) {
+        for (Node n : boxNode.usages().filter(NodePredicates.isA(VirtualState.class)).snapshot()) {
             if (virtualValueNode == null) {
                 virtualObjectNode = n.graph().unique(new BoxedVirtualObjectNode(exactType, replacement));
             }

@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import com.oracle.max.cri.ci.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.cri.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
@@ -31,12 +31,12 @@ import com.oracle.graal.nodes.type.*;
 /**
  * Load of a value from a location specified as an offset relative to an object.
  */
-public class UnsafeLoadNode extends AbstractStateSplit implements Lowerable {
+public class UnsafeLoadNode extends FixedWithNextNode implements Lowerable {
 
     @Input private ValueNode object;
     @Input private ValueNode offset;
     private final int displacement;
-    private final CiKind loadKind;
+    private final Kind loadKind;
 
     public ValueNode object() {
         return object;
@@ -50,7 +50,15 @@ public class UnsafeLoadNode extends AbstractStateSplit implements Lowerable {
         return offset;
     }
 
-    public UnsafeLoadNode(ValueNode object, int displacement, ValueNode offset, CiKind kind) {
+    public UnsafeLoadNode(ValueNode object, int displacement, ValueNode offset, boolean nonNull) {
+        super(nonNull ? StampFactory.objectNonNull() : StampFactory.object());
+        this.object = object;
+        this.displacement = displacement;
+        this.offset = offset;
+        this.loadKind = Kind.Object;
+    }
+
+    public UnsafeLoadNode(ValueNode object, int displacement, ValueNode offset, Kind kind) {
         super(StampFactory.forKind(kind.stackKind()));
         this.object = object;
         this.displacement = displacement;
@@ -58,7 +66,7 @@ public class UnsafeLoadNode extends AbstractStateSplit implements Lowerable {
         this.loadKind = kind;
     }
 
-    public CiKind loadKind() {
+    public Kind loadKind() {
         return loadKind;
     }
 
@@ -69,7 +77,13 @@ public class UnsafeLoadNode extends AbstractStateSplit implements Lowerable {
 
     @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static <T> T load(Object object, @ConstantNodeParameter int displacement, long offset, @ConstantNodeParameter CiKind kind) {
+    public static <T> T load(Object object, @ConstantNodeParameter int displacement, long offset, @ConstantNodeParameter Kind kind) {
+        throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
+    }
+
+    @SuppressWarnings("unused")
+    @NodeIntrinsic
+    public static Object loadObject(Object object, @ConstantNodeParameter int displacement, long offset, @ConstantNodeParameter boolean nonNull) {
         throw new UnsupportedOperationException("This method may only be compiled with the Graal compiler");
     }
 }
