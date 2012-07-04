@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -19,50 +19,33 @@
  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
  * or visit www.oracle.com if you need additional information or have any
  * questions.
- *
  */
-package com.sun.hotspot.igv.data;
+package com.oracle.graal.nodes.java;
+
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
- *
- * @author Thomas Wuerthinger
+ * The {@code NewPrimitiveArrayNode} class definition.
  */
-public class InputBytecode {
+public final class NewPrimitiveArrayNode extends NewArrayNode implements LIRLowerable {
 
-    private int bci;
-    private String name;
-    private String operands;
-    private String comment;
-    private InputMethod inlined;
+    private final ResolvedJavaType elementType;
 
-    public InputBytecode(int bci, String name, String operands, String comment) {
-        this.bci = bci;
-        this.name = name;
-        this.operands = operands;
-        this.comment = comment;
+    public NewPrimitiveArrayNode(ValueNode length, ResolvedJavaType elementType) {
+        super(StampFactory.exactNonNull(elementType.arrayOf()), length);
+        this.elementType = elementType;
     }
 
-    public InputMethod getInlined() {
-        return inlined;
+    @Override
+    public ResolvedJavaType elementType() {
+        return elementType;
     }
 
-    public void setInlined(InputMethod inlined) {
-        this.inlined = inlined;
-    }
-
-    public int getBci() {
-        return bci;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public String getOperands() {
-        return operands;
-    }
-
-    public String getComment() {
-        return comment;
+    @Override
+    public void generate(LIRGeneratorTool gen) {
+        gen.visitNewPrimitiveArray(this);
     }
 }
