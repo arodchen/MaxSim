@@ -32,7 +32,7 @@ import java.util.*;
 import com.oracle.max.asm.*;
 import com.oracle.max.asm.target.amd64.*;
 import com.oracle.max.asm.target.amd64.AMD64Assembler.ConditionFlag;
-import com.oracle.max.cri.xir.CiXirAssembler.XirMark;
+import com.oracle.max.cri.xir.XirAssembler.XirMark;
 import com.oracle.max.cri.xir.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CompilationResult.*;
@@ -93,7 +93,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         }
     }
 
-    public AMD64LIRGenerator(Graph graph, CodeCacheProvider runtime, TargetDescription target, FrameMap frameMap, ResolvedJavaMethod method, LIR lir, RiXirGenerator xir, Assumptions assumptions) {
+    public AMD64LIRGenerator(Graph graph, CodeCacheProvider runtime, TargetDescription target, FrameMap frameMap, ResolvedJavaMethod method, LIR lir, XirGenerator xir, Assumptions assumptions) {
         super(graph, runtime, target, frameMap, method, lir, xir, assumptions);
         lir.spillMoveFactory = new AMD64SpillMoveFactory();
     }

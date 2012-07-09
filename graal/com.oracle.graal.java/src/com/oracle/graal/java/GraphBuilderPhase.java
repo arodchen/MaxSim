@@ -30,8 +30,8 @@ import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.meta.JavaType.*;
-import com.oracle.graal.api.meta.JavaTypeProfile.*;
+import com.oracle.graal.api.meta.JavaType.Representation;
+import com.oracle.graal.api.meta.JavaTypeProfile.ProfiledType;
 import com.oracle.graal.bytecode.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.phases.*;
@@ -649,7 +649,7 @@ public final class GraphBuilderPhase extends Phase {
             ResolvedJavaType resolvedType = (ResolvedJavaType) type;
             ConstantNode hub = appendConstant(resolvedType.getEncoding(JavaType.Representation.ObjectHub));
             InstanceOfNode instanceOfNode = new InstanceOfNode(hub, (ResolvedJavaType) type, object, getProfileForTypeCheck(resolvedType));
-            frameState.ipush(append(MaterializeNode.create(currentGraph.unique(instanceOfNode), currentGraph)));
+            frameState.ipush(append(MaterializeNode.create(currentGraph.unique(instanceOfNode))));
         } else {
             BlockPlaceholderNode successor = currentGraph.add(new BlockPlaceholderNode());
             DeoptimizeNode deopt = currentGraph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.Unresolved, graphId));
@@ -693,10 +693,10 @@ public final class GraphBuilderPhase extends Phase {
         // Checkstyle: resume
     }
 
-    private void genNewTypeArray(int typeCode) {
+    private void genNewPrimitiveArray(int typeCode) {
         Kind kind = arrayTypeCodeToKind(typeCode);
         ResolvedJavaType elementType = runtime.getResolvedJavaType(kind);
-        NewTypeArrayNode nta = currentGraph.add(new NewTypeArrayNode(frameState.ipop(), elementType));
+        NewPrimitiveArrayNode nta = currentGraph.add(new NewPrimitiveArrayNode(frameState.ipop(), elementType));
         frameState.apush(append(nta));
     }
 
@@ -1144,7 +1144,7 @@ public final class GraphBuilderPhase extends Phase {
                 int pos = 0;
                 ArrayList<Block> exitLoops = new ArrayList<>(Long.bitCount(exits));
                 do {
-                    int lMask = 1 << pos;
+                    long lMask = 1L << pos;
                     if ((exits & lMask) != 0) {
                         exitLoops.add(loopHeaders[pos]);
                         exits &= ~lMask;
@@ -1187,7 +1187,7 @@ public final class GraphBuilderPhase extends Phase {
     }
 
     private FixedNode createTarget(double probability, Block block, FrameStateBuilder stateAfter) {
-        assert probability >= 0 && probability <= 1;
+        assert probability >= 0 && probability <= 1.01 : probability;
         if (probability == 0 && optimisticOpts.removeNeverExecutedCode()) {
             return currentGraph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.UnreachedCode, graphId));
         } else {
@@ -1709,7 +1709,7 @@ public final class GraphBuilderPhase extends Phase {
             case INVOKESTATIC   : cpi = stream.readCPI(); genInvokeStatic(lookupMethod(cpi, opcode)); break;
             case INVOKEINTERFACE: cpi = stream.readCPI(); genInvokeInterface(lookupMethod(cpi, opcode)); break;
             case NEW            : genNewInstance(stream.readCPI()); break;
-            case NEWARRAY       : genNewTypeArray(stream.readLocalIndex()); break;
+            case NEWARRAY       : genNewPrimitiveArray(stream.readLocalIndex()); break;
             case ANEWARRAY      : genNewObjectArray(stream.readCPI()); break;
             case ARRAYLENGTH    : genArrayLength(); break;
             case ATHROW         : genThrow(); break;

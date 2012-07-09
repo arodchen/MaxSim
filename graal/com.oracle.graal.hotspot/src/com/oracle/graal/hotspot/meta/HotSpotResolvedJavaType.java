@@ -31,7 +31,7 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 
 /**
- * Implementation of RiType for resolved non-primitive HotSpot classes.
+ * Implementation of {@link JavaType} for resolved non-primitive HotSpot classes.
  */
 public final class HotSpotResolvedJavaType extends HotSpotJavaType implements ResolvedJavaType {
 
@@ -54,7 +54,11 @@ public final class HotSpotResolvedJavaType extends HotSpotJavaType implements Re
     private ConstantPool constantPool;
     private boolean isInitialized;
     private ResolvedJavaType arrayOfType;
-    private long prototypeHeader;
+
+    /**
+     * Initial value for the mark word in a new object of this type.
+     */
+    private long initialMarkWord;
 
     private HotSpotResolvedJavaType() {
         throw new GraalInternalError(HotSpotResolvedJavaType.class + " should only be created from C++ code");
@@ -213,7 +217,7 @@ public final class HotSpotResolvedJavaType extends HotSpotJavaType implements Re
         return instanceSize;
     }
 
-    public synchronized ResolvedJavaField createRiField(String fieldName, JavaType type, int offset, int flags) {
+    public synchronized ResolvedJavaField createField(String fieldName, JavaType type, int offset, int flags) {
         ResolvedJavaField result = null;
 
         long id = offset + ((long) flags << 32);
@@ -285,7 +289,7 @@ public final class HotSpotResolvedJavaType extends HotSpotJavaType implements Re
         return superCheckOffset;
     }
 
-    public long prototypeHeader() {
-        return prototypeHeader;
+    public long initialMarkWord() {
+        return initialMarkWord;
     }
 }

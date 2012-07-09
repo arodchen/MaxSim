@@ -30,6 +30,7 @@ import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.snippets.*;
 import com.oracle.graal.snippets.Snippet.ConstantParameter;
 import com.oracle.graal.snippets.Snippet.Fold;
+import com.oracle.graal.snippets.nodes.*;
 
 
 @SuppressWarnings("unused")
@@ -312,12 +313,12 @@ public class ArrayCopySnippets implements SnippetsInterface{
         if (src == dest && srcPos < destPos) { // bad aliased case
             for (long i = (length - 1) * scale; i >= 0; i -= scale) {
                 Object a = UnsafeLoadNode.load(src, header, i + (long) srcPos * scale, Kind.Object);
-                DirectObjectStoreNode.store(dest, header, i + (long) destPos * scale, a);
+                DirectObjectStoreNode.storeObject(dest, header, i + (long) destPos * scale, a);
             }
         } else {
             for (long i = 0; i < length * scale; i += scale) {
                 Object a = UnsafeLoadNode.load(src, header, i + (long) srcPos * scale, Kind.Object);
-                DirectObjectStoreNode.store(dest, header, i + (long) destPos * scale, a);
+                DirectObjectStoreNode.storeObject(dest, header, i + (long) destPos * scale, a);
             }
         }
         if (length > 0) {

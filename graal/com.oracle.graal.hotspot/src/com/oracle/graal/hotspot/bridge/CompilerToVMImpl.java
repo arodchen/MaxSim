@@ -77,7 +77,7 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native JavaField ConstantPool_lookupField(HotSpotResolvedJavaType pool, int cpi, byte byteCode);
 
     @Override
-    public native HotSpotCompiledMethod installMethod(HotSpotTargetMethod targetMethod, boolean makeDefault, HotSpotCodeInfo info);
+    public native HotSpotCompiledMethod installMethod(HotSpotCompilationResult comp, boolean makeDefault, HotSpotCodeInfo info);
 
     @Override
     public native HotSpotVMConfig getConfiguration();
@@ -148,9 +148,6 @@ public class CompilerToVMImpl implements CompilerToVM {
 
     @Override
     public native String disassembleNative(byte[] code, long address);
-
-    @Override
-    public native String disassembleJava(HotSpotResolvedJavaMethod method);
 
     @Override
     public native StackTraceElement JavaMethod_toStackTraceElement(HotSpotResolvedJavaMethod method, int bci);

@@ -63,7 +63,7 @@ public interface CompilerToVM {
 
     void ConstantPool_loadReferencedType(HotSpotResolvedJavaType pool, int cpi, byte byteCode);
 
-    HotSpotCompiledMethod installMethod(HotSpotTargetMethod targetMethod, boolean makeDefault, HotSpotCodeInfo info);
+    HotSpotCompiledMethod installMethod(HotSpotCompilationResult compResult, boolean makeDefault, HotSpotCodeInfo info);
 
     HotSpotVMConfig getConfiguration();
 
@@ -104,8 +104,6 @@ public interface CompilerToVM {
     long getMaxCallTargetOffset(RuntimeCall rtcall);
 
     String disassembleNative(byte[] code, long address);
-
-    String disassembleJava(HotSpotResolvedJavaMethod method);
 
     StackTraceElement JavaMethod_toStackTraceElement(HotSpotResolvedJavaMethod method, int bci);
 

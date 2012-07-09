@@ -25,6 +25,7 @@ package com.oracle.graal.api.meta;
 import static java.lang.reflect.Modifier.*;
 
 import java.lang.annotation.*;
+import java.lang.reflect.*;
 import java.util.*;
 
 import com.oracle.graal.api.meta.JavaTypeProfile.ProfiledType;
@@ -308,6 +309,27 @@ public class MetaUtil {
 
 
     /**
+     * Gets the annotations of a particular type for the formal parameters of a given method.
+     *
+     * @param annotationClass the Class object corresponding to the annotation type
+     * @param method the method for which a parameter annotations are being requested
+     * @return the annotation of type {@code annotationClass} (if any) for each formal parameter present
+     */
+    public static <T extends Annotation> T[] getParameterAnnotations(Class<T> annotationClass, ResolvedJavaMethod method) {
+        Annotation[][] parameterAnnotations = method.getParameterAnnotations();
+        @SuppressWarnings("unchecked")
+        T[] result = (T[]) Array.newInstance(annotationClass, parameterAnnotations.length);
+        for (int i = 0; i < parameterAnnotations.length; i++) {
+            for (Annotation a : parameterAnnotations[i]) {
+                if (a.annotationType() == annotationClass) {
+                    result[i] = annotationClass.cast(a);
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
      * Gets the annotation of a particular type for a formal parameter of a given method.
      *
      * @param annotationClass the Class object corresponding to the annotation type
@@ -328,7 +350,6 @@ public class MetaUtil {
         return null;
     }
 
-
     /**
      * Convenient shortcut for calling {@link #appendLocation(StringBuilder, ResolvedJavaMethod, int)} without having to supply a
      * a {@link StringBuilder} instance and convert the result to a string.
@@ -348,7 +369,8 @@ public class MetaUtil {
      *     java.lang.String.valueOf(String.java:2930) [bci: 12]
      * </pre>
      *
-     * Otherwise, the string returned is the value of {@code CiUtil.format("%H.%n(%p)"}, suffixed by the bci location.
+     * Otherwise, the string returned is the value of applying {@link #format(String, JavaMethod)}
+     * with the format string {@code "%H.%n(%p)"}, suffixed by the bci location.
      * For example:
      *
      * <pre>
