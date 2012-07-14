@@ -831,7 +831,7 @@ bool VM_RedefineClasses::is_unresolved_string_mismatch(constantPoolHandle cp1,
 jvmtiError VM_RedefineClasses::load_new_class_versions(TRAPS) {
   // For consistency allocate memory using os::malloc wrapper.
   _scratch_classes = (instanceKlassHandle *)
-    os::malloc(sizeof(instanceKlassHandle) * _class_count);
+    os::malloc(sizeof(instanceKlassHandle) * _class_count, mtInternal);
   if (_scratch_classes == NULL) {
     return JVMTI_ERROR_OUT_OF_MEMORY;
   }
@@ -3230,7 +3230,9 @@ void VM_RedefineClasses::redefine_single_class(jclass the_jclass,
 
   // Copy the "source debug extension" attribute from new class version
   the_class->set_source_debug_extension(
-    scratch_class->source_debug_extension());
+    scratch_class->source_debug_extension(),
+    scratch_class->source_debug_extension() == NULL ? 0 :
+    (int)strlen(scratch_class->source_debug_extension()));
 
   // Use of javac -g could be different in the old and the new
   if (scratch_class->access_flags().has_localvariable_table() !=
