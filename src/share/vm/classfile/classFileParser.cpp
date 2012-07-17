@@ -1380,7 +1380,7 @@ class Classfile_LVT_Element VALUE_OBJ_CLASS_SPEC {
 };
 
 
-class LVT_Hash: public CHeapObj {
+class LVT_Hash: public CHeapObj<mtClass> {
  public:
   LocalVariableTableElement  *_elem;  // element
   LVT_Hash*                   _next;  // Next entry in hash table
@@ -2498,12 +2498,13 @@ void ClassFileParser::parse_classfile_source_debug_extension_attribute(constantP
 
   // Don't bother storing it if there is no way to retrieve it
   if (JvmtiExport::can_get_source_debug_extension()) {
-    // Optimistically assume that only 1 byte UTF format is used
-    // (common case)
-    TempNewSymbol sde_symbol = SymbolTable::new_symbol((const char*)sde_buffer, length, CHECK);
-    // Note that set_source_debug_extension() increments the reference count
-    // for its copy of the Symbol*, so use a TempNewSymbol here.
-    set_class_sde_symbol(sde_symbol);
+    assert((length+1) > length, "Overflow checking");
+    u1* sde = NEW_RESOURCE_ARRAY_IN_THREAD(THREAD, u1, length+1);
+    for (int i = 0; i < length; i++) {
+      sde[i] = sde_buffer[i];
+    }
+    sde[length] = '\0';
+    set_class_sde_buffer((char*)sde, length);
   }
   // Got utf8 string, set stream position forward
   cfs->skip_u1(length, CHECK);
@@ -2874,7 +2875,9 @@ void ClassFileParser::apply_parsed_class_attributes(instanceKlassHandle k) {
     _generic_signature->increment_refcount();
     k->set_generic_signature(_generic_signature);
   }
-  k->set_source_debug_extension(_sde_symbol);  // increment_refcount inside
+  if (_sde_buffer != NULL) {
+    k->set_source_debug_extension(_sde_buffer, _sde_length);
+  }
   k->set_inner_classes(_inner_classes());
   k->set_class_annotations(_annotations());
 }

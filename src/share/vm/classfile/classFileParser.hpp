@@ -60,20 +60,23 @@ class ClassFileParser VALUE_OBJ_CLASS_SPEC {
   bool       _synthetic_flag;
   Symbol*    _sourcefile;
   Symbol*    _generic_signature;
-  TempNewSymbol   _sde_symbol;
+  char*      _sde_buffer;
+  int        _sde_length;
   typeArrayHandle _inner_classes;
   typeArrayHandle _annotations;
 
   void set_class_synthetic_flag(bool x)           { _synthetic_flag = x; }
   void set_class_sourcefile(Symbol* x)            { _sourcefile = x; }
   void set_class_generic_signature(Symbol* x)     { _generic_signature = x; }
-  void set_class_sde_symbol(Symbol* x)            { _sde_symbol = x; }
+  void set_class_sde_buffer(char* x, int len)     { _sde_buffer = x; _sde_length = len; }
   void set_class_inner_classes(typeArrayHandle x) { _inner_classes = x; }
   void set_class_annotations(typeArrayHandle x)   { _annotations = x; }
   void init_parsed_class_attributes() {
     _synthetic_flag = false;
     _sourcefile = NULL;
     _generic_signature = NULL;
+    _sde_buffer = NULL;
+    _sde_length = 0;
     // initialize the other flags too:
     _has_finalizer = _has_empty_finalizer = _has_vanilla_constructor = false;
     _max_bootstrap_specifier_index = -1;
