@@ -22,6 +22,10 @@
  */
 package com.oracle.graal.hotspot;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.max.asm.target.amd64.*;
+
+
 /**
  * Used to communicate configuration details, runtime offsets, etc. to graal upon compileMethod.
  */
@@ -29,7 +33,7 @@ public final class HotSpotVMConfig extends CompilerObject {
 
     private static final long serialVersionUID = -4744897993263044184L;
 
-    private HotSpotVMConfig() {
+    HotSpotVMConfig() {
     }
 
     // os information, register layout, code generation, ...
@@ -146,6 +150,9 @@ public final class HotSpotVMConfig extends CompilerObject {
     public long fastMonitorEnterStub;
     public long fastMonitorExitStub;
     public long verifyOopStub;
+
+    // special registers
+    public final Register threadRegister = AMD64.r15;
 
     public void check() {
         assert vmPageSize >= 16;

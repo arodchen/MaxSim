@@ -24,11 +24,10 @@ package com.oracle.graal.hotspot.snippets;
 
 import static com.oracle.graal.hotspot.nodes.CastFromHub.*;
 import static com.oracle.graal.hotspot.nodes.RegisterNode.*;
-import static com.oracle.graal.nodes.extended.UnsafeLoadNode.*;
+import static com.oracle.graal.hotspot.snippets.HotSpotSnippetUtils.*;
 import static com.oracle.graal.snippets.SnippetTemplate.Arguments.*;
 import static com.oracle.graal.snippets.nodes.DirectObjectStoreNode.*;
 import static com.oracle.graal.snippets.nodes.ExplodeLoopNode.*;
-import static com.oracle.max.asm.target.amd64.AMD64.*;
 import static com.oracle.max.criutils.UnsignedMath.*;
 
 import com.oracle.graal.api.code.*;
@@ -43,7 +42,6 @@ import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.snippets.*;
 import com.oracle.graal.snippets.Snippet.ConstantParameter;
-import com.oracle.graal.snippets.Snippet.Fold;
 import com.oracle.graal.snippets.Snippet.Parameter;
 import com.oracle.graal.snippets.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.snippets.SnippetTemplate.Arguments;
@@ -56,7 +54,7 @@ public class NewObjectSnippets implements SnippetsInterface {
 
     @Snippet
     public static Word allocate(@Parameter("size") int size) {
-        Word thread = asWord(register(r15, wordKind()));
+        Word thread = asWord(register(threadReg(), wordKind()));
         Word top = loadWord(thread, threadTlabTopOffset());
         Word end = loadWord(thread, threadTlabEndOffset());
         Word newTop = top.plus(size);
@@ -153,22 +151,6 @@ public class NewObjectSnippets implements SnippetsInterface {
         int size = (length << log2ElementSize) + headerSize + (alignment - 1);
         int mask = ~(alignment - 1);
         return size & mask;
-    }
-
-    private static Object verifyOop(Object object) {
-        if (verifyOops()) {
-            VerifyOopStubCall.call(object);
-        }
-        return object;
-    }
-
-    private static Word asWord(Object object) {
-        return Word.fromObject(object);
-    }
-
-    private static Word loadWord(Word address, int offset) {
-        Object value = loadObject(address, 0, offset, true);
-        return asWord(value);
     }
 
     /**
@@ -348,46 +330,6 @@ public class NewObjectSnippets implements SnippetsInterface {
             Debug.log("Lowering initializeObjectArray in %s: node=%s, template=%s, arguments=%s", graph, initializeNode, template, arguments);
             template.instantiate(runtime, initializeNode, arguments);
         }
-    }
-
-    @Fold
-    private static boolean verifyOops() {
-        return HotSpotGraalRuntime.getInstance().getConfig().verifyOops;
-    }
-
-    @Fold
-    private static int threadTlabTopOffset() {
-        return HotSpotGraalRuntime.getInstance().getConfig().threadTlabTopOffset;
-    }
-
-    @Fold
-    private static int threadTlabEndOffset() {
-        return HotSpotGraalRuntime.getInstance().getConfig().threadTlabEndOffset;
-    }
-
-    @Fold
-    private static Kind wordKind() {
-        return HotSpotGraalRuntime.getInstance().getTarget().wordKind;
-    }
-
-    @Fold
-    private static int wordSize() {
-        return HotSpotGraalRuntime.getInstance().getTarget().wordSize;
-    }
-
-    @Fold
-    private static int markOffset() {
-        return HotSpotGraalRuntime.getInstance().getConfig().markOffset;
-    }
-
-    @Fold
-    private static int hubOffset() {
-        return HotSpotGraalRuntime.getInstance().getConfig().hubOffset;
-    }
-
-    @Fold
-    private static int arrayLengthOffset() {
-        return HotSpotGraalRuntime.getInstance().getConfig().arrayLengthOffset;
     }
 
     private static final SnippetCounter.Group countersNew = GraalOptions.SnippetCounters ? new SnippetCounter.Group("NewInstance") : null;
