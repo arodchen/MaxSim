@@ -551,6 +551,18 @@ JNIEXPORT jobject JNICALL Java_com_oracle_graal_hotspot_bridge_CompilerToVMImpl_
 }
 
 // public JavaType JavaType_superType(HotSpotResolvedType klass);
+JNIEXPORT jlong JNICALL Java_com_oracle_graal_hotspot_bridge_CompilerToVMImpl_JavaType_initialMarkWord(JNIEnv *, jobject, jobject klass) {
+  TRACE_graal_3("CompilerToVM::JavaType_superType");
+  VM_ENTRY_MARK;
+  KlassHandle klass_handle(java_lang_Class::as_klassOop(HotSpotResolvedJavaType::javaMirror(klass)));
+  if (klass_handle->oop_is_array()) {
+    return (int32_t)(intptr_t) markOopDesc::prototype();
+  } else {
+    return (jlong) (intptr_t) klass_handle->prototype_header();
+  }
+}
+
+// public JavaType JavaType_superType(HotSpotResolvedType klass);
 JNIEXPORT jobject JNICALL Java_com_oracle_graal_hotspot_bridge_CompilerToVMImpl_JavaType_1superType(JNIEnv *, jobject, jobject klass) {
   TRACE_graal_3("CompilerToVM::JavaType_superType");
   VM_ENTRY_MARK;
@@ -707,11 +719,8 @@ jobject get_object(JNIEnv* env, jobject obj, const char* name, const char* sig) 
 BasicType basicTypes[] = { T_BOOLEAN, T_BYTE, T_SHORT, T_CHAR, T_INT, T_FLOAT, T_LONG, T_DOUBLE, T_OBJECT };
 int basicTypeCount = sizeof(basicTypes) / sizeof(BasicType);
 
-// public HotSpotVMConfig getConfiguration();
-JNIEXPORT jobject JNICALL Java_com_oracle_graal_hotspot_bridge_CompilerToVMImpl_getConfiguration(JNIEnv *env, jobject) {
-  jclass klass = env->FindClass("com/oracle/graal/hotspot/HotSpotVMConfig");
-  assert(klass != NULL, "HotSpot vm config class not found");
-  jobject config = env->AllocObject(klass);
+// public void initializeConfiguration(HotSpotVMConfig config);
+JNIEXPORT void JNICALL Java_com_oracle_graal_hotspot_bridge_CompilerToVMImpl_initializeConfiguration(JNIEnv *env, jobject, jobject config) {
 #ifdef _WIN64
   set_boolean(env, config, "windowsOs", true);
 #else
@@ -727,6 +736,7 @@ JNIEXPORT jobject JNICALL Java_com_oracle_graal_hotspot_bridge_CompilerToVMImpl_
   set_int(env, config, "stackShadowPages", StackShadowPages);
   set_int(env, config, "hubOffset", oopDesc::klass_offset_in_bytes());
   set_int(env, config, "markOffset", oopDesc::mark_offset_in_bytes());
+  set_int(env, config, "initialMarkWordOffset", in_bytes(Klass::prototype_header_offset()));
   set_int(env, config, "superCheckOffsetOffset", in_bytes(Klass::super_check_offset_offset()));
   set_int(env, config, "secondarySuperCacheOffset", in_bytes(Klass::secondary_super_cache_offset()));
   set_int(env, config, "secondarySupersOffset", in_bytes(Klass::secondary_supers_offset()));
@@ -736,7 +746,6 @@ JNIEXPORT jobject JNICALL Java_com_oracle_graal_hotspot_bridge_CompilerToVMImpl_
   set_int(env, config, "threadTlabTopOffset", in_bytes(JavaThread::tlab_top_offset()));
   set_int(env, config, "threadTlabEndOffset", in_bytes(JavaThread::tlab_end_offset()));
   set_int(env, config, "threadObjectOffset", in_bytes(JavaThread::threadObj_offset()));
-  set_int(env, config, "instanceHeaderPrototypeOffset", in_bytes(Klass::prototype_header_offset()));
   set_int(env, config, "threadExceptionOopOffset", in_bytes(JavaThread::exception_oop_offset()));
   set_int(env, config, "threadExceptionPcOffset", in_bytes(JavaThread::exception_pc_offset()));
   set_int(env, config, "threadMultiNewArrayStorageOffset", in_bytes(JavaThread::graal_multinewarray_storage_offset()));
@@ -808,7 +817,6 @@ JNIEXPORT jobject JNICALL Java_com_oracle_graal_hotspot_bridge_CompilerToVMImpl_
     }
 
   set_int(env, config, "arrayClassElementOffset", in_bytes(objArrayKlass::element_klass_offset()));
-  return config;
 }
 
 // public HotSpotCompiledMethod installMethod(HotSpotCompilationResult comp, boolean installCode);
@@ -1040,13 +1048,14 @@ JNINativeMethod CompilerToVM_methods[] = {
   {CC"JavaType_componentType",              CC"("RESOLVED_TYPE")"TYPE,                            FN_PTR(JavaType_1componentType)},
   {CC"JavaType_uniqueConcreteSubtype",      CC"("RESOLVED_TYPE")"TYPE,                            FN_PTR(JavaType_1uniqueConcreteSubtype)},
   {CC"JavaType_superType",                  CC"("RESOLVED_TYPE")"TYPE,                            FN_PTR(JavaType_1superType)},
+  {CC"JavaType_initialMarkWord",            CC"("RESOLVED_TYPE")J",                               FN_PTR(JavaType_initialMarkWord)},
   {CC"JavaType_arrayOf",                    CC"("RESOLVED_TYPE")"TYPE,                            FN_PTR(JavaType_1arrayOf)},
   {CC"JavaType_fields",                     CC"("RESOLVED_TYPE")["RESOLVED_FIELD,                 FN_PTR(JavaType_1fields)},
   {CC"JavaType_isInitialized",              CC"("RESOLVED_TYPE")Z",                               FN_PTR(JavaType_1isInitialized)},
   {CC"getPrimitiveArrayType",               CC"("KIND")"TYPE,                                     FN_PTR(getPrimitiveArrayType)},
   {CC"getMaxCallTargetOffset",              CC"("RUNTIME_CALL")J",                                FN_PTR(getMaxCallTargetOffset)},
   {CC"getType",                             CC"("CLASS")"TYPE,                                    FN_PTR(getType)},
-  {CC"getConfiguration",                    CC"()"CONFIG,                                         FN_PTR(getConfiguration)},
+  {CC"initializeConfiguration",             CC"("CONFIG")V",                                      FN_PTR(initializeConfiguration)},
   {CC"installMethod",                       CC"("HS_COMP_RESULT"Z"HS_CODE_INFO")"HS_COMP_METHOD,  FN_PTR(installMethod)},
   {CC"disassembleNative",                   CC"([BJ)"STRING,                                      FN_PTR(disassembleNative)},
   {CC"JavaMethod_toStackTraceElement",      CC"("RESOLVED_METHOD"I)"STACK_TRACE_ELEMENT,          FN_PTR(JavaMethod_1toStackTraceElement)},
