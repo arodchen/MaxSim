@@ -47,6 +47,7 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.nodes.*;
+import com.oracle.graal.hotspot.phases.*;
 import com.oracle.graal.hotspot.snippets.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -103,6 +104,11 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider {
                         /*           temps */ null,
                         /*             ret */ ret(Kind.Void),
                         /* arg0: exception */ arg(0, Kind.Object));
+
+        addRuntimeCall(OnStackReplacementPhase.OSR_MIGRATION_END, config.osrMigrationEndStub,
+                        /*           temps */ null,
+                        /*             ret */ ret(Kind.Void),
+                        /* arg0:      long */ arg(0, Kind.Long));
 
         addRuntimeCall(REGISTER_FINALIZER, config.registerFinalizerStub,
                         /*           temps */ null,
@@ -667,15 +673,15 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider {
         return hsInfo;
     }
 
-    public void installMethod(ResolvedJavaMethod method, CompilationResult compResult, CodeInfo[] info) {
+    public void installMethod(ResolvedJavaMethod method, int entryBCI, CompilationResult compResult, CodeInfo[] info) {
         HotSpotCodeInfo hsInfo = makeInfo(method, compResult, info);
-        graalRuntime.getCompilerToVM().installMethod(new HotSpotCompilationResult((HotSpotResolvedJavaMethod) method, compResult), true, hsInfo);
+        graalRuntime.getCompilerToVM().installMethod(new HotSpotCompilationResult((HotSpotResolvedJavaMethod) method, entryBCI, compResult), true, hsInfo);
     }
 
     @Override
     public InstalledCode addMethod(ResolvedJavaMethod method, CompilationResult compResult, CodeInfo[] info) {
         HotSpotCodeInfo hsInfo = makeInfo(method, compResult, info);
-        return graalRuntime.getCompilerToVM().installMethod(new HotSpotCompilationResult((HotSpotResolvedJavaMethod) method, compResult), false, hsInfo);
+        return graalRuntime.getCompilerToVM().installMethod(new HotSpotCompilationResult((HotSpotResolvedJavaMethod) method, -1, compResult), false, hsInfo);
     }
 
     @Override

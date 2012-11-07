@@ -54,7 +54,7 @@ import com.oracle.graal.phases.util.*;
  * This class traverses the HIR instructions and generates LIR instructions from them.
  */
 public abstract class LIRGenerator extends LIRGeneratorTool {
-    protected final Graph graph;
+    protected final StructuredGraph graph;
     protected final CodeCacheProvider runtime;
     protected final TargetDescription target;
     protected final ResolvedJavaMethod method;
@@ -89,7 +89,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
      */
     private final ArrayList<StackSlot> lockDataSlots;
 
-    public LIRGenerator(Graph graph, CodeCacheProvider runtime, TargetDescription target, FrameMap frameMap, ResolvedJavaMethod method, LIR lir) {
+    public LIRGenerator(StructuredGraph graph, CodeCacheProvider runtime, TargetDescription target, FrameMap frameMap, ResolvedJavaMethod method, LIR lir) {
         this.graph = graph;
         this.runtime = runtime;
         this.target = target;
@@ -448,8 +448,12 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         return !(location instanceof IndexedLocationNode) && location.displacement() < 4096;
     }
 
+    protected CallingConvention createCallingConvention() {
+        return frameMap.registerConfig.getCallingConvention(JavaCallee, method.getSignature().getReturnKind(), MetaUtil.signatureToKinds(method), target, false);
+    }
+
     protected void emitPrologue() {
-        CallingConvention incomingArguments = frameMap.registerConfig.getCallingConvention(JavaCallee, method.getSignature().getReturnKind(), MetaUtil.signatureToKinds(method), target, false);
+        CallingConvention incomingArguments = createCallingConvention();
 
         Value[] params = new Value[incomingArguments.getArgumentCount()];
         for (int i = 0; i < params.length; i++) {
