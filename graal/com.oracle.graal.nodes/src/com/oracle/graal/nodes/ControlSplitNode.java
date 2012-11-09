@@ -25,6 +25,7 @@ package com.oracle.graal.nodes;
 import java.util.*;
 
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
@@ -61,28 +62,8 @@ public abstract class ControlSplitNode extends FixedNode {
         branchProbability[successorIndex] = x;
     }
 
-    public Iterable<BeginNode> blockSuccessors() {
-        return new Iterable<BeginNode>() {
-            @Override
-            public Iterator<BeginNode> iterator() {
-                return new Iterator<BeginNode>() {
-                    int i = 0;
-                    @Override
-                    public void remove() {
-                        throw new UnsupportedOperationException();
-                    }
-                    @Override
-                    public BeginNode next() {
-                        return ControlSplitNode.this.blockSuccessor(i++);
-                    }
-
-                    @Override
-                    public boolean hasNext() {
-                        return i < ControlSplitNode.this.blockSuccessorCount();
-                    }
-                };
-            }
-        };
+    public NodeIterable<BeginNode> blockSuccessors() {
+        return blockSuccessors;
     }
 
     public int blockSuccessorIndex(BeginNode successor) {

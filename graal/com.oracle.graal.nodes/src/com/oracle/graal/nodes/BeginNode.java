@@ -87,7 +87,7 @@ public class BeginNode extends FixedWithNextNode implements StateSplit, LIRLower
         return null;
     }
 
-    public void evacuateGuards(FixedNode evacuateFrom) {
+    private void evacuateGuards(FixedNode evacuateFrom) {
         if (!usages().isEmpty()) {
             BeginNode prevBegin = prevBegin(evacuateFrom);
             assert prevBegin != null;

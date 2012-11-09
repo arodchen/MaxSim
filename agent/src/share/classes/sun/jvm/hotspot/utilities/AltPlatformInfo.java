@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -19,28 +19,13 @@
  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
  * or visit www.oracle.com if you need additional information or have any
  * questions.
+ *
  */
-package com.oracle.graal.virtual.phases.ea.experimental;
 
-import java.util.*;
+package sun.jvm.hotspot.utilities;
 
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.cfg.*;
-import com.oracle.graal.virtual.phases.ea.*;
+public interface AltPlatformInfo {
+  // Additional cpu types can be tested via this interface
 
-public abstract class BlockIteratorClosure<T extends MergeableBlockState<T>> {
-
-    public static class LoopInfo<T extends MergeableBlockState<T>> {
-
-        public final List<T> endStates = new ArrayList<>();
-        public final List<T> exitStates = new ArrayList<>();
-    }
-
-    protected abstract void processBlock(Block block, T currentState);
-
-    protected abstract T merge(MergeNode merge, List<T> states);
-
-    protected abstract T afterSplit(FixedNode node, T oldState);
-
-    protected abstract List<T> processLoop(Loop loop, T initialState);
+  public boolean knownCPU(String cpu);
 }

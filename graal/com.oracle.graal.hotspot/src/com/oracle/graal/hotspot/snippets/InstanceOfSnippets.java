@@ -25,30 +25,23 @@ import static com.oracle.graal.hotspot.snippets.CheckCastSnippets.*;
 import static com.oracle.graal.hotspot.snippets.CheckCastSnippets.Templates.*;
 import static com.oracle.graal.hotspot.snippets.HotSpotSnippetUtils.*;
 import static com.oracle.graal.snippets.Snippet.Varargs.*;
-import static com.oracle.graal.snippets.SnippetTemplate.*;
 import static com.oracle.graal.snippets.SnippetTemplate.Arguments.*;
-import static com.oracle.graal.snippets.nodes.JumpNode.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.snippets.*;
 import com.oracle.graal.snippets.Snippet.ConstantParameter;
 import com.oracle.graal.snippets.Snippet.Parameter;
 import com.oracle.graal.snippets.Snippet.VarargsParameter;
-import com.oracle.graal.snippets.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.snippets.SnippetTemplate.Arguments;
 import com.oracle.graal.snippets.SnippetTemplate.Key;
-import com.oracle.graal.snippets.SnippetTemplate.UsageReplacer;
 import com.oracle.graal.snippets.nodes.*;
 
 /**
@@ -62,10 +55,10 @@ import com.oracle.graal.snippets.nodes.*;
 public class InstanceOfSnippets implements SnippetsInterface {
 
     /**
-     * A test against a final type with the result being {@linkplain ConditionalNode materialized}.
+     * A test against a final type.
      */
     @Snippet
-    public static Object materializeExact(
+    public static Object instanceofExact(
                     @Parameter("object") Object object,
                     @Parameter("exactHub") Object exactHub,
                     @Parameter("trueValue") Object trueValue,
@@ -85,33 +78,10 @@ public class InstanceOfSnippets implements SnippetsInterface {
     }
 
     /**
-     * A test against a final type with the result being {@linkplain IfNode branched} upon.
+     * A test against a primary type.
      */
     @Snippet
-    public static void ifExact(
-                    @Parameter("object") Object object,
-                    @Parameter("exactHub") Object exactHub,
-                    @ConstantParameter("checkNull") boolean checkNull) {
-        if (checkNull && object == null) {
-            isNull.inc();
-            jump(IfNode.FALSE_EDGE);
-            return;
-        }
-        Object objectHub = loadHub(object);
-        if (objectHub != exactHub) {
-            exactMiss.inc();
-            jump(IfNode.FALSE_EDGE);
-            return;
-        }
-        exactHit.inc();
-        jump(IfNode.TRUE_EDGE);
-    }
-
-    /**
-     * A test against a primary type with the result being {@linkplain ConditionalNode materialized}.
-     */
-    @Snippet
-    public static Object materializePrimary(
+    public static Object instanceofPrimary(
                     @Parameter("hub") Object hub,
                     @Parameter("object") Object object,
                     @Parameter("trueValue") Object trueValue,
@@ -132,35 +102,10 @@ public class InstanceOfSnippets implements SnippetsInterface {
     }
 
     /**
-     * A test against a primary type with the result being {@linkplain IfNode branched} upon.
+     * A test against a restricted secondary type type.
      */
     @Snippet
-    public static void ifPrimary(
-                    @Parameter("hub") Object hub,
-                    @Parameter("object") Object object,
-                    @ConstantParameter("checkNull") boolean checkNull,
-                    @ConstantParameter("superCheckOffset") int superCheckOffset) {
-        if (checkNull && object == null) {
-            isNull.inc();
-            jump(IfNode.FALSE_EDGE);
-            return;
-        }
-        Object objectHub = loadHub(object);
-        if (UnsafeLoadNode.loadObject(objectHub, 0, superCheckOffset, true) != hub) {
-            displayMiss.inc();
-            jump(IfNode.FALSE_EDGE);
-            return;
-        }
-        displayHit.inc();
-        jump(IfNode.TRUE_EDGE);
-        return;
-    }
-
-    /**
-     * A test against a restricted secondary type type with the result being {@linkplain ConditionalNode materialized}.
-     */
-    @Snippet
-    public static Object materializeSecondary(
+    public static Object instanceofSecondary(
                     @Parameter("hub") Object hub,
                     @Parameter("object") Object object,
                     @Parameter("trueValue") Object trueValue,
@@ -182,70 +127,6 @@ public class InstanceOfSnippets implements SnippetsInterface {
             }
         }
         if (!checkSecondarySubType(hub, objectHub)) {
-            return falseValue;
-        }
-        return trueValue;
-    }
-
-    /**
-     * A test against a restricted secondary type with the result being {@linkplain IfNode branched} upon.
-     */
-    @Snippet
-    public static void ifSecondary(
-                    @Parameter("hub") Object hub,
-                    @Parameter("object") Object object,
-                    @VarargsParameter("hints") Object[] hints,
-                    @ConstantParameter("checkNull") boolean checkNull) {
-        if (checkNull && object == null) {
-            isNull.inc();
-            jump(IfNode.FALSE_EDGE);
-            return;
-        }
-        Object objectHub = loadHub(object);
-        // if we get an exact match: succeed immediately
-        ExplodeLoopNode.explodeLoop();
-        for (int i = 0; i < hints.length; i++) {
-            Object hintHub = hints[i];
-            if (hintHub == objectHub) {
-                hintsHit.inc();
-                jump(IfNode.TRUE_EDGE);
-                return;
-            }
-        }
-        if (!checkSecondarySubType(hub, objectHub)) {
-            jump(IfNode.FALSE_EDGE);
-            return;
-        }
-        jump(IfNode.TRUE_EDGE);
-        return;
-    }
-
-    /**
-     * A test against an unknown (at compile time) type with the result being {@linkplain ConditionalNode materialized}.
-     */
-    @Snippet
-    public static Object materializeUnknown(
-                    @Parameter("hub") Object hub,
-                    @Parameter("object") Object object,
-                    @Parameter("trueValue") Object trueValue,
-                    @Parameter("falseValue") Object falseValue,
-                    @VarargsParameter("hints") Object[] hints,
-                    @ConstantParameter("checkNull") boolean checkNull) {
-        if (checkNull && object == null) {
-            isNull.inc();
-            return falseValue;
-        }
-        Object objectHub = loadHub(object);
-        // if we get an exact match: succeed immediately
-        ExplodeLoopNode.explodeLoop();
-        for (int i = 0; i < hints.length; i++) {
-            Object hintHub = hints[i];
-            if (hintHub == objectHub) {
-                hintsHit.inc();
-                return trueValue;
-            }
-        }
-        if (!checkUnknownSubType(hub, objectHub)) {
             return falseValue;
         }
         return trueValue;
@@ -278,136 +159,45 @@ public class InstanceOfSnippets implements SnippetsInterface {
         return false;
     }
 
-    public static class Templates extends AbstractTemplates<InstanceOfSnippets> {
+    public static class Templates extends InstanceOfSnippetsTemplates<InstanceOfSnippets> {
 
-        private final ResolvedJavaMethod ifExact;
-        private final ResolvedJavaMethod ifPrimary;
-        private final ResolvedJavaMethod ifSecondary;
-        private final ResolvedJavaMethod materializeExact;
-        private final ResolvedJavaMethod materializePrimary;
-        private final ResolvedJavaMethod materializeSecondary;
+        private final ResolvedJavaMethod instanceofExact;
+        private final ResolvedJavaMethod instanceofPrimary;
+        private final ResolvedJavaMethod instanceofSecondary;
 
         public Templates(CodeCacheProvider runtime) {
             super(runtime, InstanceOfSnippets.class);
-            ifExact = snippet("ifExact", Object.class, Object.class, boolean.class);
-            ifPrimary = snippet("ifPrimary", Object.class, Object.class, boolean.class, int.class);
-            ifSecondary = snippet("ifSecondary", Object.class, Object.class, Object[].class, boolean.class);
-
-            materializeExact = snippet("materializeExact", Object.class, Object.class, Object.class, Object.class, boolean.class);
-            materializePrimary = snippet("materializePrimary", Object.class, Object.class, Object.class, Object.class, boolean.class, int.class);
-            materializeSecondary = snippet("materializeSecondary", Object.class, Object.class, Object.class, Object.class, Object[].class, boolean.class);
+            instanceofExact = snippet("instanceofExact", Object.class, Object.class, Object.class, Object.class, boolean.class);
+            instanceofPrimary = snippet("instanceofPrimary", Object.class, Object.class, Object.class, Object.class, boolean.class, int.class);
+            instanceofSecondary = snippet("instanceofSecondary", Object.class, Object.class, Object.class, Object.class, Object[].class, boolean.class);
         }
 
-        private static final boolean MATERIALIZE_IF_NODE_USAGES = Boolean.getBoolean("graal.instanceof.disableJumpNodes");
-
-        public void lower(InstanceOfNode instanceOf, LoweringTool tool) {
-            ValueNode hub = instanceOf.targetClassInstruction();
+        @Override
+        protected KeyAndArguments getKeyAndArguments(InstanceOfUsageReplacer replacer, LoweringTool tool) {
+            InstanceOfNode instanceOf = replacer.instanceOf;
+            ValueNode trueValue = replacer.trueValue;
+            ValueNode falseValue = replacer.falseValue;
             ValueNode object = instanceOf.object();
-            TypeCheckHints hintInfo = new TypeCheckHints(instanceOf.targetClass(), instanceOf.profile(), tool.assumptions(), GraalOptions.CheckcastMinHintHitProbability, GraalOptions.CheckcastMaxHints);
-            final HotSpotResolvedJavaType target = (HotSpotResolvedJavaType) instanceOf.targetClass();
+            TypeCheckHints hintInfo = new TypeCheckHints(instanceOf.type(), instanceOf.profile(), tool.assumptions(), GraalOptions.InstanceOfMinHintHitProbability, GraalOptions.InstanceOfMaxHints);
+            final HotSpotResolvedJavaType type = (HotSpotResolvedJavaType) instanceOf.type();
+            ConstantNode hub = ConstantNode.forObject(type.klassOop(), runtime, instanceOf.graph());
             boolean checkNull = !object.stamp().nonNull();
-
-            for (Node usage : instanceOf.usages().snapshot()) {
-                Arguments arguments = null;
-                Key key = null;
-
-                // instanceof nodes are lowered separately for each usage. To simply graph modifications,
-                // we duplicate the instanceof node for each usage.
-                final InstanceOfNode duplicate = instanceOf.graph().add(new InstanceOfNode(instanceOf.targetClassInstruction(), instanceOf.targetClass(), instanceOf.object(), instanceOf.profile()));
-                usage.replaceFirstInput(instanceOf, duplicate);
-
-                if (usage instanceof IfNode) {
-                    final StructuredGraph graph = (StructuredGraph) usage.graph();
-                    if (!MATERIALIZE_IF_NODE_USAGES) {
-
-                        IfNode ifNode = (IfNode) usage;
-                        if (hintInfo.exact) {
-                            HotSpotKlassOop[] hints = createHints(hintInfo);
-                            assert hints.length == 1;
-                            key = new Key(ifExact).add("checkNull", checkNull);
-                            arguments = arguments("object", object).add("exactHub", hints[0]);
-                        } else if (target.isPrimaryType()) {
-                            key = new Key(ifPrimary).add("checkNull", checkNull).add("superCheckOffset", target.superCheckOffset());
-                            arguments = arguments("hub", hub).add("object", object);
-                        } else {
-                            HotSpotKlassOop[] hints = createHints(hintInfo);
-                            key = new Key(ifSecondary).add("hints", vargargs(Object.class, hints.length)).add("checkNull", checkNull);
-                            arguments = arguments("hub", hub).add("object", object).add("hints", hints);
-                        }
-
-                        SnippetTemplate template = cache.get(key);
-                        template.instantiate(runtime, duplicate, ifNode, arguments);
-                        assert ifNode.isDeleted();
-
-                    } else {
-
-                        final ValueNode falseValue = ConstantNode.forInt(0, graph);
-                        final ValueNode trueValue = ConstantNode.forInt(1, graph);
-
-                        if (hintInfo.exact) {
-                            HotSpotKlassOop[] hints = createHints(hintInfo);
-                            assert hints.length == 1;
-                            key = new Key(materializeExact).add("checkNull", checkNull);
-                            arguments = arguments("object", object).add("exactHub", hints[0]).add("trueValue", trueValue).add("falseValue", falseValue);
-                        } else if (target.isPrimaryType()) {
-                            key = new Key(materializePrimary).add("checkNull", checkNull).add("superCheckOffset", target.superCheckOffset());
-                            arguments = arguments("hub", hub).add("object", object).add("trueValue", trueValue).add("falseValue", falseValue);
-                        } else {
-                            HotSpotKlassOop[] hints = createHints(hintInfo);
-                            key = new Key(materializeSecondary).add("hints", vargargs(Object.class, hints.length)).add("checkNull", checkNull);
-                            arguments = arguments("hub", hub).add("object", object).add("hints", hints).add("trueValue", trueValue).add("falseValue", falseValue);
-                        }
-
-                        UsageReplacer replacer = new UsageReplacer() {
-                            @Override
-                            public void replace(ValueNode oldNode, ValueNode newNode) {
-                                assert oldNode == duplicate;
-                                newNode.inferStamp();
-                                IntegerEqualsNode condition = graph.add(new IntegerEqualsNode(newNode, trueValue));
-                                oldNode.replaceAtUsages(condition);
-                            }
-                        };
-
-                        SnippetTemplate template = cache.get(key);
-                        template.instantiate(runtime, duplicate, replacer, tool.lastFixedNode(), arguments);
-                    }
-
-                } else if (usage instanceof ConditionalNode) {
-
-                    ConditionalNode materialize = (ConditionalNode) usage;
-                    materialize.replaceAtUsages(duplicate);
-                    ValueNode falseValue = materialize.falseValue();
-                    ValueNode trueValue = materialize.trueValue();
-
-                    // The materialize node is no longer connected to anyone -> kill it
-                    materialize.clearInputs();
-                    assert materialize.usages().isEmpty();
-                    GraphUtil.killWithUnusedFloatingInputs(materialize);
-
-                    if (hintInfo.exact) {
-                        HotSpotKlassOop[] hints = createHints(hintInfo);
-                        assert hints.length == 1;
-                        key = new Key(materializeExact).add("checkNull", checkNull);
-                        arguments = arguments("object", object).add("exactHub", hints[0]).add("trueValue", trueValue).add("falseValue", falseValue);
-                    } else if (target.isPrimaryType()) {
-                        key = new Key(materializePrimary).add("checkNull", checkNull).add("superCheckOffset", target.superCheckOffset());
-                        arguments = arguments("hub", hub).add("object", object).add("trueValue", trueValue).add("falseValue", falseValue);
-                    } else {
-                        HotSpotKlassOop[] hints = createHints(hintInfo);
-                        key = new Key(materializeSecondary).add("hints", vargargs(Object.class, hints.length)).add("checkNull", checkNull);
-                        arguments = arguments("hub", hub).add("object", object).add("hints", hints).add("trueValue", trueValue).add("falseValue", falseValue);
-                    }
-
-                    SnippetTemplate template = cache.get(key);
-                    template.instantiate(runtime, duplicate, DEFAULT_REPLACER, tool.lastFixedNode(), arguments);
-                } else {
-                    throw new GraalInternalError("Unexpected usage of %s: %s", instanceOf, usage);
-                }
+            Arguments arguments;
+            Key key;
+            if (hintInfo.exact) {
+                HotSpotKlassOop[] hints = createHints(hintInfo);
+                assert hints.length == 1;
+                key = new Key(instanceofExact).add("checkNull", checkNull);
+                arguments = arguments("object", object).add("exactHub", hints[0]).add("trueValue", trueValue).add("falseValue", falseValue);
+            } else if (type.isPrimaryType()) {
+                key = new Key(instanceofPrimary).add("checkNull", checkNull).add("superCheckOffset", type.superCheckOffset());
+                arguments = arguments("hub", hub).add("object", object).add("trueValue", trueValue).add("falseValue", falseValue);
+            } else {
+                HotSpotKlassOop[] hints = createHints(hintInfo);
+                key = new Key(instanceofSecondary).add("hints", vargargs(Object.class, hints.length)).add("checkNull", checkNull);
+                arguments = arguments("hub", hub).add("object", object).add("hints", hints).add("trueValue", trueValue).add("falseValue", falseValue);
             }
-
-            assert !instanceOf.isDeleted();
-            assert instanceOf.usages().isEmpty();
-            GraphUtil.killWithUnusedFloatingInputs(instanceOf);
+            return new KeyAndArguments(key, arguments);
         }
     }
 

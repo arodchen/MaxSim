@@ -40,11 +40,10 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.PhasePlan.*;
+import com.oracle.graal.phases.PhasePlan.PhasePosition;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.schedule.*;
 import com.oracle.graal.virtual.phases.ea.*;
-import com.oracle.graal.virtual.phases.ea.experimental.*;
 
 public class GraalCompiler {
 
@@ -69,12 +68,9 @@ public class GraalCompiler {
         this.backend = backend;
     }
 
-    public CompilationResult compileMethod(final ResolvedJavaMethod method, final StructuredGraph graph, int osrBCI, final GraphCache cache, final PhasePlan plan,
+    public CompilationResult compileMethod(final ResolvedJavaMethod method, final StructuredGraph graph, final GraphCache cache, final PhasePlan plan,
                     final OptimisticOptimizations optimisticOpts) {
         assert (method.getModifiers() & Modifier.NATIVE) == 0 : "compiling native methods is not supported";
-        if (osrBCI != -1) {
-            throw new BailoutException("No OSR supported");
-        }
 
         return Debug.scope("GraalCompiler", new Object[]{graph, method, this}, new Callable<CompilationResult>() {
 
@@ -134,7 +130,7 @@ public class GraalCompiler {
             }
 
             if (GraalOptions.CheckCastElimination && GraalOptions.OptCanonicalizer) {
-                new IterativeCheckCastEliminationPhase(target, runtime, assumptions).apply(graph);
+                new IterativeConditionalEliminationPhase(target, runtime, assumptions).apply(graph);
             }
         }
 
@@ -157,7 +153,7 @@ public class GraalCompiler {
         }
 
         if (GraalOptions.PartialEscapeAnalysis && !plan.isPhaseDisabled(PartialEscapeAnalysisPhase.class)) {
-            new SplitPartialEscapeAnalysisPhase(runtime).apply(graph);
+            new PartialEscapeAnalysisPhase(target, runtime, assumptions).apply(graph);
         }
         if (GraalOptions.OptLoopTransform) {
             new LoopTransformHighPhase().apply(graph);
@@ -172,7 +168,7 @@ public class GraalCompiler {
             new CullFrameStatesPhase().apply(graph);
         }
 
-        if (GraalOptions.FloatingReads) {
+        if (GraalOptions.OptFloatingReads) {
             int mark = graph.getMark();
             new FloatingReadPhase().apply(graph);
             new CanonicalizerPhase(target, runtime, assumptions, mark, null).apply(graph);
@@ -190,8 +186,16 @@ public class GraalCompiler {
             new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
         }
 
+        if (GraalOptions.OptEliminatePartiallyRedundantGuards) {
+            new EliminatePartiallyRedundantGuardsPhase(false, true).apply(graph);
+        }
+
         if (GraalOptions.CheckCastElimination && GraalOptions.OptCanonicalizer) {
-            new IterativeCheckCastEliminationPhase(target, runtime, assumptions).apply(graph);
+            new IterativeConditionalEliminationPhase(target, runtime, assumptions).apply(graph);
+        }
+
+        if (GraalOptions.OptEliminatePartiallyRedundantGuards) {
+            new EliminatePartiallyRedundantGuardsPhase(true, true).apply(graph);
         }
 
         plan.runPhases(PhasePosition.MID_LEVEL, graph);

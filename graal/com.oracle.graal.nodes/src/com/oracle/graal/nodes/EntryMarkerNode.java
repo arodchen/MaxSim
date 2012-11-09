@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,10 +20,23 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.virtual.phases.ea;
+package com.oracle.graal.nodes;
 
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.spi.*;
 
-public interface MergeableBlockState<T> {
+/**
+ * This node will be inserted at point specified by {@link StructuredGraph#getEntryBCI()}, usually by the graph builder.
+ */
+public class EntryMarkerNode extends BeginNode implements Node.IterableNodeType, Simplifiable, LIRLowerable {
 
-    T clone();
+    @Override
+    public void simplify(SimplifierTool tool) {
+        // this node should not be removed, this overrides BeginNode.simplify
+    }
+
+    @Override
+    public void generate(LIRGeneratorTool gen) {
+        throw new GraalInternalError("OnStackReplacementNode should not survive");
+    }
 }

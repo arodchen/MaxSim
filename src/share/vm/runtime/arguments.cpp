@@ -1934,7 +1934,7 @@ bool Arguments::check_vm_args_consistency() {
       (ExplicitGCInvokesConcurrent ||
        ExplicitGCInvokesConcurrentAndUnloadsClasses)) {
     jio_fprintf(defaultStream::error_stream(),
-                "error: +ExplictGCInvokesConcurrent[AndUnloadsClasses] conflicts"
+                "error: +ExplicitGCInvokesConcurrent[AndUnloadsClasses] conflicts"
                 " with -UseAsyncConcMarkSweepGC");
     status = false;
   }
@@ -2148,6 +2148,7 @@ jint Arguments::parse_vm_init_args(const JavaVMInitArgs* args) {
     // modify its entries, not its name or shape
     const char* graal_projects[] = {
 #ifdef AMD64
+        "com.oracle.graal.amd64",
         "com.oracle.graal.asm.amd64",
         "com.oracle.graal.lir.amd64",
         "com.oracle.graal.compiler.amd64",

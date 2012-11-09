@@ -33,7 +33,6 @@ import com.oracle.graal.api.meta.JavaTypeProfile.ProfiledType;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.FrameState.InliningIdentifier;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
@@ -807,7 +806,6 @@ public class InliningUtil {
      * @param receiverNullCheck true if a null check needs to be generated for non-static inlinings, false if no such check is required
      */
     public static void inline(Invoke invoke, StructuredGraph inlineGraph, boolean receiverNullCheck) {
-        InliningIdentifier identifier = new InliningIdentifier(inlineGraph.method(), invoke);
         NodeInputList<ValueNode> parameters = invoke.callTarget().arguments();
         StructuredGraph graph = (StructuredGraph) invoke.node().graph();
 
@@ -917,7 +915,6 @@ public class InliningUtil {
                             outerFrameState.setDuringCall(true);
                         }
                         frameState.setOuterFrameState(outerFrameState);
-                        frameState.setInliningIdentifier(identifier);
                     }
                 }
             }
@@ -953,7 +950,7 @@ public class InliningUtil {
         NodeInputList<ValueNode> parameters = callTarget.arguments();
         ValueNode firstParam = parameters.size() <= 0 ? null : parameters.get(0);
         if (!callTarget.isStatic() && firstParam.kind() == Kind.Object && !firstParam.objectStamp().nonNull()) {
-            graph.addBeforeFixed(invoke.node(), graph.add(new FixedGuardNode(graph.unique(new IsNullNode(firstParam)), DeoptimizationReason.ClassCastException, DeoptimizationAction.InvalidateReprofile, true, invoke.leafGraphId())));
+            graph.addBeforeFixed(invoke.node(), graph.add(new FixedGuardNode(graph.unique(new IsNullNode(firstParam)), DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, true, invoke.leafGraphId())));
         }
     }
 }

@@ -52,7 +52,6 @@ public final class GraalOptions {
     public static int     SmallCompiledCodeSize              = 2200;
     public static boolean LimitInlinedProbability            = ____;
     // WeightBasedInliningPolicy (0)
-    public static boolean ParseBeforeInlining                = ____;
     public static float   InliningSizePenaltyExp             = 20;
     public static float   MaximumInlineWeight                = 1.25f;
     public static float   InliningSizePenalty                = 1;
@@ -69,9 +68,11 @@ public final class GraalOptions {
 
     // escape analysis settings
     public static boolean PartialEscapeAnalysis              = true;
+    public static int     EscapeAnalysisIterations           = 2;
+    public static String  EscapeAnalyzeOnly                  = null;
 
-    public static double TailDuplicationProbability          = 0.5;
-    public static int    TailDuplicationTrivialSize          = 1;
+    public static double  TailDuplicationProbability         = 0.5;
+    public static int     TailDuplicationTrivialSize         = 1;
 
     // absolute probability analysis
     public static boolean ProbabilityAnalysis                = true;
@@ -96,9 +97,6 @@ public final class GraalOptions {
     public static int     GraphCacheSize                     = 1000;
     public static boolean PrintGraphCache                    = ____;
 
-    //rematerialize settings
-    public static float   MinimumUsageProbability            = 0.95f;
-
     //loop transform settings TODO (gd) tune
     public static boolean LoopPeeling                        = true;
     public static boolean ReassociateInvariants              = true;
@@ -120,26 +118,22 @@ public final class GraalOptions {
 
     public static String  PrintFilter                        = null;
 
-    // printing settings
-    public static boolean PrintLIR                           = ____;
-    public static boolean PrintCFGToFile                     = ____;
-
     // Debug settings:
     public static boolean Debug                              = true;
     public static boolean PerThreadDebugValues               = ____;
     public static boolean SummarizeDebugValues               = ____;
     public static boolean SummarizePerPhase                  = ____;
-    public static String Dump                                = null;
-    public static String Meter                               = null;
-    public static String Time                                = null;
-    public static String Log                                 = null;
-    public static String LogFile                             = null;
-    public static String MethodFilter                        = null;
+    public static String  Dump                                = null;
+    public static String  Meter                               = null;
+    public static String  Time                                = null;
+    public static String  Log                                 = null;
+    public static String  LogFile                             = null;
+    public static String  MethodFilter                        = null;
     public static boolean DumpOnError                        = ____;
 
     // Ideal graph visualizer output settings
-    public static boolean PrintBinaryGraphs                  = ____;
-    public static boolean PrintCFG                           = true;
+    public static boolean PrintBinaryGraphs                  = true;
+    public static boolean PrintCFG                           = ____;
     public static boolean PrintIdealGraphFile                = ____;
     public static String  PrintIdealGraphAddress             = "127.0.0.1";
     public static int     PrintIdealGraphPort                = 4444;
@@ -149,23 +143,15 @@ public final class GraalOptions {
     public static boolean PrintQueue                         = ____;
     public static boolean PrintCompilation                   = ____;
     public static boolean PrintProfilingInformation          = ____;
-    public static boolean PrintXirTemplates                  = ____;
     public static boolean PrintIRWithLIR                     = ____;
-    public static boolean PrintAssembly                      = ____;
     public static boolean PrintCodeBytes                     = ____;
-    public static int     PrintAssemblyBytesPerLine          = 16;
     public static boolean PrintBailout                       = ____;
     public static int     TraceLinearScanLevel               = 0;
-    public static boolean TraceRegisterAllocation            = false;
     public static int     TraceLIRGeneratorLevel             = 0;
     public static boolean TraceEscapeAnalysis                = ____;
     public static int     TraceBytecodeParserLevel           = 0;
-    public static boolean PrintBailouts                      = true;
     public static boolean ExitVMOnBailout                    = ____;
     public static boolean ExitVMOnException                  = true;
-
-    // state merging settings
-    public static boolean AssumeVerifiedBytecode             = true;
 
     // Code generator settings
     public static boolean CheckCastElimination               = true;
@@ -180,7 +166,6 @@ public final class GraalOptions {
            static boolean UseTypeCheckHints                  = true;
     public static boolean InlineVTableStubs                  = true;
     public static boolean AlwaysInlineVTableStubs            = ____;
-
     public static boolean GenAssertionCode                   = ____;
     public static boolean AlignCallsForPatching              = true;
     public static boolean ResolveClassBeforeStaticInvoke     = true;
@@ -193,33 +178,23 @@ public final class GraalOptions {
     public static boolean DetailedAsserts                    = ____;
 
     // Runtime settings
-    public static int     ReadPrefetchInstr                  = 0;
     public static int     StackShadowPages                   = 2;
-
-    // Assembler settings
-    public static boolean CommentedAssembly                  = ____;
-    public static boolean PrintLIRWithAssembly               = ____;
 
     public static boolean SupportJsrBytecodes                = true;
 
     public static boolean OptAssumptions                     = true;
     public static boolean OptReadElimination                 = true;
-    public static boolean OptGVN                             = true;
     public static boolean OptCanonicalizer                   = true;
-    public static boolean ScheduleOutOfLoops                 = true;
+    public static boolean OptScheduleOutOfLoops              = true;
     public static boolean OptReorderLoops                    = true;
     public static boolean OptEliminateGuards                 = true;
     public static boolean OptImplicitNullChecks              = true;
     public static boolean OptLivenessAnalysis                = true;
     public static boolean OptLoopTransform                   = true;
     public static boolean OptSafepointElimination            = true;
-    public static boolean FloatingReads                      = true;
+    public static boolean OptFloatingReads                   = true;
     public static boolean OptTailDuplication                 = true;
-
-    /**
-     * Prints all the available GraalOptions.
-     */
-    public static boolean PrintFlags                           = false;
+    public static boolean OptEliminatePartiallyRedundantGuards = true;
 
     /**
      * Counts the various paths taken through snippets.
@@ -247,11 +222,10 @@ public final class GraalOptions {
     /**
      * @see #CheckcastMaxHints
      */
-    public static int InstanceOfMaxHints = 1;
+    public static int InstanceOfMaxHints = 2;
 
     static {
         // turn detailed assertions on when the general assertions are on (misusing the assert keyword for this)
         assert (DetailedAsserts = true) == true;
-        assert (CommentedAssembly = true) == true;
     }
 }

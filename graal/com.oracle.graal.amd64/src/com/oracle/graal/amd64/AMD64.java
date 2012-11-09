@@ -20,7 +20,7 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.asm.amd64;
+package com.oracle.graal.amd64;
 
 import static com.oracle.graal.api.code.MemoryBarriers.*;
 import static com.oracle.graal.api.code.Register.RegisterFlag.*;
@@ -114,15 +114,4 @@ public class AMD64 extends Architecture {
               r15.encoding + 1,
               8);
     }
-
-    @Override
-    public boolean isX86() {
-        return true;
-    }
-
-    @Override
-    public boolean twoOperandMode() {
-        return true;
-    }
-
 }

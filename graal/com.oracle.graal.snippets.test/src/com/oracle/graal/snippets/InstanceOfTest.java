@@ -26,12 +26,17 @@ import java.util.*;
 
 import org.junit.*;
 
+import com.oracle.graal.api.code.CompilationResult.Call;
+import com.oracle.graal.api.code.CompilationResult.Mark;
+import com.oracle.graal.api.code.CompilationResult.Site;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.snippets.CheckCastTest.*;
+import com.oracle.graal.snippets.CheckCastTest.Depth12;
+import com.oracle.graal.snippets.CheckCastTest.Depth13;
+import com.oracle.graal.snippets.CheckCastTest.Depth14;
 
 /**
  * Tests the implementation of instanceof, allowing profiling information to
@@ -48,7 +53,7 @@ public class InstanceOfTest extends TypeCheckTest {
     protected void replaceProfile(StructuredGraph graph, JavaTypeProfile profile) {
         InstanceOfNode ion = graph.getNodes().filter(InstanceOfNode.class).first();
         if (ion != null) {
-            InstanceOfNode ionNew = graph.add(new InstanceOfNode(ion.targetClassInstruction(), ion.targetClass(), ion.object(), profile));
+            InstanceOfNode ionNew = graph.add(new InstanceOfNode(ion.type(), ion.object(), profile));
             graph.replaceFloating(ion, ionNew);
         }
     }
@@ -196,15 +201,12 @@ public class InstanceOfTest extends TypeCheckTest {
         return -1;
     }
 
-
     public static int isThrowableInt(Object o) {
+        int result = o instanceof Throwable ? 4 : 5;
         if (o instanceof Throwable) {
-            return 1;
+            return id(4);
         }
-        if (o instanceof Throwable) {
-            return 2;
-        }
-        return 0;
+        return result;
     }
 
     public static boolean isMap(Object o) {
@@ -213,9 +215,9 @@ public class InstanceOfTest extends TypeCheckTest {
 
     public static int isMapInt(Object o) {
         if (o instanceof Map) {
-            return 1;
+            return id(1);
         }
-        return 0;
+        return id(0);
     }
 
     public static boolean isDepth12(Object o) {
@@ -227,5 +229,99 @@ public class InstanceOfTest extends TypeCheckTest {
             return id(0);
         }
         return id(0);
+    }
+
+    abstract static class MySite {
+        final int offset;
+        MySite(int offset) {
+            this.offset = offset;
+        }
+    }
+
+    static class MyMark extends MySite {
+        MyMark(int offset) {
+            super(offset);
+        }
+    }
+
+    abstract static class MySafepoint extends MySite {
+        MySafepoint(int offset) {
+            super(offset);
+        }
+    }
+
+    static class MyCall extends MySafepoint {
+        MyCall(int offset) {
+            super(offset);
+        }
+    }
+
+    @Test
+    public void test9() {
+        MyCall callAt63 = new MyCall(63);
+        MyMark markAt63 = new MyMark(63);
+        test("compareMySites",  callAt63, callAt63);
+        test("compareMySites",  callAt63, markAt63);
+        test("compareMySites",  markAt63, callAt63);
+        test("compareMySites",  markAt63, markAt63);
+    }
+
+    public static int compareMySites(MySite s1, MySite s2) {
+        if (s1.offset == s2.offset && (s1 instanceof MyMark ^ s2 instanceof MyMark)) {
+            return s1 instanceof MyMark ? -1 : 1;
+        }
+        return s1.offset - s2.offset;
+    }
+
+    @Test
+    public void test10() {
+        Mark[] noMarks = {};
+        Call callAt63 = new Call("ignore", 63, 5, true, null);
+        Mark markAt63 = new Mark(63, "1", noMarks);
+        test("compareSites",  callAt63, callAt63);
+        test("compareSites",  callAt63, markAt63);
+        test("compareSites",  markAt63, callAt63);
+        test("compareSites",  markAt63, markAt63);
+    }
+
+    public static int compareSites(Site s1, Site s2) {
+        if (s1.pcOffset == s2.pcOffset && (s1 instanceof Mark ^ s2 instanceof Mark)) {
+            return s1 instanceof Mark ? -1 : 1;
+        }
+        return s1.pcOffset - s2.pcOffset;
+    }
+
+    /**
+     * This test exists to show the kind of pattern that is be optimizable by
+     * {@code removeIntermediateMaterialization()} in {@link IfNode}.
+     * <p>
+     * The test exists in this source file as the transformation was originally motivated by the need to
+     * remove use of special JumpNodes in the {@code InstanceOfSnippets}.
+     */
+    @Test
+    public void test_removeIntermediateMaterialization() {
+        List<String> list = Arrays.asList("1", "2", "3", "4");
+        test("removeIntermediateMaterialization",    profile(),                        list, "2", "yes", "no");
+        test("removeIntermediateMaterialization",    profile(),                        list, null, "yes", "no");
+        test("removeIntermediateMaterialization",    profile(),                        null, "2", "yes", "no");
+    }
+
+    public static String removeIntermediateMaterialization(List<Object> list, Object e, String a, String b) {
+        boolean test;
+        if (list == null || e == null) {
+            test = false;
+        } else {
+            test = false;
+            for (Object i : list) {
+                if (i.equals(e)) {
+                    test = true;
+                    break;
+                }
+            }
+        }
+        if (test) {
+            return a;
+        }
+        return b;
     }
 }

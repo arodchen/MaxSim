@@ -36,14 +36,16 @@ public final class HotSpotCompilationResult extends CompilerObject {
     private static final long serialVersionUID = 7807321392203253218L;
     public final CompilationResult comp;
     public final HotSpotResolvedJavaMethod method; // used only for methods
+    public final int entryBCI; // used only for methods
     public final String name; // used only for stubs
 
     public final Site[] sites;
     public final ExceptionHandler[] exceptionHandlers;
 
-    public HotSpotCompilationResult(HotSpotResolvedJavaMethod method, CompilationResult comp) {
+    public HotSpotCompilationResult(HotSpotResolvedJavaMethod method, int entryBCI, CompilationResult comp) {
         this.method = method;
         this.comp = comp;
+        this.entryBCI = entryBCI;
         this.name = null;
 
         sites = getSortedSites(comp);
@@ -51,6 +53,15 @@ public final class HotSpotCompilationResult extends CompilerObject {
             exceptionHandlers = null;
         } else {
             exceptionHandlers = comp.getExceptionHandlers().toArray(new ExceptionHandler[comp.getExceptionHandlers().size()]);
+        }
+    }
+
+    static class SiteComparator implements Comparator<Site> {
+        public int compare(Site s1, Site s2) {
+            if (s1.pcOffset == s2.pcOffset && (s1 instanceof Mark ^ s2 instanceof Mark)) {
+                return s1 instanceof Mark ? -1 : 1;
+            }
+            return s1.pcOffset - s2.pcOffset;
         }
     }
 
@@ -67,15 +78,7 @@ public final class HotSpotCompilationResult extends CompilerObject {
                 result[pos++] = (Site) elem;
             }
         }
-        Arrays.sort(result, new Comparator<Site>() {
-
-            public int compare(Site s1, Site s2) {
-                if (s1.pcOffset == s2.pcOffset && (s1 instanceof Mark ^ s2 instanceof Mark)) {
-                    return s1 instanceof Mark ? -1 : 1;
-                }
-                return s1.pcOffset - s2.pcOffset;
-            }
-        });
+        Arrays.sort(result, new SiteComparator());
         return result;
     }
 }

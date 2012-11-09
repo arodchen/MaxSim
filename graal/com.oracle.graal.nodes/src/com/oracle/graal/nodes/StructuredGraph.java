@@ -38,11 +38,14 @@ import com.oracle.graal.nodes.util.*;
  */
 public class StructuredGraph extends Graph {
 
+    public static final int INVOCATION_ENTRY_BCI = -1;
     public static final long INVALID_GRAPH_ID = -1;
+
     private static final AtomicLong uniqueGraphIds = new AtomicLong();
     private final StartNode start;
     private final ResolvedJavaMethod method;
     private final long graphId;
+    private final int entryBCI;
 
     /**
      * Creates a new Graph containing a single {@link BeginNode} as the {@link #start() start} node.
@@ -54,23 +57,24 @@ public class StructuredGraph extends Graph {
     /**
      * Creates a new Graph containing a single {@link BeginNode} as the {@link #start() start} node.
      */
-    public StructuredGraph(String name) {
-        this(name, null);
-    }
-
     public StructuredGraph(String name, ResolvedJavaMethod method) {
-        this(name, method, uniqueGraphIds.incrementAndGet());
+        this(name, method, uniqueGraphIds.incrementAndGet(), INVOCATION_ENTRY_BCI);
     }
 
-    private StructuredGraph(String name, ResolvedJavaMethod method, long graphId) {
+    public StructuredGraph(ResolvedJavaMethod method) {
+        this(null, method, uniqueGraphIds.incrementAndGet(), INVOCATION_ENTRY_BCI);
+    }
+
+    public StructuredGraph(ResolvedJavaMethod method, int entryBCI) {
+        this(null, method, uniqueGraphIds.incrementAndGet(), entryBCI);
+    }
+
+    private StructuredGraph(String name, ResolvedJavaMethod method, long graphId, int entryBCI) {
         super(name);
         this.start = add(new StartNode());
         this.method = method;
         this.graphId = graphId;
-    }
-
-    public StructuredGraph(ResolvedJavaMethod method) {
-        this(null, method);
+        this.entryBCI = entryBCI;
     }
 
     @Override
@@ -102,6 +106,10 @@ public class StructuredGraph extends Graph {
         return method;
     }
 
+    public int getEntryBCI() {
+        return entryBCI;
+    }
+
     public long graphId() {
         return graphId;
     }
@@ -113,7 +121,7 @@ public class StructuredGraph extends Graph {
 
     @Override
     public StructuredGraph copy(String newName) {
-        StructuredGraph copy = new StructuredGraph(newName, method, graphId);
+        StructuredGraph copy = new StructuredGraph(newName, method, graphId, entryBCI);
         HashMap<Node, Node> replacements = new HashMap<>();
         replacements.put(start, copy.start);
         copy.addDuplicates(getNodes(), replacements);

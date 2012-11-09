@@ -29,29 +29,24 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
- * Implements a type check that results in a {@link ClassCastException} if it fails.
+ * Implements a type check against a compile-time known type.
  */
 public final class CheckCastNode extends FixedWithNextNode implements Canonicalizable, Lowerable, Node.IterableNodeType {
 
     @Input private ValueNode object;
-    @Input private ValueNode targetClassInstruction;
-    private final ResolvedJavaType targetClass;
+    private final ResolvedJavaType type;
     private final JavaTypeProfile profile;
 
     /**
      * Creates a new CheckCast instruction.
-     * @param targetClassInstruction the instruction which produces the class which is being cast to
-     * @param targetClass the class being cast to
+     *
+     * @param type the type being cast to
      * @param object the instruction producing the object
      */
-    public CheckCastNode(ValueNode targetClassInstruction, ResolvedJavaType targetClass, ValueNode object) {
-        this(targetClassInstruction, targetClass, object, null);
-    }
-
-    public CheckCastNode(ValueNode targetClassInstruction, ResolvedJavaType targetClass, ValueNode object, JavaTypeProfile profile) {
-        super(targetClass == null ? StampFactory.object() : StampFactory.declared(targetClass));
-        this.targetClassInstruction = targetClassInstruction;
-        this.targetClass = targetClass;
+    public CheckCastNode(ResolvedJavaType type, ValueNode object, JavaTypeProfile profile) {
+        super(StampFactory.declared(type));
+        assert type != null;
+        this.type = type;
         this.object = object;
         this.profile = profile;
     }
@@ -64,7 +59,7 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
     @Override
     public boolean inferStamp() {
         if (object().stamp().nonNull() && !stamp().nonNull()) {
-            setStamp(targetClass == null ? StampFactory.objectNonNull() : StampFactory.declaredNonNull(targetClass));
+            setStamp(StampFactory.declaredNonNull(type));
             return true;
         }
         return super.inferStamp();
@@ -74,9 +69,9 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
     public ValueNode canonical(CanonicalizerTool tool) {
         assert object() != null : this;
 
-        if (targetClass != null) {
+        if (type != null) {
             ResolvedJavaType objectType = object().objectStamp().type();
-            if (objectType != null && objectType.isSubtypeOf(targetClass)) {
+            if (objectType != null && objectType.isSubtypeOf(type)) {
                 // we don't have to check for null types here because they will also pass the checkcast.
                 return object();
             }
@@ -92,19 +87,11 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
         return object;
     }
 
-    public ValueNode targetClassInstruction() {
-        return targetClassInstruction;
-    }
-
     /**
-     * Gets the target class, i.e. the class being cast to, or the class being tested against.
-     * This may be null in the case where the type being tested is dynamically loaded such as
-     * when checking an object array store.
-     *
-     * @return the target class or null if not known
+     * Gets the type being cast to.
      */
-    public ResolvedJavaType targetClass() {
-        return targetClass;
+    public ResolvedJavaType type() {
+        return type;
     }
 
     public JavaTypeProfile profile() {
