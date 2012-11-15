@@ -255,10 +255,11 @@ public abstract class LoopFragment {
             merge.setNext(next);
 
             FrameState exitState = earlyExit.stateAfter();
-            FrameState newExitState = newEarlyExit.stateAfter();
             FrameState state = null;
             if (exitState != null) {
-                state = exitState.duplicateWithVirtualState();
+                state = exitState;
+                exitState = exitState.duplicateWithVirtualState();
+                earlyExit.setStateAfter(exitState);
                 merge.setStateAfter(state);
             }
 
@@ -291,7 +292,7 @@ public abstract class LoopFragment {
                     if (!merge.isPhiAtMerge(usage)) {
                         if (usage instanceof VirtualState) {
                             VirtualState stateUsage = (VirtualState) usage;
-                            if (exitState.isPartOfThisState(stateUsage) || newExitState.isPartOfThisState(stateUsage)) {
+                            if (exitState.isPartOfThisState(stateUsage)) {
                                 continue;
                             }
                         }
