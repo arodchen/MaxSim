@@ -23,12 +23,14 @@
 package com.oracle.graal.virtual.phases.ea;
 
 import java.util.*;
+import java.util.concurrent.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.graph.*;
@@ -40,11 +42,13 @@ public class PartialEscapeAnalysisPhase extends Phase {
     private final TargetDescription target;
     private final MetaAccessProvider runtime;
     private final Assumptions assumptions;
+    private final boolean iterative;
 
-    public PartialEscapeAnalysisPhase(TargetDescription target, MetaAccessProvider runtime, Assumptions assumptions) {
+    public PartialEscapeAnalysisPhase(TargetDescription target, MetaAccessProvider runtime, Assumptions assumptions, boolean iterative) {
         this.target = target;
         this.runtime = runtime;
         this.assumptions = assumptions;
+        this.iterative = iterative;
     }
 
     public static final void trace(String format, Object... obj) {
@@ -63,17 +67,30 @@ public class PartialEscapeAnalysisPhase extends Phase {
             return;
         }
 
-        for (int iteration = 0; iteration < GraalOptions.EscapeAnalysisIterations; iteration++) {
-            Debug.scope("iteration " + iteration, new Runnable() {
+        boolean analyzableNodes = false;
+        for (Node node : graph.getNodes()) {
+            if (node instanceof EscapeAnalyzable) {
+                analyzableNodes = true;
+                break;
+            }
+        }
+        if (!analyzableNodes) {
+            return;
+        }
+
+        Boolean continueIteration = true;
+        for (int iteration = 0; iteration < GraalOptions.EscapeAnalysisIterations && continueIteration; iteration++) {
+            continueIteration = Debug.scope("iteration " + iteration, new Callable<Boolean>() {
+
                 @Override
-                public void run() {
+                public Boolean call() {
                     SchedulePhase schedule = new SchedulePhase();
                     schedule.apply(graph, false);
                     PartialEscapeClosure closure = new PartialEscapeClosure(graph.createNodeBitMap(), schedule, runtime);
                     ReentrantBlockIterator.apply(closure, schedule.getCFG().getStartBlock(), new BlockState(), null);
 
                     if (closure.getVirtualIdCount() == 0) {
-                        return;
+                        return false;
                     }
 
                     // apply the effects collected during the escape analysis iteration
@@ -87,9 +104,13 @@ public class PartialEscapeAnalysisPhase extends Phase {
                     assert noObsoleteNodes(graph, obsoleteNodes);
 
                     new DeadCodeEliminationPhase().apply(graph);
+                    if (!iterative) {
+                        return false;
+                    }
                     if (GraalOptions.OptCanonicalizer) {
                         new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
                     }
+                    return true;
                 }
             });
         }

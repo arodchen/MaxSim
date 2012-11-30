@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,6 +25,7 @@
 #ifndef SHARE_VM_CODE_STUBS_HPP
 #define SHARE_VM_CODE_STUBS_HPP
 
+#include "asm/codeBuffer.hpp"
 #include "memory/allocation.hpp"
 #ifdef TARGET_OS_FAMILY_linux
 # include "os_linux.inline.hpp"
@@ -71,7 +72,8 @@
 class Stub VALUE_OBJ_CLASS_SPEC {
  public:
   // Initialization/finalization
-  void    initialize(int size)                   { ShouldNotCallThis(); }                // called to initialize/specify the stub's size
+  void    initialize(int size,
+                     CodeComments& comments)     { ShouldNotCallThis(); }                // called to initialize/specify the stub's size
   void    finalize()                             { ShouldNotCallThis(); }                // called before the stub is deallocated
 
   // General info/converters
@@ -104,7 +106,8 @@ class Stub VALUE_OBJ_CLASS_SPEC {
 class StubInterface: public CHeapObj<mtCode> {
  public:
   // Initialization/finalization
-  virtual void    initialize(Stub* self, int size)         = 0; // called after creation (called twice if allocated via (request, commit))
+  virtual void    initialize(Stub* self, int size,
+                             CodeComments& comments)       = 0; // called after creation (called twice if allocated via (request, commit))
   virtual void    finalize(Stub* self)                     = 0; // called before deallocation
 
   // General info/converters
@@ -117,7 +120,7 @@ class StubInterface: public CHeapObj<mtCode> {
 
   // Debugging
   virtual void    verify(Stub* self)                       = 0; // verifies the stub
-  virtual void    print(Stub* self)                        = 0; // prints information about the stub
+  virtual void    print_on(Stub* self, outputStream* st)   = 0; // prints information about the stub
 };
 
 
@@ -132,7 +135,8 @@ class StubInterface: public CHeapObj<mtCode> {
                                                            \
    public:                                                 \
     /* Initialization/finalization */                      \
-    virtual void    initialize(Stub* self, int size)       { cast(self)->initialize(size); }       \
+    virtual void    initialize(Stub* self, int size,       \
+                               CodeComments& comments)     { cast(self)->initialize(size, comments); } \
     virtual void    finalize(Stub* self)                   { cast(self)->finalize(); }             \
                                                            \
     /* General info */                                     \
@@ -145,7 +149,7 @@ class StubInterface: public CHeapObj<mtCode> {
                                                            \
     /* Debugging */                                        \
     virtual void    verify(Stub* self)                     { cast(self)->verify(); }               \
-    virtual void    print(Stub* self)                      { cast(self)->print(); }                \
+    virtual void    print_on(Stub* self, outputStream* st) { cast(self)->print_on(st); }           \
   };
 
 
@@ -171,13 +175,14 @@ class StubQueue: public CHeapObj<mtCode> {
   Stub* current_stub() const                     { return stub_at(_queue_end); }
 
   // Stub functionality accessed via interface
-  void  stub_initialize(Stub* s, int size)       { assert(size % CodeEntryAlignment == 0, "size not aligned"); _stub_interface->initialize(s, size); }
+  void  stub_initialize(Stub* s, int size,
+                        CodeComments& comments)  { assert(size % CodeEntryAlignment == 0, "size not aligned"); _stub_interface->initialize(s, size, comments); }
   void  stub_finalize(Stub* s)                   { _stub_interface->finalize(s); }
   int   stub_size(Stub* s) const                 { return _stub_interface->size(s); }
   bool  stub_contains(Stub* s, address pc) const { return _stub_interface->code_begin(s) <= pc && pc < _stub_interface->code_end(s); }
   int   stub_code_size_to_size(int code_size) const { return _stub_interface->code_size_to_size(code_size); }
   void  stub_verify(Stub* s)                     { _stub_interface->verify(s); }
-  void  stub_print(Stub* s)                      { _stub_interface->print(s); }
+  void  stub_print(Stub* s, outputStream* st)    { _stub_interface->print_on(s, st); }
 
   static void register_queue(StubQueue*);
 
@@ -200,7 +205,8 @@ class StubQueue: public CHeapObj<mtCode> {
   // Stub allocation (atomic transactions)
   Stub* request_committed(int code_size);        // request a stub that provides exactly code_size space for code
   Stub* request(int requested_code_size);        // request a stub with a (maximum) code space - locks the queue
-  void  commit (int committed_code_size);        // commit the previously requested stub - unlocks the queue
+  void  commit (int committed_code_size,
+                CodeComments& comments);         // commit the previously requested stub - unlocks the queue
 
   // Stub deallocation
   void  remove_first();                          // remove the first stub in the queue
@@ -221,7 +227,8 @@ class StubQueue: public CHeapObj<mtCode> {
 
   // Debugging/printing
   void  verify();                                // verifies the stub queue
-  void  print();                                 // prints information about the stub queue
+  void  print()                                  { print_on(tty); }
+  void  print_on(outputStream* st);
 };
 
 #endif // SHARE_VM_CODE_STUBS_HPP

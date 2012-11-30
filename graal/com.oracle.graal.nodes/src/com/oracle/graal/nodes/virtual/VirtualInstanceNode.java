@@ -67,12 +67,17 @@ public class VirtualInstanceNode extends VirtualObjectNode {
     }
 
     @Override
-    public Object fieldName(int index) {
+    public String fieldName(int index) {
         return fields[index].getName();
     }
 
     public int fieldIndex(ResolvedJavaField field) {
         Integer index = fieldMap.get(field);
         return index == null ? -1 : index;
+    }
+
+    @Override
+    public int fieldIndexForOffset(long constantOffset) {
+        return fieldIndex(type.findInstanceFieldWithOffset(constantOffset));
     }
 }

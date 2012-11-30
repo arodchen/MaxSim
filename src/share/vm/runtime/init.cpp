@@ -34,6 +34,7 @@
 #include "runtime/init.hpp"
 #include "runtime/safepoint.hpp"
 #include "runtime/sharedRuntime.hpp"
+#include "utilities/machineCodePrinter.hpp"
 
 // Initialization done by VM thread in vm_init_globals()
 void check_ThreadShadow();
@@ -86,6 +87,10 @@ void vm_init_globals() {
   mutex_init();
   chunkpool_init();
   perfMemory_init();
+
+  if(PrintMachineCodeToFile) {
+    MachineCodePrinter::initialize();
+  }
 }
 
 
@@ -94,12 +99,13 @@ jint init_globals() {
   management_init();
   bytecodes_init();
   classLoader_init();
+  Metaspace::global_initialize(); // must be before codeCache
   codeCache_init();
   VM_Version_init();
   os_init_globals();
   stubRoutines_init1();
   jint status = universe_init();  // dependent on codeCache_init and
-                                  // stubRoutines_init1
+                                  // stubRoutines_init1 and metaspace_init.
   if (status != JNI_OK)
     return status;
 
@@ -113,9 +119,9 @@ jint init_globals() {
   universe2_init();  // dependent on codeCache_init and stubRoutines_init1
   referenceProcessor_init();
   jni_handles_init();
-#ifndef VM_STRUCTS_KERNEL
+#if INCLUDE_VM_STRUCTS
   vmStructs_init();
-#endif // VM_STRUCTS_KERNEL
+#endif // INCLUDE_VM_STRUCTS
 
   vtableStubs_init();
   InlineCacheBuffer_init();

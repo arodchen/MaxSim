@@ -35,7 +35,7 @@
 #include "memory/allocation.inline.hpp"
 #include "memory/oopFactory.hpp"
 #include "memory/universe.inline.hpp"
-#include "oops/methodDataOop.hpp"
+#include "oops/methodData.hpp"
 #include "oops/objArrayKlass.hpp"
 #include "prims/jvmtiExport.hpp"
 #include "runtime/init.hpp"
@@ -45,13 +45,11 @@
 #include "c1/c1_Runtime1.hpp"
 
 // ------------------------------------------------------------------
-// ciEnv::check_klass_accessiblity
-//
 // Note: the logic of this method should mirror the logic of
 // constantPoolOopDesc::verify_constant_pool_resolve.
 bool GraalEnv::check_klass_accessibility(KlassHandle accessing_klass, KlassHandle resolved_klass) {
   if (accessing_klass->oop_is_objArray()) {
-    accessing_klass = objArrayKlass::cast(accessing_klass())->bottom_klass();
+    accessing_klass = ObjArrayKlass::cast(accessing_klass())->bottom_klass();
   }
   if (!accessing_klass->oop_is_instance()) {
     return true;
@@ -59,7 +57,7 @@ bool GraalEnv::check_klass_accessibility(KlassHandle accessing_klass, KlassHandl
 
   if (resolved_klass->oop_is_objArray()) {
     // Find the element klass, if this is an array.
-    resolved_klass = objArrayKlass::cast(resolved_klass())->bottom_klass();
+    resolved_klass = ObjArrayKlass::cast(resolved_klass())->bottom_klass();
   }
   if (resolved_klass->oop_is_instance()) {
     return Reflection::verify_class_access(accessing_klass(), resolved_klass(), true);
@@ -68,7 +66,6 @@ bool GraalEnv::check_klass_accessibility(KlassHandle accessing_klass, KlassHandl
 }
 
 // ------------------------------------------------------------------
-// ciEnv::get_klass_by_name_impl
 KlassHandle GraalEnv::get_klass_by_name_impl(KlassHandle& accessing_klass,
                                           constantPoolHandle& cpool,
                                           Symbol* sym,
@@ -97,7 +94,7 @@ KlassHandle GraalEnv::get_klass_by_name_impl(KlassHandle& accessing_klass,
   {
     ttyUnlocker ttyul;  // release tty lock to avoid ordering problems
     MutexLocker ml(Compile_lock);
-    klassOop kls;
+    Klass*  kls;
     if (!require_local) {
       kls = SystemDictionary::find_constrained_instance_or_array_klass(sym, loader, CHECK_(KlassHandle()));
     } else {
@@ -120,7 +117,7 @@ KlassHandle GraalEnv::get_klass_by_name_impl(KlassHandle& accessing_klass,
                                                  sym->utf8_length()-1,
                                                  CHECK_(KlassHandle()));
 
-    // Get element ciKlass recursively.
+    // Get element Klass recursively.
     KlassHandle elem_klass =
       get_klass_by_name_impl(accessing_klass,
                              cpool,
@@ -136,8 +133,8 @@ KlassHandle GraalEnv::get_klass_by_name_impl(KlassHandle& accessing_klass,
     // Look inside the constant pool for pre-resolved class entries.
     for (int i = cpool->length() - 1; i >= 1; i--) {
       if (cpool->tag_at(i).is_klass()) {
-        klassOop kls = cpool->resolved_klass_at(i);
-        if (Klass::cast(kls)->name() == sym) {
+        Klass*  kls = cpool->resolved_klass_at(i);
+        if (kls->name() == sym) {
           return kls;
         }
       }
@@ -148,7 +145,6 @@ KlassHandle GraalEnv::get_klass_by_name_impl(KlassHandle& accessing_klass,
 }
 
 // ------------------------------------------------------------------
-// ciEnv::get_klass_by_name
 KlassHandle GraalEnv::get_klass_by_name(KlassHandle& accessing_klass,
                                   Symbol* klass_name,
                                   bool require_local) {
@@ -161,15 +157,13 @@ KlassHandle GraalEnv::get_klass_by_name(KlassHandle& accessing_klass,
 }
 
 // ------------------------------------------------------------------
-// ciEnv::get_klass_by_index_impl
-//
 // Implementation of get_klass_by_index.
 KlassHandle GraalEnv::get_klass_by_index_impl(constantPoolHandle& cpool,
                                         int index,
                                         bool& is_accessible,
                                         KlassHandle& accessor) {
   EXCEPTION_CONTEXT;
-  KlassHandle klass (THREAD, constantPoolOopDesc::klass_at_if_loaded(cpool, index));
+  KlassHandle klass (THREAD, ConstantPool::klass_at_if_loaded(cpool, index));
   Symbol* klass_name = NULL;
   if (klass.is_null()) {
     // The klass has not been inserted into the constant pool.
@@ -177,7 +171,7 @@ KlassHandle GraalEnv::get_klass_by_index_impl(constantPoolHandle& cpool,
     {
       // We have to lock the cpool to keep the oop from being resolved
       // while we are accessing it.
-      ObjectLocker ol(cpool, THREAD);
+      MutexLockerEx ml(cpool->lock(), Mutex::_no_safepoint_check_flag);
 
       constantTag tag = cpool->tag_at(index);
       if (tag.is_klass()) {
@@ -222,8 +216,6 @@ KlassHandle GraalEnv::get_klass_by_index_impl(constantPoolHandle& cpool,
 }
 
 // ------------------------------------------------------------------
-// ciEnv::get_klass_by_index
-//
 // Get a klass from the constant pool.
 KlassHandle GraalEnv::get_klass_by_index(constantPoolHandle& cpool,
                                    int index,
@@ -235,8 +227,6 @@ KlassHandle GraalEnv::get_klass_by_index(constantPoolHandle& cpool,
 }
 
 // ------------------------------------------------------------------
-// ciEnv::get_field_by_index_impl
-//
 // Implementation of get_field_by_index.
 //
 // Implementation note: the results of field lookups are cached
@@ -257,9 +247,6 @@ void GraalEnv::get_field_by_index_impl(instanceKlassHandle& klass, fieldDescript
   Symbol* signature = cpool->symbol_at(sig_index);
 
   // Get the field's declared holder.
-  //
-  // Note: we actually create a ciInstanceKlass for this klass,
-  // even though we may not need to.
   int holder_index = cpool->klass_ref_index_at(index);
   bool holder_is_accessible;
   KlassHandle declared_holder = get_klass_by_index(cpool, holder_index,
@@ -274,8 +261,8 @@ void GraalEnv::get_field_by_index_impl(instanceKlassHandle& klass, fieldDescript
 
 
   // Perform the field lookup.
-  klassOop canonical_holder =
-    instanceKlass::cast(declared_holder())->find_field(name, signature, &field_desc);
+  Klass*  canonical_holder =
+    InstanceKlass::cast(declared_holder())->find_field(name, signature, &field_desc);
   if (canonical_holder == NULL) {
     return;
   }
@@ -284,18 +271,13 @@ void GraalEnv::get_field_by_index_impl(instanceKlassHandle& klass, fieldDescript
 }
 
 // ------------------------------------------------------------------
-// ciEnv::get_field_by_index
-//
 // Get a field by index from a klass's constant pool.
-void GraalEnv::get_field_by_index(instanceKlassHandle& accessor, fieldDescriptor& fd,
-                                   int index) {
+void GraalEnv::get_field_by_index(instanceKlassHandle& accessor, fieldDescriptor& fd, int index) {
   ResourceMark rm;
   return get_field_by_index_impl(accessor, fd, index);
 }
 
 // ------------------------------------------------------------------
-// ciEnv::lookup_method
-//
 // Perform an appropriate method lookup based on accessor, holder,
 // name, signature, and bytecode.
 methodHandle GraalEnv::lookup_method(instanceKlassHandle& h_accessor,
@@ -333,7 +315,6 @@ methodHandle GraalEnv::lookup_method(instanceKlassHandle& h_accessor,
 
 
 // ------------------------------------------------------------------
-// ciEnv::get_method_by_index_impl
 methodHandle GraalEnv::get_method_by_index_impl(constantPoolHandle& cpool,
                                           int index, Bytecodes::Code bc,
                                           instanceKlassHandle& accessor) {
@@ -350,8 +331,8 @@ methodHandle GraalEnv::get_method_by_index_impl(constantPoolHandle& cpool,
     methodHandle m = lookup_method(accessor, lookup, name_sym, sig_sym, bc);
     if (!m.is_null() &&
         (bc == Bytecodes::_invokestatic
-         ?  instanceKlass::cast(m->method_holder())->is_not_initialized()
-         : !instanceKlass::cast(m->method_holder())->is_loaded())) {
+         ?  InstanceKlass::cast(m->method_holder())->is_not_initialized()
+         : !InstanceKlass::cast(m->method_holder())->is_loaded())) {
       m = NULL;
     }
     if (!m.is_null()) {
@@ -361,23 +342,16 @@ methodHandle GraalEnv::get_method_by_index_impl(constantPoolHandle& cpool,
   }
 
   // Either the declared holder was not loaded, or the method could
-  // not be found.  Create a dummy ciMethod to represent the failed
-  // lookup.
+  // not be found.
 
   return NULL;
 }
 
 // ------------------------------------------------------------------
-// ciEnv::get_instance_klass_for_declared_method_holder
 instanceKlassHandle GraalEnv::get_instance_klass_for_declared_method_holder(KlassHandle& method_holder) {
-  // For the case of <array>.clone(), the method holder can be a ciArrayKlass
-  // instead of a ciInstanceKlass.  For that case simply pretend that the
+  // For the case of <array>.clone(), the method holder can be an ArrayKlass*
+  // instead of an InstanceKlass*.  For that case simply pretend that the
   // declared holder is Object.clone since that's where the call will bottom out.
-  // A more correct fix would trickle out through many interfaces in CI,
-  // requiring ciInstanceKlass* to become ciKlass* and many more places would
-  // require checks to make sure the expected type was found.  Given that this
-  // only occurs for clone() the more extensive fix seems like overkill so
-  // instead we simply smear the array type into Object.
   if (method_holder->oop_is_instance()) {
     return instanceKlassHandle(method_holder());
   } else if (method_holder->oop_is_array()) {
@@ -390,7 +364,6 @@ instanceKlassHandle GraalEnv::get_instance_klass_for_declared_method_holder(Klas
 
 
 // ------------------------------------------------------------------
-// ciEnv::get_method_by_index
 methodHandle GraalEnv::get_method_by_index(constantPoolHandle& cpool,
                                      int index, Bytecodes::Code bc,
                                      instanceKlassHandle& accessor) {
@@ -400,7 +373,6 @@ methodHandle GraalEnv::get_method_by_index(constantPoolHandle& cpool,
 }
 
 // ------------------------------------------------------------------
-// ciEnv::check_for_system_dictionary_modification
 // Check for changes to the system dictionary during compilation
 // class loads, evolution, breakpoints
 bool GraalEnv::check_for_system_dictionary_modification(Dependencies* dependencies) {
@@ -418,8 +390,10 @@ bool GraalEnv::check_for_system_dictionary_modification(Dependencies* dependenci
   //if (!test_deps)  return;
 
   for (Dependencies::DepStream deps(dependencies); deps.next(); ) {
-    klassOop witness = deps.check_dependency();
+    Klass*  witness = deps.check_dependency();
     if (witness != NULL) {
+      // TODO (gd) remove when thing look stable
+      deps.print_dependency(witness, true);
       return false;
     }
   }
@@ -428,8 +402,9 @@ bool GraalEnv::check_for_system_dictionary_modification(Dependencies* dependenci
 }
 
 // ------------------------------------------------------------------
-// ciEnv::register_method
-nmethod* GraalEnv::register_method(methodHandle& method,
+GraalEnv::CodeInstallResult GraalEnv::register_method(
+                                methodHandle& method,
+                                nmethod*& nm,
                                 int entry_bci,
                                 CodeOffsets* offsets,
                                 int orig_pc_offset,
@@ -445,10 +420,10 @@ nmethod* GraalEnv::register_method(methodHandle& method,
                                 int compile_id,
                                 bool has_debug_info,
                                 bool has_unsafe_access,
-                                bool install_code) {
+                                Handle installed_code) {
   EXCEPTION_CONTEXT;
   NMethodSweeper::possibly_sweep();
-  nmethod* nm = NULL;
+  nm = NULL;
   int comp_level = CompLevel_simple;
   {
     // To prevent compile queue updates.
@@ -464,16 +439,16 @@ nmethod* GraalEnv::register_method(methodHandle& method,
     // Check for {class loads, evolution, breakpoints} during compilation
     if (!check_for_system_dictionary_modification(dependencies)) {
       // While not a true deoptimization, it is a preemptive decompile.
-      methodDataOop mdo = method()->method_data();
-      if (mdo != NULL) {
-        mdo->inc_decompile_count();
+      MethodData* mdp = method()->method_data();
+      if (mdp != NULL) {
+        mdp->inc_decompile_count();
       }
 
       // All buffers in the CodeBuffer are allocated in the CodeCache.
       // If the code buffer is created on each compile attempt
       // as in C2, then it must be freed.
       //code_buffer->free_blob();
-      return NULL;
+      return GraalEnv::dependencies_failed;
     }
 
     nm =  nmethod::new_nmethod(method,
@@ -484,7 +459,7 @@ nmethod* GraalEnv::register_method(methodHandle& method,
                                debug_info, dependencies, code_buffer,
                                frame_words, oop_map_set,
                                handler_table, inc_table,
-                               compiler, comp_level);
+                               compiler, comp_level, installed_code);
 
     // Free codeBlobs
     //code_buffer->free_blob();
@@ -513,7 +488,7 @@ nmethod* GraalEnv::register_method(methodHandle& method,
       // (Put nm into the task handle *before* publishing to the Java heap.)
       if (task != NULL)  task->set_code(nm);
 
-      if (install_code) {
+      if (installed_code.is_null()) {
         if (entry_bci == InvocationEntryBci) {
           if (TieredCompilation) {
             // If there is an old version we're done with it
@@ -547,7 +522,7 @@ nmethod* GraalEnv::register_method(methodHandle& method,
                           method_name,
                           entry_bci);
           }
-          instanceKlass::cast(method->method_holder())->add_osr_nmethod(nm);
+          InstanceKlass::cast(method->method_holder())->add_osr_nmethod(nm);
 
         }
       }
@@ -556,8 +531,9 @@ nmethod* GraalEnv::register_method(methodHandle& method,
   // JVMTI -- compiled method notification (must be done outside lock)
   if (nm != NULL) {
     nm->post_compiled_method_load_event();
+    return GraalEnv::ok;
   }
 
-  return nm;
+  return GraalEnv::cache_full;
 }
 

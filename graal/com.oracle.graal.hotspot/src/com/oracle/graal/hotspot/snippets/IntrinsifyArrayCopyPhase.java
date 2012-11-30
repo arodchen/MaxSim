@@ -36,6 +36,7 @@ import com.oracle.graal.phases.common.*;
 
 public class IntrinsifyArrayCopyPhase extends Phase {
     private final GraalCodeCacheProvider runtime;
+    private final Assumptions assumptions;
     private ResolvedJavaMethod arrayCopy;
     private ResolvedJavaMethod byteArrayCopy;
     private ResolvedJavaMethod shortArrayCopy;
@@ -46,8 +47,9 @@ public class IntrinsifyArrayCopyPhase extends Phase {
     private ResolvedJavaMethod doubleArrayCopy;
     private ResolvedJavaMethod objectArrayCopy;
 
-    public IntrinsifyArrayCopyPhase(GraalCodeCacheProvider runtime) {
+    public IntrinsifyArrayCopyPhase(GraalCodeCacheProvider runtime, Assumptions assumptions) {
         this.runtime = runtime;
+        this.assumptions = assumptions;
         try {
             byteArrayCopy = getArrayCopySnippet(runtime, byte.class);
             charArrayCopy = getArrayCopySnippet(runtime, char.class);
@@ -83,9 +85,9 @@ public class IntrinsifyArrayCopyPhase extends Phase {
                 ResolvedJavaType srcType = src.objectStamp().type();
                 ResolvedJavaType destType = dest.objectStamp().type();
                 if (srcType != null
-                                && srcType.isArrayClass()
+                                && srcType.isArray()
                                 && destType != null
-                                && destType.isArrayClass()) {
+                                && destType.isArray()) {
                     Kind componentKind = srcType.getComponentType().getKind();
                     if (srcType.getComponentType() == destType.getComponentType()) {
                         if (componentKind == Kind.Int) {
@@ -106,7 +108,7 @@ public class IntrinsifyArrayCopyPhase extends Phase {
                             snippetMethod = objectArrayCopy;
                         }
                     } else if (componentKind == Kind.Object
-                                    && srcType.getComponentType().isSubtypeOf(destType.getComponentType())) {
+                                    && destType.getComponentType().isAssignableFrom(srcType.getComponentType())) {
                         snippetMethod = objectArrayCopy;
                     }
                 }
@@ -121,7 +123,7 @@ public class IntrinsifyArrayCopyPhase extends Phase {
             }
         }
         if (GraalOptions.OptCanonicalizer && hits) {
-            new CanonicalizerPhase(null, runtime, null).apply(graph);
+            new CanonicalizerPhase(null, runtime, assumptions).apply(graph);
         }
     }
 }

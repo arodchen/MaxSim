@@ -34,114 +34,87 @@ import com.oracle.graal.hotspot.meta.*;
  */
 public class CompilerToVMImpl implements CompilerToVM {
 
-    @Override
-    public native JavaMethod getJavaMethod(Method reflectionMethod);
+    private native int installCode0(HotSpotCompilationResult comp, HotSpotInstalledCode code, HotSpotCodeInfo info);
 
     @Override
-    public native ResolvedJavaField getJavaField(Field reflectionMethod);
+    public CodeInstallResult installCode(HotSpotCompilationResult comp, HotSpotInstalledCode code, HotSpotCodeInfo info) {
+        return CodeInstallResult.values()[installCode0(comp, code, info)];
+    }
 
     @Override
-    public native byte[] getBytecode(HotSpotResolvedJavaMethod method);
+    public native long getMetaspaceMethod(Method reflectionMethod, HotSpotResolvedObjectType[] resultHolder);
 
     @Override
-    public native String getSignature(HotSpotResolvedJavaMethod method);
+    public native long getMetaspaceConstructor(Constructor reflectionConstructor, HotSpotResolvedObjectType[] resultHolder);
 
     @Override
-    public native ExceptionHandler[] getExceptionHandlers(HotSpotResolvedJavaMethod method);
+    public native HotSpotResolvedJavaField getJavaField(Field reflectionMethod);
 
     @Override
-    public native boolean hasBalancedMonitors(HotSpotResolvedJavaMethod method);
+    public native byte[] initializeBytecode(long metaspaceMethod, byte[] code);
 
     @Override
-    public native JavaMethod getUniqueConcreteMethod(HotSpotResolvedJavaMethod method);
+    public native String getSignature(long metaspaceMethod);
 
     @Override
-    public native int getInvocationCount(HotSpotResolvedJavaMethod method);
+    public native ExceptionHandler[] initializeExceptionHandlers(long metaspaceMethod, ExceptionHandler[] handlers);
 
     @Override
-    public native JavaType lookupType(String name, HotSpotResolvedJavaType accessingClass, boolean eagerResolve);
+    public native boolean hasBalancedMonitors(long metaspaceMethod);
 
     @Override
-    public native Object lookupConstantInPool(HotSpotResolvedJavaType pool, int cpi);
+    public native boolean isMethodCompilable(long metaspaceMethod);
 
     @Override
-    public native JavaMethod lookupMethodInPool(HotSpotResolvedJavaType pool, int cpi, byte opcode);
+    public native long getUniqueConcreteMethod(long metaspaceMethod, HotSpotResolvedObjectType[] resultHolder);
 
     @Override
-    public native JavaType lookupTypeInPool(HotSpotResolvedJavaType pool, int cpi);
+    public native int getInvocationCount(long metaspaceMethod);
 
     @Override
-    public native void lookupReferencedTypeInPool(HotSpotResolvedJavaType pool, int cpi, byte opcode);
+    public native JavaType lookupType(String name, HotSpotResolvedObjectType accessingClass, boolean eagerResolve);
 
     @Override
-    public native JavaField lookupFieldInPool(HotSpotResolvedJavaType pool, int cpi, byte opcode);
+    public native Object lookupConstantInPool(HotSpotResolvedObjectType pool, int cpi);
 
     @Override
-    public native HotSpotCompiledMethod installMethod(HotSpotCompilationResult comp, boolean makeDefault, HotSpotCodeInfo info);
+    public native JavaMethod lookupMethodInPool(HotSpotResolvedObjectType pool, int cpi, byte opcode);
+
+    @Override
+    public native JavaType lookupTypeInPool(HotSpotResolvedObjectType pool, int cpi);
+
+    @Override
+    public native void lookupReferencedTypeInPool(HotSpotResolvedObjectType pool, int cpi, byte opcode);
+
+    @Override
+    public native JavaField lookupFieldInPool(HotSpotResolvedObjectType pool, int cpi, byte opcode);
 
     @Override
     public native void initializeConfiguration(HotSpotVMConfig config);
 
     @Override
-    public native JavaMethod resolveMethod(HotSpotResolvedJavaType klass, String name, String signature);
+    public native JavaMethod resolveMethod(HotSpotResolvedObjectType klass, String name, String signature);
 
     @Override
-    public native boolean isSubtypeOf(HotSpotResolvedJavaType klass, JavaType other);
+    public native boolean isTypeInitialized(HotSpotResolvedObjectType klass);
 
     @Override
-    public native JavaType getLeastCommonAncestor(HotSpotResolvedJavaType thisType, HotSpotResolvedJavaType otherType);
+    public native void initializeType(HotSpotResolvedObjectType klass);
 
     @Override
-    public native JavaType getPrimitiveArrayType(Kind kind);
+    public native void initializeMethod(long metaspaceMethod, HotSpotResolvedJavaMethod method);
 
     @Override
-    public native JavaType getArrayOf(HotSpotResolvedJavaType klass);
+    public native void initializeMethodData(long metaspaceMethodData, HotSpotMethodData methodData);
 
     @Override
-    public native JavaType getComponentType(HotSpotResolvedJavaType klass);
+    public native ResolvedJavaType getResolvedType(Class<?> javaClass);
 
     @Override
-    public native JavaType getUniqueConcreteSubtype(HotSpotResolvedJavaType klass);
+    public native HotSpotResolvedJavaField[] getInstanceFields(HotSpotResolvedObjectType klass);
 
     @Override
-    public native JavaType getSuperType(HotSpotResolvedJavaType klass);
-
-    @Override
-    public native boolean isTypeInitialized(HotSpotResolvedJavaType klass);
-
-    @Override
-    public native void initializeType(HotSpotResolvedJavaType klass);
-
-    @Override
-    public native HotSpotMethodData getMethodData(HotSpotResolvedJavaMethod method);
-
-    @Override
-    public native JavaType getType(Class<?> javaClass);
-
-    @Override
-    public int getArrayLength(Constant array) {
-        return Array.getLength(array.asObject());
-    }
-
-    @Override
-    public boolean compareConstantObjects(Constant x, Constant y) {
-        return x.asObject() == y.asObject();
-    }
-
-    @Override
-    public JavaType getJavaType(Constant constant) {
-        Object o = constant.asObject();
-        if (o == null) {
-            return null;
-        }
-        return getType(o.getClass());
-    }
-
-    @Override
-    public native ResolvedJavaField[] getFields(HotSpotResolvedJavaType klass);
-
-    @Override
-    public native int getCompiledCodeSize(HotSpotResolvedJavaMethod method);
+    public native int getCompiledCodeSize(long metaspaceMethod);
 
     @Override
     public native long getMaxCallTargetOffset(long stub);
@@ -150,16 +123,16 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native String disassembleNative(byte[] code, long address);
 
     @Override
-    public native StackTraceElement getStackTraceElement(HotSpotResolvedJavaMethod method, int bci);
+    public native StackTraceElement getStackTraceElement(long metaspaceMethod, int bci);
 
     @Override
-    public native Object executeCompiledMethod(HotSpotCompiledMethod method, Object arg1, Object arg2, Object arg3);
+    public native Object executeCompiledMethod(long metaspaceMethod, long nmethod, Object arg1, Object arg2, Object arg3);
 
     @Override
-    public native Object executeCompiledMethodVarargs(HotSpotCompiledMethod method, Object... args);
+    public native Object executeCompiledMethodVarargs(long metaspaceMethod, long nmethod, Object... args);
 
     @Override
-    public native int getVtableEntryOffset(HotSpotResolvedJavaMethod method);
+    public native int getVtableEntryOffset(long metaspaceMethod);
 
     @Override
     public native long[] getDeoptedLeafGraphIds();
@@ -168,5 +141,5 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native String decodePC(long pc);
 
     @Override
-    public native long getPrototypeMarkWord(HotSpotResolvedJavaType type);
+    public native long getPrototypeMarkWord(HotSpotResolvedObjectType type);
 }

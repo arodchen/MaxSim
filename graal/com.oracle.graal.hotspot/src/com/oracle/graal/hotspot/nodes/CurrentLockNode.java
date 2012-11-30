@@ -34,8 +34,8 @@ import com.oracle.graal.snippets.*;
  */
 public final class CurrentLockNode extends FixedWithNextNode implements LIRGenLowerable {
 
-    public CurrentLockNode(Kind wordKind) {
-        super(StampFactory.forWord(wordKind, true));
+    public CurrentLockNode() {
+        super(StampFactory.forWord());
     }
 
     @Override
@@ -46,5 +46,5 @@ public final class CurrentLockNode extends FixedWithNextNode implements LIRGenLo
     }
 
     @NodeIntrinsic
-    public static native Word currentLock(@ConstantNodeParameter Kind wordKind);
+    public static native Word currentLock();
 }

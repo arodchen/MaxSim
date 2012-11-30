@@ -85,7 +85,7 @@ class BlockState extends MergeableBlockState<BlockState> {
     private void materializeChangedBefore(FixedNode fixed, VirtualObjectNode virtual, HashSet<VirtualObjectNode> deferred, GraphEffectList deferredStores, GraphEffectList materializeEffects) {
         trace("materializing %s at %s", virtual, fixed);
         ObjectState obj = getObjectState(virtual);
-        if (obj.getLockCount() > 0 && obj.virtual.type().isArrayClass()) {
+        if (obj.getLockCount() > 0 && obj.virtual.type().isArray()) {
             throw new BailoutException("array materialized with lock");
         }
 
@@ -119,6 +119,7 @@ class BlockState extends MergeableBlockState<BlockState> {
             materializeEffects.addFixedNodeBefore(newObject, fixed);
         } else {
             // some entries are not default constants - do the materialization
+            virtual.materializeAt(fixed);
             MaterializeObjectNode materialize = new MaterializeObjectNode(virtual, obj.getLockCount());
             ValueNode[] values = new ValueNode[obj.getEntries().length];
             materialize.setProbability(fixed.probability());
@@ -158,8 +159,10 @@ class BlockState extends MergeableBlockState<BlockState> {
 
     void addAndMarkAlias(VirtualObjectNode virtual, ValueNode node, NodeBitMap usages) {
         objectAliases.put(node, virtual);
-        for (Node usage : node.usages()) {
-            markVirtualUsages(usage, usages);
+        if (node.isAlive()) {
+            for (Node usage : node.usages()) {
+                markVirtualUsages(usage, usages);
+            }
         }
     }
 

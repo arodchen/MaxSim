@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -68,23 +68,29 @@ void ScopeDesc::decode_body() {
     // This is a sentinel record, which is only relevant to
     // approximate queries.  Decode a reasonable frame.
     _sender_decode_offset = DebugInformationRecorder::serialized_null;
-    _method = methodHandle(_code->method());
+    _method = _code->method();
     _bci = InvocationEntryBci;
     _locals_decode_offset = DebugInformationRecorder::serialized_null;
     _expressions_decode_offset = DebugInformationRecorder::serialized_null;
     _monitors_decode_offset = DebugInformationRecorder::serialized_null;
+#ifdef GRAAL
+    _deferred_writes_decode_offset = DebugInformationRecorder::serialized_null;
+#endif // GRAAL
   } else {
     // decode header
     DebugInfoReadStream* stream  = stream_at(decode_offset());
 
     _sender_decode_offset = stream->read_int();
-    _method = methodHandle((methodOop) stream->read_oop());
+    _method = stream->read_method();
     _bci    = stream->read_bci();
 
     // decode offsets for body and sender
     _locals_decode_offset      = stream->read_int();
     _expressions_decode_offset = stream->read_int();
     _monitors_decode_offset    = stream->read_int();
+#ifdef GRAAL
+    _deferred_writes_decode_offset = stream->read_int();
+#endif // GRAAL
   }
 }
 
@@ -126,6 +132,25 @@ GrowableArray<MonitorValue*>* ScopeDesc::decode_monitor_values(int decode_offset
   return result;
 }
 
+#ifdef GRAAL
+
+GrowableArray<DeferredWriteValue*>* ScopeDesc::decode_deferred_writes(int decode_offset) {
+  if (decode_offset == DebugInformationRecorder::serialized_null) return NULL;
+  DebugInfoReadStream* stream  = stream_at(decode_offset);
+  int length = stream->read_int();
+  GrowableArray<DeferredWriteValue*>* result = new GrowableArray<DeferredWriteValue*> (length);
+  for (int index = 0; index < length; index++) {
+    result->push(new DeferredWriteValue(stream));
+  }
+  return result;
+}
+
+GrowableArray<DeferredWriteValue*>* ScopeDesc::deferred_writes() {
+  return decode_deferred_writes(_deferred_writes_decode_offset);
+}
+
+#endif // GRAAL
+
 DebugInfoReadStream* ScopeDesc::stream_at(int decode_offset) const {
   return new DebugInfoReadStream(_code, decode_offset, _objects);
 }
@@ -160,7 +185,7 @@ ScopeDesc* ScopeDesc::sender() const {
 
 void ScopeDesc::print_value_on(outputStream* st) const {
   tty->print("   ");
-  method()()->print_short_name(st);
+  method()->print_short_name(st);
   int lineno = method()->line_number_from_bci(bci());
   if (lineno != -1) {
     st->print_cr("@%d (line %d)", bci(), lineno);
@@ -225,8 +250,8 @@ void ScopeDesc::print_on(outputStream* st, PcDesc* pd) const {
     }
   }
 
-#ifdef COMPILER2
-  if (DoEscapeAnalysis && is_top() && _objects != NULL) {
+#if defined(COMPILER2) || defined(GRAAL)
+  if (NOT_GRAAL(DoEscapeAnalysis &&) is_top() && _objects != NULL) {
     tty->print_cr("Objects");
     for (int i = 0; i < _objects->length(); i++) {
       ObjectValue* sv = (ObjectValue*) _objects->at(i);
@@ -235,7 +260,20 @@ void ScopeDesc::print_on(outputStream* st, PcDesc* pd) const {
       tty->cr();
     }
   }
-#endif // COMPILER2
+#endif // COMPILER2 || GRAAL
+#ifdef GRAAL
+  // deferred writes
+  { GrowableArray<DeferredWriteValue*>* l = ((ScopeDesc*) this)->deferred_writes();
+    if (l != NULL) {
+      st->print_cr("   Deferred writes");
+      for (int index = 0; index < l->length(); index++) {
+        st->print("    - @%d: ", index);
+        l->at(index)->print_on(st);
+        st->cr();
+      }
+    }
+  }
+#endif
 }
 
 #endif

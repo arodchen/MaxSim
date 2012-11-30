@@ -22,12 +22,15 @@
  */
 package com.oracle.graal.snippets;
 
+import static com.oracle.graal.api.meta.MetaUtil.*;
+
 import java.lang.annotation.*;
 import java.lang.reflect.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.snippets.Word.Operation;
 import com.oracle.graal.snippets.nodes.*;
 
@@ -45,54 +48,61 @@ public @interface Snippet {
 
     /**
      * Specifies the class defining the inlining policy for this snippet.
-     * A {@linkplain InliningPolicy#Default default} policy is used if none is supplied.
+     * A {@linkplain DefaultSnippetInliningPolicy default} policy is used if none is supplied.
      */
-    Class<? extends InliningPolicy> inlining() default InliningPolicy.class;
+    Class<? extends SnippetInliningPolicy> inlining() default SnippetInliningPolicy.class;
 
     /**
      * Guides inlining decisions used when installing a snippet.
      */
-    public interface InliningPolicy {
+    public interface SnippetInliningPolicy {
         /**
          * Determines if {@code method} should be inlined into {@code caller}.
          */
         boolean shouldInline(ResolvedJavaMethod method, ResolvedJavaMethod caller);
+    }
 
-        /**
-         * The default inlining policy which inlines everything except for methods
-         * in any of the following categories.
-         * <ul>
-         * <li>{@linkplain Fold foldable} methods</li>
-         * <li>{@linkplain NodeIntrinsic node intrinsics}</li>
-         * <li>native methods</li>
-         * <li>constructors of {@link Throwable} classes</li>
-         * </ul>
-         */
-        InliningPolicy Default = new InliningPolicy() {
-            public boolean shouldInline(ResolvedJavaMethod method, ResolvedJavaMethod caller) {
-                if (Modifier.isNative(method.getModifiers())) {
-                    return false;
-                }
-                if (method.getAnnotation(Fold.class) != null) {
-                    return false;
-                }
-                if (method.getAnnotation(NodeIntrinsic.class) != null) {
-                    return false;
-                }
-                if (Throwable.class.isAssignableFrom(method.getDeclaringClass().toJava())) {
-                    if (method.getName().equals("<init>")) {
-                        return false;
-                    }
-                }
-                if (method.getAnnotation(Operation.class) != null) {
-                    return false;
-                }
-                if (BoxingMethodPool.isSpecialMethodStatic(method)) {
-                    return false;
-                }
-                return true;
+    /**
+     * The default inlining policy which inlines everything except for methods
+     * in any of the following categories.
+     * <ul>
+     * <li>{@linkplain Fold foldable} methods</li>
+     * <li>{@linkplain NodeIntrinsic node intrinsics}</li>
+     * <li>native methods</li>
+     * <li>constructors of {@link Throwable} classes</li>
+     * </ul>
+     */
+    public static class DefaultSnippetInliningPolicy implements SnippetInliningPolicy {
+        private final BoxingMethodPool pool;
+
+        public DefaultSnippetInliningPolicy(BoxingMethodPool pool) {
+            this.pool = pool;
+        }
+
+        @Override
+        public boolean shouldInline(ResolvedJavaMethod method, ResolvedJavaMethod caller) {
+            if (Modifier.isNative(method.getModifiers())) {
+                return false;
             }
-        };
+            if (method.getAnnotation(Fold.class) != null) {
+                return false;
+            }
+            if (method.getAnnotation(NodeIntrinsic.class) != null) {
+                return false;
+            }
+            if (Throwable.class.isAssignableFrom(getMirrorOrFail(method.getDeclaringClass(), null))) {
+                if (method.getName().equals("<init>")) {
+                    return false;
+                }
+            }
+            if (method.getAnnotation(Operation.class) != null) {
+                return false;
+            }
+            if (pool.isSpecialMethod(method)) {
+                return false;
+            }
+            return true;
+        }
     }
 
     /**
@@ -157,40 +167,50 @@ public @interface Snippet {
      * Wrapper for the prototype value of a {@linkplain VarargsParameter varargs} parameter.
      */
     public static class Varargs {
-        public final Object array;
-        private final Class componentType;
+        private final Object args;
+        private final Class argType;
         private final int length;
+        private final Stamp argStamp;
 
-        public static Varargs vargargs(Class componentType, int length) {
-            return new Varargs(Array.newInstance(componentType, length));
+        public static Varargs vargargs(Object array, Stamp argStamp) {
+            return new Varargs(array, argStamp);
         }
 
-        public Varargs(Object array) {
+        public Varargs(Object array, Stamp argStamp) {
             assert array != null;
-            this.componentType = array.getClass().getComponentType();
-            assert this.componentType != null;
+            this.argType = array.getClass().getComponentType();
+            this.argStamp = argStamp;
+            assert this.argType != null;
             this.length = java.lang.reflect.Array.getLength(array);
-            this.array = array;
+            this.args = array;
         }
 
         @Override
         public boolean equals(Object obj) {
             if (obj instanceof Varargs) {
                 Varargs other = (Varargs) obj;
-                return other.componentType == componentType &&
+                return other.argType == argType &&
                         other.length == length;
             }
             return false;
         }
 
+        public Object getArray() {
+            return args;
+        }
+
+        public Stamp getArgStamp() {
+            return argStamp;
+        }
+
         @Override
         public int hashCode() {
-            return componentType.hashCode() ^ length;
+            return argType.hashCode() ^ length;
         }
 
         @Override
         public String toString() {
-            return componentType.getName() + "[" + length + "]";
+            return argType.getName() + "[" + length + "]";
         }
     }
 }

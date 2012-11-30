@@ -23,12 +23,15 @@
 
 package com.oracle.graal.hotspot.bridge;
 
+import static com.oracle.graal.graph.FieldIntrospection.*;
+
 import java.io.*;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.debug.*;
@@ -51,37 +54,58 @@ public class VMToCompilerImpl implements VMToCompiler {
     private final HotSpotGraalRuntime graalRuntime;
     private IntrinsifyArrayCopyPhase intrinsifyArrayCopy;
 
-    public final HotSpotTypePrimitive typeBoolean;
-    public final HotSpotTypePrimitive typeChar;
-    public final HotSpotTypePrimitive typeFloat;
-    public final HotSpotTypePrimitive typeDouble;
-    public final HotSpotTypePrimitive typeByte;
-    public final HotSpotTypePrimitive typeShort;
-    public final HotSpotTypePrimitive typeInt;
-    public final HotSpotTypePrimitive typeLong;
-    public final HotSpotTypePrimitive typeVoid;
+    public final HotSpotResolvedPrimitiveType typeBoolean;
+    public final HotSpotResolvedPrimitiveType typeChar;
+    public final HotSpotResolvedPrimitiveType typeFloat;
+    public final HotSpotResolvedPrimitiveType typeDouble;
+    public final HotSpotResolvedPrimitiveType typeByte;
+    public final HotSpotResolvedPrimitiveType typeShort;
+    public final HotSpotResolvedPrimitiveType typeInt;
+    public final HotSpotResolvedPrimitiveType typeLong;
+    public final HotSpotResolvedPrimitiveType typeVoid;
 
     private ThreadPoolExecutor compileQueue;
     private ThreadPoolExecutor slowCompileQueue;
     private AtomicInteger compileTaskIds = new AtomicInteger();
+
+    private volatile boolean bootstrapRunning;
 
     private PrintStream log = System.out;
 
     public VMToCompilerImpl(HotSpotGraalRuntime compiler) {
         this.graalRuntime = compiler;
 
-        typeBoolean = new HotSpotTypePrimitive(Kind.Boolean);
-        typeChar = new HotSpotTypePrimitive(Kind.Char);
-        typeFloat = new HotSpotTypePrimitive(Kind.Float);
-        typeDouble = new HotSpotTypePrimitive(Kind.Double);
-        typeByte = new HotSpotTypePrimitive(Kind.Byte);
-        typeShort = new HotSpotTypePrimitive(Kind.Short);
-        typeInt = new HotSpotTypePrimitive(Kind.Int);
-        typeLong = new HotSpotTypePrimitive(Kind.Long);
-        typeVoid = new HotSpotTypePrimitive(Kind.Void);
+        typeBoolean = new HotSpotResolvedPrimitiveType(Kind.Boolean);
+        typeChar = new HotSpotResolvedPrimitiveType(Kind.Char);
+        typeFloat = new HotSpotResolvedPrimitiveType(Kind.Float);
+        typeDouble = new HotSpotResolvedPrimitiveType(Kind.Double);
+        typeByte = new HotSpotResolvedPrimitiveType(Kind.Byte);
+        typeShort = new HotSpotResolvedPrimitiveType(Kind.Short);
+        typeInt = new HotSpotResolvedPrimitiveType(Kind.Int);
+        typeLong = new HotSpotResolvedPrimitiveType(Kind.Long);
+        typeVoid = new HotSpotResolvedPrimitiveType(Kind.Void);
     }
 
+    private static void initMirror(HotSpotResolvedPrimitiveType type, long offset) {
+        Class<?> mirror = type.mirror();
+        unsafe.putObject(mirror, offset, type);
+        assert unsafe.getObject(mirror, offset) == type;
+    }
+
+
     public void startCompiler() throws Throwable {
+
+        long offset = HotSpotGraalRuntime.getInstance().getConfig().graalMirrorInClassOffset;
+        initMirror(typeBoolean, offset);
+        initMirror(typeChar, offset);
+        initMirror(typeFloat, offset);
+        initMirror(typeDouble, offset);
+        initMirror(typeByte, offset);
+        initMirror(typeShort, offset);
+        initMirror(typeInt, offset);
+        initMirror(typeLong, offset);
+        initMirror(typeVoid, offset);
+
         if (GraalOptions.LogFile != null) {
             try {
                 final boolean enableAutoflush = true;
@@ -112,10 +136,11 @@ public class VMToCompilerImpl implements VMToCompiler {
 
                 @Override
                 public void run() {
-                    VMToCompilerImpl.this.intrinsifyArrayCopy = new IntrinsifyArrayCopyPhase(runtime);
-                    SnippetInstaller installer = new SnippetInstaller(runtime, runtime.getGraalRuntime().getTarget());
+                    Assumptions assumptions = new Assumptions(GraalOptions.OptAssumptions);
+                    VMToCompilerImpl.this.intrinsifyArrayCopy = new IntrinsifyArrayCopyPhase(runtime, assumptions);
+                    SnippetInstaller installer = new SnippetInstaller(runtime, assumptions, runtime.getGraalRuntime().getTarget());
                     GraalIntrinsics.installIntrinsics(installer);
-                    runtime.installSnippets(installer);
+                    runtime.installSnippets(installer, assumptions);
                 }
             });
 
@@ -170,6 +195,7 @@ public class VMToCompilerImpl implements VMToCompiler {
         TTY.flush();
         long startTime = System.currentTimeMillis();
 
+        bootstrapRunning = true;
         boolean firstRun = true;
         do {
             // Initialize compile queue with a selected set of methods.
@@ -213,6 +239,7 @@ public class VMToCompilerImpl implements VMToCompiler {
             }
         } while ((System.currentTimeMillis() - startTime) <= GraalOptions.TimedBootstrap);
         CompilationStatistics.clear("bootstrap");
+        bootstrapRunning = false;
 
         TTY.println(" in %d ms", System.currentTimeMillis() - startTime);
         if (graalRuntime.getCache() != null) {
@@ -348,33 +375,58 @@ public class VMToCompilerImpl implements VMToCompiler {
     }
 
     @Override
+    public boolean compileMethod(long metaspaceMethod, final HotSpotResolvedObjectType holder, final int entryBCI, boolean blocking, int priority) throws Throwable {
+        HotSpotResolvedJavaMethod method = holder.createMethod(metaspaceMethod);
+        return compileMethod(method, entryBCI, blocking, priority);
+    }
+
+    /**
+     * Compiles a method to machine code.
+     * @return true if the method is in the queue (either added to the queue or already in the queue)
+     */
     public boolean compileMethod(final HotSpotResolvedJavaMethod method, final int entryBCI, boolean blocking, int priority) throws Throwable {
+        CompilationTask current = method.currentTask();
+        boolean osrCompilation = entryBCI != StructuredGraph.INVOCATION_ENTRY_BCI;
+        if (osrCompilation && bootstrapRunning) {
+            // no OSR compilations during bootstrap - the compiler is just too slow at this point, and we know that there are no endless loops
+            return current != null;
+        }
+
         if (CompilationTask.withinEnqueue.get()) {
             // This is required to avoid deadlocking a compiler thread. The issue is that a
             // java.util.concurrent.BlockingQueue is used to implement the compilation worker
             // queues. If a compiler thread triggers a compilation, then it may be blocked trying
             // to add something to its own queue.
-            return false;
+            return current != null;
         }
         CompilationTask.withinEnqueue.set(Boolean.TRUE);
 
         try {
-            CompilationTask current = method.currentTask();
             if (!blocking && current != null) {
-                if (GraalOptions.PriorityCompileQueue) {
-                    // normally compilation tasks will only be re-queued when they get a priority boost, so cancel the old task and add a new one
-                    current.cancel();
+                if (current.isInProgress()) {
+                    if (current.getEntryBCI() == entryBCI) {
+                        // a compilation with the correct bci is already in progress, so just return true
+                        return true;
+                    }
                 } else {
-                    // without a prioritizing compile queue it makes no sense to re-queue the compilation task
-                    return true;
+                    if (GraalOptions.PriorityCompileQueue) {
+                        // normally compilation tasks will only be re-queued when they get a priority boost, so cancel the old task and add a new one
+                        current.cancel();
+                    } else {
+                        // without a prioritizing compile queue it makes no sense to re-queue the compilation task
+                        return true;
+                    }
                 }
             }
 
             final OptimisticOptimizations optimisticOpts = new OptimisticOptimizations(method);
             int id = compileTaskIds.incrementAndGet();
-            CompilationTask task = CompilationTask.create(graalRuntime, createPhasePlan(optimisticOpts, false), optimisticOpts, method, StructuredGraph.INVOCATION_ENTRY_BCI, id, priority, null);
+            // OSR compilations need to be finished quickly, so they get max priority
+            int queuePriority = osrCompilation ? -1 : priority;
+            CompilationTask task = CompilationTask.create(graalRuntime, createPhasePlan(optimisticOpts, osrCompilation), optimisticOpts, method, entryBCI, id, queuePriority);
             if (blocking) {
                 task.runCompilation();
+                return false;
             } else {
                 try {
                     method.setCurrentTask(task);
@@ -383,49 +435,35 @@ public class VMToCompilerImpl implements VMToCompiler {
                     } else {
                         compileQueue.execute(task);
                     }
+                    return true;
                 } catch (RejectedExecutionException e) {
                     // The compile queue was already shut down.
                     return false;
                 }
             }
-            if (entryBCI != StructuredGraph.INVOCATION_ENTRY_BCI && CompilationTask.withinCompilation.get() == 0) {
-                final OptimisticOptimizations osrOptimisticOpts = new OptimisticOptimizations(method);
-                int osrId = compileTaskIds.incrementAndGet();
-                Debug.log("OSR compilation %s@%d", method, entryBCI);
-                final CountDownLatch latch = new CountDownLatch(1);
-                Runnable callback = new Runnable() {
-                    @Override
-                    public void run() {
-                        latch.countDown();
-                    }
-                };
-                CompilationTask osrTask = CompilationTask.create(graalRuntime, createPhasePlan(osrOptimisticOpts, true), osrOptimisticOpts, method, entryBCI, osrId, Integer.MAX_VALUE, callback);
-                compileQueue.execute(osrTask);
-                latch.await();
-            }
-            return true;
         } finally {
             CompilationTask.withinEnqueue.set(Boolean.FALSE);
         }
     }
 
     @Override
-    public JavaMethod createJavaMethod(String name, String signature, JavaType holder) {
+    public JavaMethod createUnresolvedJavaMethod(String name, String signature, JavaType holder) {
         return new HotSpotMethodUnresolved(name, signature, holder);
     }
 
     @Override
-    public Signature createSignature(String signature) {
-        return new HotSpotSignature(signature);
+    public JavaField createJavaField(JavaType holder, String name, JavaType type, int offset, int flags, boolean internal) {
+        if (offset != -1) {
+            HotSpotResolvedObjectType resolved = (HotSpotResolvedObjectType) holder;
+            return resolved.createField(name, type, offset, flags, internal);
+        }
+        return new HotSpotUnresolvedField(holder, name, type);
     }
 
     @Override
-    public JavaField createJavaField(JavaType holder, String name, JavaType type, int offset, int flags) {
-        if (offset != -1) {
-            HotSpotResolvedJavaType resolved = (HotSpotResolvedJavaType) holder;
-            return resolved.createField(name, type, offset, flags);
-        }
-        return new HotSpotUnresolvedField(holder, name, type);
+    public ResolvedJavaMethod createResolvedJavaMethod(JavaType holder, long metaspaceMethod) {
+        HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) holder;
+        return type.createMethod(metaspaceMethod);
     }
 
     @Override
@@ -455,8 +493,44 @@ public class VMToCompilerImpl implements VMToCompiler {
     }
 
     @Override
-    public JavaType createJavaType(String name) {
-        return new HotSpotTypeUnresolved(name);
+    public HotSpotUnresolvedJavaType createUnresolvedJavaType(String name) {
+        int dims = 0;
+        int startIndex = 0;
+        while (name.charAt(startIndex) == '[') {
+            startIndex++;
+            dims++;
+        }
+
+        // Decode name if necessary.
+        if (name.charAt(name.length() - 1) == ';') {
+            assert name.charAt(startIndex) == 'L';
+            return new HotSpotUnresolvedJavaType(name, name.substring(startIndex + 1, name.length() - 1), dims);
+        } else {
+            return new HotSpotUnresolvedJavaType(HotSpotUnresolvedJavaType.getFullName(name, dims), name, dims);
+        }
+    }
+
+    @Override
+    public HotSpotResolvedObjectType createResolvedJavaType(long metaspaceKlass,
+                    String name,
+                    String simpleName,
+                    Class javaMirror,
+                    boolean hasFinalizableSubclass,
+                    int sizeOrSpecies) {
+        HotSpotResolvedObjectType type = new HotSpotResolvedObjectType(
+                                        metaspaceKlass,
+                                        name,
+                                        simpleName,
+                                        javaMirror,
+                                        hasFinalizableSubclass,
+                                        sizeOrSpecies);
+
+        long offset = HotSpotGraalRuntime.getInstance().getConfig().graalMirrorInClassOffset;
+        if (!unsafe.compareAndSwapObject(javaMirror, offset, null, type)) {
+            // lost the race - return the existing value instead
+            type = (HotSpotResolvedObjectType) unsafe.getObject(javaMirror, offset);
+        }
+        return type;
     }
 
     @Override

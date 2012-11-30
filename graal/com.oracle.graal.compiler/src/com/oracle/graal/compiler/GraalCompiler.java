@@ -75,7 +75,7 @@ public class GraalCompiler {
         return Debug.scope("GraalCompiler", new Object[]{graph, method, this}, new Callable<CompilationResult>() {
 
             public CompilationResult call() {
-                final Assumptions assumptions = GraalOptions.OptAssumptions ? new Assumptions() : null;
+                final Assumptions assumptions = new Assumptions(GraalOptions.OptAssumptions);
                 final LIR lir = Debug.scope("FrontEnd", new Callable<LIR>() {
 
                     public LIR call() {
@@ -118,16 +118,9 @@ public class GraalCompiler {
             new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
         }
 
-        if (GraalOptions.Intrinsify) {
-            new IntrinsificationPhase(runtime).apply(graph);
-        }
-
         if (GraalOptions.Inline && !plan.isPhaseDisabled(InliningPhase.class)) {
             new InliningPhase(target, runtime, null, assumptions, cache, plan, optimisticOpts).apply(graph);
-
-            if (GraalOptions.OptCanonicalizer) {
-                new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
-            }
+            new DeadCodeEliminationPhase().apply(graph);
 
             if (GraalOptions.CheckCastElimination && GraalOptions.OptCanonicalizer) {
                 new IterativeConditionalEliminationPhase(target, runtime, assumptions).apply(graph);
@@ -139,7 +132,7 @@ public class GraalCompiler {
         plan.runPhases(PhasePosition.HIGH_LEVEL, graph);
 
         if (GraalOptions.FullUnroll) {
-            new LoopFullUnrollPhase(runtime).apply(graph);
+            new LoopFullUnrollPhase(runtime, assumptions).apply(graph);
             if (GraalOptions.OptCanonicalizer) {
                 new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
             }
@@ -153,7 +146,7 @@ public class GraalCompiler {
         }
 
         if (GraalOptions.PartialEscapeAnalysis && !plan.isPhaseDisabled(PartialEscapeAnalysisPhase.class)) {
-            new PartialEscapeAnalysisPhase(target, runtime, assumptions).apply(graph);
+            new PartialEscapeAnalysisPhase(target, runtime, assumptions, true).apply(graph);
         }
         if (GraalOptions.OptLoopTransform) {
             new LoopTransformHighPhase().apply(graph);
@@ -171,7 +164,7 @@ public class GraalCompiler {
         if (GraalOptions.OptFloatingReads) {
             int mark = graph.getMark();
             new FloatingReadPhase().apply(graph);
-            new CanonicalizerPhase(target, runtime, assumptions, mark, null).apply(graph);
+            new CanonicalizerPhase(target, runtime, assumptions, mark).apply(graph);
             if (GraalOptions.OptReadElimination) {
                 new ReadEliminationPhase().apply(graph);
             }
@@ -265,7 +258,7 @@ public class GraalCompiler {
         TargetMethodAssembler tasm = backend.newAssembler(frameMap, lir);
         backend.emitCode(tasm, method, lir);
         CompilationResult targetMethod = tasm.finishTargetMethod(method, false);
-        if (assumptions != null && !assumptions.isEmpty()) {
+        if (!assumptions.isEmpty()) {
             targetMethod.setAssumptions(assumptions);
         }
 

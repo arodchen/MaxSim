@@ -27,8 +27,8 @@ import java.lang.annotation.*;
 import java.lang.reflect.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.meta.ResolvedJavaType.*;
 import com.oracle.graal.hotspot.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.phases.*;
 
 /**
@@ -36,42 +36,57 @@ import com.oracle.graal.phases.*;
  */
 public class HotSpotResolvedJavaField extends CompilerObject implements ResolvedJavaField {
 
+    // Must not conflict with any fields flags used by the VM - the assertion in the constructor checks this assumption
+    private static final int FIELD_INTERNAL_FLAG = 0x80000000;
+
     private static final long serialVersionUID = 7692985878836955683L;
-    private final ResolvedJavaType holder;
+    private final HotSpotResolvedObjectType holder;
     private final String name;
     private final JavaType type;
     private final int offset;
-    private final int accessFlags;
-    private Constant constant;                // Constant part only valid for static fields.
+    private final int flags;
+    private Constant constant;
 
-    public HotSpotResolvedJavaField(ResolvedJavaType holder, String name, JavaType type, int offset, int accessFlags) {
+    public HotSpotResolvedJavaField(HotSpotResolvedObjectType holder, String name, JavaType type, int offset, int flags, boolean internal) {
+        assert (flags & FIELD_INTERNAL_FLAG) == 0;
         this.holder = holder;
         this.name = name;
         this.type = type;
         assert offset != -1;
         this.offset = offset;
-        this.accessFlags = accessFlags;
+        if (internal) {
+            this.flags = flags | FIELD_INTERNAL_FLAG;
+        } else {
+            this.flags = flags;
+        }
     }
 
     @Override
     public int getModifiers() {
-        return accessFlags;
+        return flags & Modifier.fieldModifiers();
     }
+
+    @Override
+    public boolean isInternal() {
+        return (flags & FIELD_INTERNAL_FLAG) != 0;
+    }
+
+    private static final String SystemClassName = MetaUtil.toInternalName(System.class.getName());
 
     @Override
     public Constant readConstantValue(Constant receiver) {
         if (receiver == null) {
-            assert Modifier.isStatic(accessFlags);
+            assert Modifier.isStatic(flags);
             if (constant == null) {
-                if (holder.isInitialized() && holder.toJava() != System.class) {
-                    if (Modifier.isFinal(getModifiers()) || assumeStaticFieldsFinal(holder.toJava())) {
+                if (holder.isInitialized() && !holder.getName().equals(SystemClassName)) {
+                    if (Modifier.isFinal(getModifiers()) || assumeStaticFieldsFinal(holder.mirror())) {
                         constant = readValue(receiver);
                     }
                 }
             }
             return constant;
         } else {
-            assert !Modifier.isStatic(accessFlags);
+            assert !Modifier.isStatic(flags);
             // TODO (chaeubl) HotSpot does not trust final non-static fields (see ciField.cpp)
             if (Modifier.isFinal(getModifiers())) {
                 return readValue(receiver);
@@ -83,15 +98,14 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
     @Override
     public Constant readValue(Constant receiver) {
         if (receiver == null) {
-            assert Modifier.isStatic(accessFlags);
+            assert Modifier.isStatic(flags);
             if (holder.isInitialized()) {
-                Constant encoding = holder.getEncoding(getKind() == Kind.Object ? Representation.StaticObjectFields : Representation.StaticPrimitiveFields);
-                return this.getKind().readUnsafeConstant(encoding.asObject(), offset);
+                return ReadNode.readUnsafeConstant(getKind(), holder.mirror(), offset);
             }
             return null;
         } else {
-            assert !Modifier.isStatic(accessFlags);
-            return this.getKind().readUnsafeConstant(receiver.asObject(), offset);
+            assert !Modifier.isStatic(flags);
+            return ReadNode.readUnsafeConstant(getKind(), receiver.asObject(), offset);
         }
     }
 
@@ -100,7 +114,7 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
     }
 
     @Override
-    public ResolvedJavaType getDeclaringClass() {
+    public HotSpotResolvedObjectType getDeclaringClass() {
         return holder;
     }
 
@@ -139,7 +153,7 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
 
     private Field toJava() {
         try {
-            return holder.toJava().getDeclaredField(name);
+            return holder.mirror().getDeclaredField(name);
         } catch (NoSuchFieldException e) {
             return null;
         }

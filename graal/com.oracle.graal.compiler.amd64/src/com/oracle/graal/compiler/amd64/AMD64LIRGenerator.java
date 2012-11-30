@@ -118,7 +118,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     public boolean canStoreConstant(Constant c) {
         // there is no immediate move of 64-bit constants on Intel
         switch (c.getKind()) {
-            case Long:   return Util.isInt(c.asLong());
+            case Long:   return Util.isInt(c.asLong()) && !runtime.needsDataPatch(c);
             case Double: return false;
             case Object: return c.isNull();
             default:     return true;
@@ -128,7 +128,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     @Override
     public boolean canInlineConstant(Constant c) {
         switch (c.getKind()) {
-            case Long:   return NumUtil.isInt(c.asLong());
+            case Long:   return NumUtil.isInt(c.asLong()) && !runtime.needsDataPatch(c);
             case Object: return c.isNull();
             default:     return true;
         }
@@ -147,8 +147,13 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
             } else if (asConstant(base).getKind() != Kind.Object) {
                 long newDisplacement = displacement + asConstant(base).asLong();
                 if (NumUtil.isInt(newDisplacement)) {
+                    assert !runtime.needsDataPatch(asConstant(base));
                     displacement = (int) newDisplacement;
                     base = Value.ILLEGAL;
+                } else {
+                    Value newBase = newVariable(Kind.Long);
+                    emitMove(base, newBase);
+                    base = newBase;
                 }
             }
         }
@@ -581,7 +586,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     public void emitBitScanReverse(Variable result, Value value) {
-        if (value.getKind().isStackInt()) {
+        if (value.getKind().getStackKind() == Kind.Int) {
             append(new AMD64BitScanOp(AMD64BitScanOp.IntrinsicOpcode.IBSR, result, value));
         } else {
             append(new AMD64BitScanOp(AMD64BitScanOp.IntrinsicOpcode.LBSR, result, value));
@@ -632,10 +637,10 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     @Override
     protected void emitSequentialSwitch(Constant[] keyConstants, LabelRef[] keyTargets, LabelRef defaultTarget, Value key) {
         // Making a copy of the switch value is necessary because jump table destroys the input value
-        if (key.getKind() == Kind.Int) {
+        if (key.getKind() == Kind.Int || key.getKind() == Kind.Long) {
             append(new SequentialSwitchOp(keyConstants, keyTargets, defaultTarget, key, Value.ILLEGAL));
         } else {
-            assert key.getKind() == Kind.Object;
+            assert key.getKind() == Kind.Object : key.getKind();
             append(new SequentialSwitchOp(keyConstants, keyTargets, defaultTarget, key, newVariable(Kind.Object)));
         }
     }
@@ -679,6 +684,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         int displacement = node.displacement();
         Value index = operand(node.offset());
         if (isConstant(index) && NumUtil.isInt(asConstant(index).asLong() + displacement)) {
+            assert !runtime.needsDataPatch(asConstant(index));
             displacement += (int) asConstant(index).asLong();
             address = new Address(kind, load(operand(node.object())), displacement);
         } else {

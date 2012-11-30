@@ -70,16 +70,15 @@ public:
   // Print compilation timers and statistics
   virtual void print_timers();
   
-  static Handle get_JavaTypeFromSignature(constantPoolHandle cp, int index, KlassHandle accessor, TRAPS);
+  static Handle get_JavaTypeFromSignature(Symbol* signature, KlassHandle accessor, TRAPS);
   static Handle get_JavaType(constantPoolHandle cp, int index, KlassHandle accessor, TRAPS);
   static Handle get_JavaType(Symbol* klass_name, TRAPS);
   static Handle get_JavaTypeFromClass(Handle javaClassHandle, TRAPS);
   static Handle get_JavaType(KlassHandle klass, TRAPS);
   static Handle get_JavaField(int offset, int flags, Symbol* field_name, Handle field_holder, Handle field_type, TRAPS);
 
-  static Handle createHotSpotResolvedJavaType(KlassHandle klass, Handle name, TRAPS);
-  static Handle createHotSpotResolvedJavaMethod(methodHandle method, TRAPS);
-  static Handle createHotSpotMethodData(methodDataHandle method_data, TRAPS);
+  static Handle createHotSpotResolvedObjectType(KlassHandle klass, Handle name, TRAPS);
+  static Handle createHotSpotResolvedObjectType(methodHandle method, TRAPS);
 
   void exit();
 
@@ -87,7 +86,7 @@ public:
 
   static int to_cp_index_u2(int index) {
     // Tag.
-    return to_index_u2(index) + constantPoolOopDesc::CPCACHE_INDEX_TAG;
+    return to_index_u2(index) + ConstantPool::CPCACHE_INDEX_TAG;
   }
 
   static int to_index_u2(int index) {

@@ -36,8 +36,8 @@ import com.oracle.graal.snippets.*;
  */
 public final class MonitorCounterNode extends FloatingNode implements LIRGenLowerable {
 
-    public MonitorCounterNode(Kind wordKind) {
-        super(StampFactory.forWord(wordKind, true));
+    public MonitorCounterNode() {
+        super(StampFactory.forWord());
     }
 
     @Override
@@ -49,5 +49,5 @@ public final class MonitorCounterNode extends FloatingNode implements LIRGenLowe
     }
 
     @NodeIntrinsic
-    public static native Word counter(@ConstantNodeParameter Kind wordKind);
+    public static native Word counter();
 }

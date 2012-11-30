@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.hotspot;
 
+import static com.oracle.graal.graph.FieldIntrospection.*;
+
 import java.lang.reflect.*;
 
 import com.oracle.graal.api.code.*;
@@ -62,9 +64,22 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
 
     private static Kind wordKind;
 
+    /**
+     * Gets the kind of a word value.
+     */
     public static Kind wordKind() {
         assert wordKind != null;
         return wordKind;
+    }
+
+    /**
+     * Reads a word value from a given address.
+     */
+    public static long unsafeReadWord(long address) {
+        if (wordKind == Kind.Long) {
+            return unsafe.getLong(address);
+        }
+        return unsafe.getInt(address);
     }
 
     protected final CompilerToVM compilerToVm;
@@ -159,35 +174,35 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
         return vmToCompiler;
     }
 
-    public JavaType lookupType(String name, HotSpotResolvedJavaType accessingClass, boolean eagerResolve) {
+    public JavaType lookupType(String name, HotSpotResolvedObjectType accessingClass, boolean eagerResolve) {
         if (name.length() == 1 && vmToCompiler instanceof VMToCompilerImpl) {
-            VMToCompilerImpl exitsNative = (VMToCompilerImpl) vmToCompiler;
+            VMToCompilerImpl impl = (VMToCompilerImpl) vmToCompiler;
             Kind kind = Kind.fromPrimitiveOrVoidTypeChar(name.charAt(0));
             switch(kind) {
                 case Boolean:
-                    return exitsNative.typeBoolean;
+                    return impl.typeBoolean;
                 case Byte:
-                    return exitsNative.typeByte;
+                    return impl.typeByte;
                 case Char:
-                    return exitsNative.typeChar;
+                    return impl.typeChar;
                 case Double:
-                    return exitsNative.typeDouble;
+                    return impl.typeDouble;
                 case Float:
-                    return exitsNative.typeFloat;
+                    return impl.typeFloat;
                 case Illegal:
                     break;
                 case Int:
-                    return exitsNative.typeInt;
+                    return impl.typeInt;
                 case Jsr:
                     break;
                 case Long:
-                    return exitsNative.typeLong;
+                    return impl.typeLong;
                 case Object:
                     break;
                 case Short:
-                    return exitsNative.typeShort;
+                    return impl.typeShort;
                 case Void:
-                    return exitsNative.typeVoid;
+                    return impl.typeVoid;
             }
         }
         return compilerToVm.lookupType(name, accessingClass, eagerResolve);

@@ -38,16 +38,6 @@ public interface ResolvedJavaType extends JavaType {
      */
     public enum Representation {
         /**
-         * The runtime representation of the data structure containing the static primitive fields of this type.
-         */
-        StaticPrimitiveFields,
-
-        /**
-         * The runtime representation of the data structure containing the static object fields of this type.
-         */
-        StaticObjectFields,
-
-        /**
          * The runtime representation of the Java class object of this type.
          */
         JavaClass,
@@ -101,7 +91,14 @@ public interface ResolvedJavaType extends JavaType {
      *
      * @return {@code true} if this type is an array class
      */
-    boolean isArrayClass();
+    boolean isArray();
+
+    /**
+     * Checks whether this type is primitive.
+     *
+     * @return {@code true} if this type is primitive
+     */
+    boolean isPrimitive();
 
     /**
      * Returns the Java language modifiers for this type, as an integer. The {@link Modifier} class should be used to
@@ -123,12 +120,11 @@ public interface ResolvedJavaType extends JavaType {
     void initialize();
 
     /**
-     * Checks whether this type is a subtype of another type.
-     *
-     * @param other the type to test
-     * @return {@code true} if this type a subtype of the specified type
+     * Determines if this type is either the same as, or is a superclass or superinterface of, the type represented by
+     * the specified parameter. This method is identical to {@link Class#isAssignableFrom(Class)} in terms of the value
+     * return for this type.
      */
-    boolean isSubtypeOf(ResolvedJavaType other);
+    boolean isAssignableFrom(ResolvedJavaType other);
 
     /**
      * Checks whether the specified object is an instance of this type.
@@ -139,21 +135,24 @@ public interface ResolvedJavaType extends JavaType {
     boolean isInstance(Constant obj);
 
     /**
-     * Attempts to get an exact type for this type. Final classes, arrays of final classes, and primitive types all have
-     * exact types.
+     * Returns this type if it is an exact type otherwise returns null.
+     * This type is exact if it is void, primitive, final, or an array of a final or primitive type.
      *
-     * @return the exact type of this type, if it exists; {@code null} otherwise
+     * @return this type if it is exact; {@code null} otherwise
      */
-    ResolvedJavaType getExactType();
+    ResolvedJavaType asExactType();
 
     /**
-     * Gets the superclass of this type, or {@code null} if it does not exist. This method is analogous to
-     * {@link Class#getSuperclass()}.
+     * Gets the super class of this type.
+     * If this type represents either the {@code Object} class, a primitive type, or void, then
+     * null is returned.  If this object represents an array class or an interface then the
+     * type object representing the {@code Object} class is returned.
      */
     ResolvedJavaType getSuperclass();
 
     /**
-     * Gets the interfaces that this type defines. This method is analogous to {@link Class#getInterfaces()}.
+     * Gets the interfaces implemented or extended by this type. This method is analogous to {@link Class#getInterfaces()}
+     * and as such, only returns the interfaces directly implemented or extended by this type.
      */
     ResolvedJavaType[] getInterfaces();
 
@@ -167,12 +166,23 @@ public interface ResolvedJavaType extends JavaType {
     ResolvedJavaType findLeastCommonAncestor(ResolvedJavaType otherType);
 
     /**
-     * Attempts to get the unique concrete subclass of this type.
+     * Attempts to get a unique concrete subclass of this type.
+     * <p>
+     * For an {@linkplain #isArray() array} type A, the unique concrete subclass is A if
+     * the {@linkplain MetaUtil#getElementalType(ResolvedJavaType) elemental} type of A
+     * is final (which includes primitive types). Otherwise {@code null} is returned for A.
+     * <p>
+     * For a non-array type T, the result is the unique concrete type in the current hierarchy of T.
+     * <p>
+     * A runtime may decide not to manage or walk a large hierarchy and so the result is conservative.
+     * That is, a non-null result is guaranteed to be the unique concrete class in T's hierarchy
+     * <b>at the current point in time</b>
+     * but a null result does not necessarily imply that there is no unique concrete class in T's hierarchy.
      * <p>
      * If the compiler uses the result of this method for its compilation, it must register an assumption because
      * dynamic class loading can invalidate the result of this method.
      *
-     * @return the exact type of this type, if it exists; {@code null} otherwise
+     * @return the unique concrete subclass for this type as described above
      */
     ResolvedJavaType findUniqueConcreteSubtype();
 
@@ -189,26 +199,28 @@ public interface ResolvedJavaType extends JavaType {
     ResolvedJavaMethod resolveMethod(ResolvedJavaMethod method);
 
     /**
-     * Given an JavaMethod a, returns a concrete JavaMethod b that is the only possible unique target for a virtual call
-     * on a(). Returns {@code null} if either no such concrete method or more than one such method exists. Returns the
-     * method a if a is a concrete method that is not overridden.
+     * Given a {@link ResolvedJavaMethod} A, returns a concrete {@link ResolvedJavaMethod} B that is the only possible
+     * unique target for a virtual call on A(). Returns {@code null} if either no such concrete method or more than one
+     * such method exists. Returns the method A if A is a concrete method that is not overridden.
      * <p>
      * If the compiler uses the result of this method for its compilation, it must register an assumption because
      * dynamic class loading can invalidate the result of this method.
      *
-     * @param method the method a for which a unique concrete target is searched
+     * @param method the method A for which a unique concrete target is searched
      * @return the unique concrete target or {@code null} if no such target exists or assumptions are not supported by
      *         this runtime
      */
     ResolvedJavaMethod findUniqueConcreteMethod(ResolvedJavaMethod method);
 
     /**
-     * Returns the instance fields declared in this class. A zero-length array is returned for array and primitive
-     * types.
+     * Returns the instance fields of this class, including {@linkplain ResolvedJavaField#isInternal() internal} fields.
+     * A zero-length array is returned for array and primitive types. The order of fields returned by this method is
+     * stable. That is, for a single JVM execution the same order is returned each time this method is called.
      *
+     * @param includeSuperclasses if true, then instance fields for the complete hierarchy of this type are included in the result
      * @return an array of instance fields
      */
-    ResolvedJavaField[] getDeclaredFields();
+    ResolvedJavaField[] getInstanceFields(boolean includeSuperclasses);
 
     /**
      * Returns the annotation for the specified type of this class, if such an annotation is present.
@@ -219,7 +231,11 @@ public interface ResolvedJavaType extends JavaType {
     <T extends Annotation> T getAnnotation(Class<T> annotationClass);
 
     /**
-     * Returns the {@link java.lang.Class} object representing this type.
+     * Returns the instance field of this class (or one of its super classes) at the given
+     * offset, or {@code null} if there is no such field.
+     *
+     * @param offset the offset of the field to look for
+     * @return the field with the given offset, or {@code null} if there is no such field.
      */
-    Class< ? > toJava();
+    ResolvedJavaField findInstanceFieldWithOffset(long offset);
 }

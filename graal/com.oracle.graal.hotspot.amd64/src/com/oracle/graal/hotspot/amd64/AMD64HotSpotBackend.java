@@ -32,8 +32,8 @@ import com.oracle.graal.amd64.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
+import com.oracle.graal.asm.amd64.AMD64Assembler.ConditionFlag;
 import com.oracle.graal.asm.amd64.*;
-import com.oracle.graal.asm.amd64.AMD64Assembler.*;
 import com.oracle.graal.compiler.amd64.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.hotspot.*;
@@ -125,6 +125,7 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
             Address address;
             Value index = operand(x.offset());
             if (ValueUtil.isConstant(index) && NumUtil.isInt(ValueUtil.asConstant(index).asLong() + disp)) {
+                assert !runtime.needsDataPatch(asConstant(index));
                 disp += (int) ValueUtil.asConstant(index).asLong();
                 address = new Address(kind, load(operand(x.object())), disp);
             } else {
@@ -153,11 +154,11 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
 
         @Override
         protected void emitIndirectCall(IndirectCallTargetNode callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState callState) {
-            Value methodOop = AMD64.rbx.asValue();
-            emitMove(operand(((HotSpotIndirectCallTargetNode) callTarget).methodOop()), methodOop);
+            Value metaspaceMethod = AMD64.rbx.asValue();
+            emitMove(operand(((HotSpotIndirectCallTargetNode) callTarget).metaspaceMethod()), metaspaceMethod);
             Value targetAddress = AMD64.rax.asValue();
             emitMove(operand(callTarget.computedAddress()), targetAddress);
-            append(new AMD64IndirectCallOp(callTarget.target(), result, parameters, temps, methodOop, targetAddress, callState));
+            append(new AMD64IndirectCallOp(callTarget.target(), result, parameters, temps, metaspaceMethod, targetAddress, callState));
         }
     }
 
@@ -231,7 +232,7 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
         //  - has no callee-saved registers
         //  - has no incoming arguments passed on the stack
         //  - has no instructions with debug info
-        boolean canOmitFrame =
+        boolean canOmitFrame = GraalOptions.CanOmitFrame &&
             frameMap.frameSize() == frameMap.initialFrameSize &&
             frameMap.registerConfig.getCalleeSaveLayout().registers.length == 0 &&
             !lir.hasArgInCallerFrame() &&

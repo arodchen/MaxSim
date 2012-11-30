@@ -60,6 +60,8 @@
           "Enable JVMTI for the compiler thread")                           \
   product(bool, BootstrapGraal, true,                                       \
           "Bootstrap graal before running Java main method")                \
+  product(ccstr, GraalClassPath, NULL,                                      \
+          "Use the defined graal class path instead of searching for the classes") \
   product(intx, TraceGraal, 0,                                              \
           "Trace level for graal")                                          \
   product(bool, TraceSignals, false,                                        \
@@ -323,7 +325,7 @@
           "Use CHA and exact type results at call sites when updating MDOs")\
                                                                             \
   product(bool, C1UpdateMethodData, trueInTiered,                           \
-          "Update methodDataOops in Tier1-generated code")                  \
+          "Update MethodData*s in Tier1-generated code")                  \
                                                                             \
   develop(bool, PrintCFGToFile, false,                                      \
           "print control flow graph to a separate file during compilation") \

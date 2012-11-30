@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1998, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -39,6 +39,7 @@
 #include "runtime/sharedRuntime.hpp"
 #include "runtime/vframe.hpp"
 #include "services/memoryService.hpp"
+#include "utilities/machineCodePrinter.hpp"
 #ifdef TARGET_ARCH_x86
 # include "nativeInst_x86.hpp"
 #endif
@@ -74,6 +75,7 @@ unsigned int CodeBlob::allocation_size(CodeBuffer* cb, int header_size) {
   size = align_code_offset(size);
   size += round_to(cb->total_content_size(), oopSize);
   size += round_to(cb->total_oop_size(), oopSize);
+  size += round_to(cb->total_metadata_size(), oopSize);
   return size;
 }
 
@@ -161,8 +163,10 @@ void CodeBlob::trace_new_stub(CodeBlob* stub, const char* name1, const char* nam
     assert(strlen(name1) + strlen(name2) < sizeof(stub_id), "");
     jio_snprintf(stub_id, sizeof(stub_id), "%s%s", name1, name2);
     if (PrintStubCode) {
+      ttyLocker ttyl;
       tty->print_cr("Decoding %s " INTPTR_FORMAT, stub_id, (intptr_t) stub);
       Disassembler::decode(stub->code_begin(), stub->code_end());
+      tty->cr();
     }
     Forte::register_stub(stub_id, stub->code_begin(), stub->code_end());
 
@@ -339,6 +343,10 @@ RuntimeStub* RuntimeStub::new_runtime_stub(const char* stub_name,
   }
 
   trace_new_stub(stub, "RuntimeStub - ", stub_name);
+
+  if (PrintMachineCodeToFile) {
+    MachineCodePrinter::print(stub);
+  }
 
   return stub;
 }
@@ -547,6 +555,7 @@ void RuntimeStub::verify() {
 }
 
 void RuntimeStub::print_on(outputStream* st) const {
+  ttyLocker ttyl;
   CodeBlob::print_on(st);
   st->print("Runtime Stub (" INTPTR_FORMAT "): ", this);
   st->print_cr(name());
@@ -562,6 +571,7 @@ void SingletonBlob::verify() {
 }
 
 void SingletonBlob::print_on(outputStream* st) const {
+  ttyLocker ttyl;
   CodeBlob::print_on(st);
   st->print_cr(name());
   Disassembler::decode((CodeBlob*)this, st);

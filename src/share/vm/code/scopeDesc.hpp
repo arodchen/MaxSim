@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,17 +27,17 @@
 
 #include "code/debugInfo.hpp"
 #include "code/pcDesc.hpp"
-#include "oops/methodOop.hpp"
+#include "oops/method.hpp"
 #include "utilities/growableArray.hpp"
 
 // SimpleScopeDesc is used when all you need to extract from
-// a given pc,nmethod pair is a methodOop and a bci. This is
+// a given pc,nmethod pair is a Method* and a bci. This is
 // quite a bit faster than allocating a full ScopeDesc, but
 // very limited in abilities.
 
 class SimpleScopeDesc : public StackObj {
  private:
-  methodOop _method;
+  Method* _method;
   int _bci;
 
  public:
@@ -46,11 +46,11 @@ class SimpleScopeDesc : public StackObj {
     assert(pc_desc != NULL, "Must be able to find matching PcDesc");
     DebugInfoReadStream buffer(code, pc_desc->scope_decode_offset());
     int ignore_sender = buffer.read_int();
-    _method           = methodOop(buffer.read_oop());
+    _method           = buffer.read_method();
     _bci              = buffer.read_bci();
   }
 
-  methodOop method() { return _method; }
+  Method* method() { return _method; }
   int bci() { return _bci; }
 };
 
@@ -68,7 +68,7 @@ class ScopeDesc : public ResourceObj {
   ScopeDesc(const nmethod* code, int decode_offset, bool reexecute, bool rethrow_exception, bool return_oop);
 
   // JVM state
-  methodHandle method()   const { return _method; }
+  Method* method()      const { return _method; }
   int          bci()      const { return _bci;    }
   bool should_reexecute() const { return _reexecute; }
   bool rethrow_exception() const { return _rethrow_exception; }
@@ -78,6 +78,9 @@ class ScopeDesc : public ResourceObj {
   GrowableArray<ScopeValue*>*   expressions();
   GrowableArray<MonitorValue*>* monitors();
   GrowableArray<ScopeValue*>*   objects();
+#ifdef GRAAL
+  GrowableArray<DeferredWriteValue*>* deferred_writes();
+#endif // GRAAL
 
   // Stack walking, returns NULL if this is the outer most scope.
   ScopeDesc* sender() const;
@@ -95,7 +98,7 @@ class ScopeDesc : public ResourceObj {
   ScopeDesc(const ScopeDesc* parent);
 
   // JVM state
-  methodHandle  _method;
+  Method*       _method;
   int           _bci;
   bool          _reexecute;
   bool          _rethrow_exception;
@@ -107,6 +110,9 @@ class ScopeDesc : public ResourceObj {
   int _locals_decode_offset;
   int _expressions_decode_offset;
   int _monitors_decode_offset;
+#ifdef GRAAL
+  int _deferred_writes_decode_offset;
+#endif // GRAAL
 
   // Object pool
   GrowableArray<ScopeValue*>* _objects;
@@ -119,6 +125,9 @@ class ScopeDesc : public ResourceObj {
   GrowableArray<ScopeValue*>* decode_scope_values(int decode_offset);
   GrowableArray<MonitorValue*>* decode_monitor_values(int decode_offset);
   GrowableArray<ScopeValue*>* decode_object_values(int decode_offset);
+#ifdef GRAAL
+  GrowableArray<DeferredWriteValue*>* decode_deferred_writes(int decode_offset);
+#endif // GRAAL
 
   DebugInfoReadStream* stream_at(int decode_offset) const;
 

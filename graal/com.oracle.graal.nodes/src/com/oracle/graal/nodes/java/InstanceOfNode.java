@@ -28,11 +28,12 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.virtual.*;
 
 /**
  * The {@code InstanceOfNode} represents an instanceof test.
  */
-public final class InstanceOfNode extends BooleanNode implements Canonicalizable, Lowerable, LIRLowerable {
+public final class InstanceOfNode extends BooleanNode implements Canonicalizable, Lowerable, LIRLowerable, Virtualizable {
 
     @Input private ValueNode object;
     private final ResolvedJavaType type;
@@ -69,7 +70,7 @@ public final class InstanceOfNode extends BooleanNode implements Canonicalizable
         ResolvedJavaType stampType = stamp.type();
 
         if (stamp.isExactType()) {
-            boolean subType = stampType.isSubtypeOf(type());
+            boolean subType = type().isAssignableFrom(stampType);
 
             if (subType) {
                 if (stamp.nonNull()) {
@@ -86,7 +87,7 @@ public final class InstanceOfNode extends BooleanNode implements Canonicalizable
                 return ConstantNode.forBoolean(false, graph());
             }
         } else if (stampType != null) {
-            boolean subType = stampType.isSubtypeOf(type());
+            boolean subType = type().isAssignableFrom(stampType);
 
             if (subType) {
                 if (stamp.nonNull()) {
@@ -128,5 +129,13 @@ public final class InstanceOfNode extends BooleanNode implements Canonicalizable
             assertTrue(usage instanceof IfNode || usage instanceof ConditionalNode, "unsupported usage: ", usage);
         }
         return super.verify();
+    }
+
+    @Override
+    public void virtualize(VirtualizerTool tool) {
+        VirtualObjectNode virtual = tool.getVirtualState(object());
+        if (virtual != null) {
+            tool.replaceWithValue(ConstantNode.forBoolean(type().isAssignableFrom(virtual.type()), graph()));
+        }
     }
 }

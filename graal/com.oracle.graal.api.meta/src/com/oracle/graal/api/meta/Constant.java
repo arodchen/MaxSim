@@ -34,27 +34,27 @@ public final class Constant extends Value {
     private static final Constant[] INT_CONSTANT_CACHE = new Constant[100];
     static {
         for (int i = 0; i < INT_CONSTANT_CACHE.length; ++i) {
-            INT_CONSTANT_CACHE[i] = new Constant(Kind.Int, i);
+            INT_CONSTANT_CACHE[i] = new Constant(Kind.Int, null, i);
         }
     }
 
-    public static final Constant NULL_OBJECT = new Constant(Kind.Object, null);
-    public static final Constant INT_MINUS_1 = new Constant(Kind.Int, -1);
+    public static final Constant NULL_OBJECT = new Constant(Kind.Object, null, 0);
+    public static final Constant INT_MINUS_1 = new Constant(Kind.Int, null, -1);
     public static final Constant INT_0 = forInt(0);
     public static final Constant INT_1 = forInt(1);
     public static final Constant INT_2 = forInt(2);
     public static final Constant INT_3 = forInt(3);
     public static final Constant INT_4 = forInt(4);
     public static final Constant INT_5 = forInt(5);
-    public static final Constant LONG_0 = new Constant(Kind.Long, 0L);
-    public static final Constant LONG_1 = new Constant(Kind.Long, 1L);
-    public static final Constant FLOAT_0 = new Constant(Kind.Float, Float.floatToRawIntBits(0.0F));
-    public static final Constant FLOAT_1 = new Constant(Kind.Float, Float.floatToRawIntBits(1.0F));
-    public static final Constant FLOAT_2 = new Constant(Kind.Float, Float.floatToRawIntBits(2.0F));
-    public static final Constant DOUBLE_0 = new Constant(Kind.Double, Double.doubleToRawLongBits(0.0D));
-    public static final Constant DOUBLE_1 = new Constant(Kind.Double, Double.doubleToRawLongBits(1.0D));
-    public static final Constant TRUE = new Constant(Kind.Boolean, 1L);
-    public static final Constant FALSE = new Constant(Kind.Boolean, 0L);
+    public static final Constant LONG_0 = new Constant(Kind.Long, null, 0L);
+    public static final Constant LONG_1 = new Constant(Kind.Long, null, 1L);
+    public static final Constant FLOAT_0 = new Constant(Kind.Float, null, Float.floatToRawIntBits(0.0F));
+    public static final Constant FLOAT_1 = new Constant(Kind.Float, null, Float.floatToRawIntBits(1.0F));
+    public static final Constant FLOAT_2 = new Constant(Kind.Float, null, Float.floatToRawIntBits(2.0F));
+    public static final Constant DOUBLE_0 = new Constant(Kind.Double, null, Double.doubleToRawLongBits(0.0D));
+    public static final Constant DOUBLE_1 = new Constant(Kind.Double, null, Double.doubleToRawLongBits(1.0D));
+    public static final Constant TRUE = new Constant(Kind.Boolean, null, 1L);
+    public static final Constant FALSE = new Constant(Kind.Boolean, null, 0L);
 
     static {
         assert FLOAT_0 != forFloat(-0.0F) : "Constant for 0.0f must be different from -0.0f";
@@ -63,7 +63,8 @@ public final class Constant extends Value {
     }
 
     /**
-     * The boxed object value. This is ignored iff {@code !kind.isObject()}.
+     * The boxed object value if {@code !kind.isObject()} otherwise the (possibly null)
+     * {@link #getPrimitiveAnnotation() annotation} for a primitive value.
      */
     private final Object object;
 
@@ -74,46 +75,28 @@ public final class Constant extends Value {
      */
     private final long primitive;
 
-    /**
-     * Create a new constant represented by the specified object reference.
-     * 
-     * @param kind the type of this constant
-     * @param object the value of this constant
-     */
-    private Constant(Kind kind, Object object) {
+    private Constant(Kind kind, Object object, long primitive) {
         super(kind);
         this.object = object;
-        this.primitive = 0L;
-    }
-
-    /**
-     * Create a new constant represented by the specified primitive.
-     * 
-     * @param kind the type of this constant
-     * @param primitive the value of this constant
-     */
-    public Constant(Kind kind, long primitive) {
-        super(kind);
-        this.object = null;
         this.primitive = primitive;
     }
 
     /**
      * Checks whether this constant is non-null.
-     * 
+     *
      * @return {@code true} if this constant is a primitive, or an object constant that is not null
      */
     public boolean isNonNull() {
-        return !getKind().isObject() || object != null;
+        return getKind() != Kind.Object || object != null;
     }
 
     /**
      * Checks whether this constant is null.
-     * 
+     *
      * @return {@code true} if this constant is the null constant
      */
     public boolean isNull() {
-        return getKind().isObject() && object == null;
+        return getKind() == Kind.Object && object == null;
     }
 
     /**
@@ -127,12 +110,16 @@ public final class Constant extends Value {
 
     @Override
     public String toString() {
-        return getKind().getJavaName() + "[" + getKind().format(asBoxedValue()) + (getKind() != Kind.Object ? "|0x" + Long.toHexString(primitive) : "") + "]";
+        String annotationSuffix = "";
+        if (getKind() != Kind.Object && getPrimitiveAnnotation() != null) {
+            annotationSuffix = "{" + getPrimitiveAnnotation() + "}";
+        }
+        return getKind().getJavaName() + "[" + getKind().format(asBoxedValue()) + (getKind() != Kind.Object ? "|0x" + Long.toHexString(primitive) : "") + "]" + annotationSuffix;
     }
 
     /**
      * Returns the value of this constant as a boxed Java value.
-     * 
+     *
      * @return the value of this constant
      */
     public Object asBoxedValue() {
@@ -142,15 +129,15 @@ public final class Constant extends Value {
             case Boolean:
                 return asInt() == 0 ? Boolean.FALSE : Boolean.TRUE;
             case Short:
-                return (short) asInt();
+                return (short) primitive;
             case Char:
-                return (char) asInt();
+                return (char) primitive;
             case Jsr:
                 return (int) primitive;
             case Int:
-                return asInt();
+                return (int) primitive;
             case Long:
-                return asLong();
+                return primitive;
             case Float:
                 return asFloat();
             case Double:
@@ -166,134 +153,100 @@ public final class Constant extends Value {
         if (!ignoreKind && getKind() != other.getKind()) {
             return false;
         }
-        if (getKind().isObject()) {
+        if (getKind() == Kind.Object) {
             return object == other.object;
         }
-        return primitive == other.primitive;
+        return primitive == other.primitive && getPrimitiveAnnotation() == other.getPrimitiveAnnotation();
     }
 
     /**
-     * Converts this constant to a primitive int.
-     * 
-     * @return the int value of this constant
+     * Returns the primitive int value this constant represents. The constant must have a {@link Kind#getStackKind()} of
+     * {@link Kind#Int}, or kind {@link Kind#Jsr}.
+     *
+     * @return the constant value
      */
     public int asInt() {
-        if (getKind().getStackKind().isStackInt() || getKind().isJsr()) {
-            return (int) primitive;
-        }
-        throw new Error("Constant is not int: " + this);
+        assert getKind().getStackKind() == Kind.Int || getKind() == Kind.Jsr;
+        return (int) primitive;
     }
 
     /**
-     * Converts this constant to a primitive boolean.
-     * 
-     * @return the boolean value of this constant
+     * Returns the primitive boolean value this constant represents. The constant must have kind {@link Kind#Boolean}.
+     *
+     * @return the constant value
      */
     public boolean asBoolean() {
-        if (getKind() == Kind.Boolean) {
-            return primitive != 0L;
-        }
-        throw new Error("Constant is not boolean: " + this);
+        assert getKind() == Kind.Boolean;
+        return primitive != 0L;
     }
 
     /**
-     * Converts this constant to a primitive long.
-     * 
-     * @return the long value of this constant
+     * Returns the primitive long value this constant represents. The constant must have kind {@link Kind#Long}, a
+     * {@link Kind#getStackKind()} of {@link Kind#Int}, or kind {@link Kind#Jsr}.
+     *
+     * @return the constant value
      */
     public long asLong() {
-        switch (getKind().getStackKind()) {
-            case Jsr:
-            case Int:
-            case Long:
-                return primitive;
-            case Float:
-                return (long) asFloat();
-            case Double:
-                return (long) asDouble();
-            default:
-                throw new Error("Constant is not long: " + this);
-        }
-    }
-
-    /**
-     * Converts this constant to a primitive float.
-     * 
-     * @return the float value of this constant
-     */
-    public float asFloat() {
-        if (getKind().isFloat()) {
-            return Float.intBitsToFloat((int) primitive);
-        }
-        throw new Error("Constant is not float: " + this);
-    }
-
-    /**
-     * Converts this constant to a primitive double.
-     * 
-     * @return the double value of this constant
-     */
-    public double asDouble() {
-        if (getKind().isFloat()) {
-            return Float.intBitsToFloat((int) primitive);
-        }
-        if (getKind().isDouble()) {
-            return Double.longBitsToDouble(primitive);
-        }
-        throw new Error("Constant is not double: " + this);
-    }
-
-    /**
-     * Converts this constant to the object reference it represents.
-     * 
-     * @return the object which this constant represents
-     */
-    public Object asObject() {
-        if (getKind().isObject()) {
-            return object;
-        }
-        throw new Error("Constant is not object: " + this);
-    }
-
-    /**
-     * Converts this constant to the jsr reference it represents.
-     * 
-     * @return the object which this constant represents
-     */
-    public int asJsr() {
-        if (getKind().isJsr()) {
-            return (int) primitive;
-        }
-        throw new Error("Constant is not jsr: " + this);
-    }
-
-    /**
-     * Unchecked access to a primitive value.
-     */
-    public long asPrimitive() {
-        if (getKind().isObject()) {
-            throw new Error("Constant is not primitive: " + this);
-        }
+        assert getKind() == Kind.Long || getKind().getStackKind() == Kind.Int || getKind() == Kind.Jsr;
         return primitive;
     }
 
     /**
+     * Returns the primitive float value this constant represents. The constant must have kind {@link Kind#Float}.
+     *
+     * @return the constant value
+     */
+    public float asFloat() {
+        assert getKind() == Kind.Float;
+        return Float.intBitsToFloat((int) primitive);
+    }
+
+    /**
+     * Returns the primitive double value this constant represents. The constant must have kind {@link Kind#Double}.
+     *
+     * @return the constant value
+     */
+    public double asDouble() {
+        assert getKind() == Kind.Double;
+        return Double.longBitsToDouble(primitive);
+    }
+
+    /**
+     * Returns the object reference this constant represents. The constant must have kind {@link Kind#Object}.
+     *
+     * @return the constant value
+     */
+    public Object asObject() {
+        assert getKind() == Kind.Object;
+        return object;
+    }
+
+    /**
+     * Gets the annotation (if any) associated with this constant.
+     *
+     * @return null if this constant is not primitive or has no annotation
+     */
+    public Object getPrimitiveAnnotation() {
+        return getKind() == Kind.Object ? null : object;
+    }
+
+    /**
      * Computes the hashcode of this constant.
-     * 
+     *
      * @return a suitable hashcode for this constant
      */
     @Override
     public int hashCode() {
-        if (getKind().isObject()) {
+        if (getKind() == Kind.Object) {
             return System.identityHashCode(object);
         }
         return (int) primitive;
     }
 
     /**
-     * Checks whether this constant equals another object. This is only true if the other object is a constant and has
-     * the same value.
-     * 
+     * Checks whether this constant equals another object. This is only true if the other object is a constant that has
+     * the same {@linkplain #getKind() kind}, value and {@link #getPrimitiveAnnotation() annotation}.
+     *
      * @param o the object to compare equality
      * @return {@code true} if this constant is equivalent to the specified object
      */
@@ -304,7 +257,7 @@ public final class Constant extends Value {
 
     /**
      * Creates a boxed double constant.
-     * 
+     *
      * @param d the double value to box
      * @return a boxed copy of {@code value}
      */
@@ -315,12 +268,12 @@ public final class Constant extends Value {
         if (Double.compare(d, 1.0D) == 0) {
             return DOUBLE_1;
         }
-        return new Constant(Kind.Double, Double.doubleToRawLongBits(d));
+        return new Constant(Kind.Double, null, Double.doubleToRawLongBits(d));
     }
 
     /**
      * Creates a boxed float constant.
-     * 
+     *
      * @param f the float value to box
      * @return a boxed copy of {@code value}
      */
@@ -334,22 +287,22 @@ public final class Constant extends Value {
         if (Float.compare(f, 2.0F) == 0) {
             return FLOAT_2;
         }
-        return new Constant(Kind.Float, Float.floatToRawIntBits(f));
+        return new Constant(Kind.Float, null, Float.floatToRawIntBits(f));
     }
 
     /**
      * Creates a boxed long constant.
-     * 
+     *
      * @param i the long value to box
      * @return a boxed copy of {@code value}
      */
     public static Constant forLong(long i) {
-        return i == 0 ? LONG_0 : i == 1 ? LONG_1 : new Constant(Kind.Long, i);
+        return i == 0 ? LONG_0 : i == 1 ? LONG_1 : new Constant(Kind.Long, null, i);
     }
 
     /**
      * Creates a boxed integer constant.
-     * 
+     *
      * @param i the integer value to box
      * @return a boxed copy of {@code value}
      */
@@ -360,22 +313,22 @@ public final class Constant extends Value {
         if (i >= 0 && i < INT_CONSTANT_CACHE.length) {
             return INT_CONSTANT_CACHE[i];
         }
-        return new Constant(Kind.Int, i);
+        return new Constant(Kind.Int, null, i);
     }
 
     /**
      * Creates a boxed byte constant.
-     * 
+     *
      * @param i the byte value to box
      * @return a boxed copy of {@code value}
      */
     public static Constant forByte(byte i) {
-        return new Constant(Kind.Byte, i);
+        return new Constant(Kind.Byte, null, i);
     }
 
     /**
      * Creates a boxed boolean constant.
-     * 
+     *
      * @param i the boolean value to box
      * @return a boxed copy of {@code value}
      */
@@ -385,37 +338,37 @@ public final class Constant extends Value {
 
     /**
      * Creates a boxed char constant.
-     * 
+     *
      * @param i the char value to box
      * @return a boxed copy of {@code value}
      */
     public static Constant forChar(char i) {
-        return new Constant(Kind.Char, i);
+        return new Constant(Kind.Char, null, i);
     }
 
     /**
      * Creates a boxed short constant.
-     * 
+     *
      * @param i the short value to box
      * @return a boxed copy of {@code value}
      */
     public static Constant forShort(short i) {
-        return new Constant(Kind.Short, i);
+        return new Constant(Kind.Short, null, i);
     }
 
     /**
      * Creates a boxed address (jsr/ret address) constant.
-     * 
+     *
      * @param i the address value to box
      * @return a boxed copy of {@code value}
      */
     public static Constant forJsr(int i) {
-        return new Constant(Kind.Jsr, i);
+        return new Constant(Kind.Jsr, null, i);
     }
 
     /**
      * Creates a boxed object constant.
-     * 
+     *
      * @param o the object value to box
      * @return a boxed copy of {@code value}
      */
@@ -423,13 +376,33 @@ public final class Constant extends Value {
         if (o == null) {
             return NULL_OBJECT;
         }
-        return new Constant(Kind.Object, o);
+        return new Constant(Kind.Object, o, 0L);
+    }
+
+    /**
+     * Creates an annotated int or long constant. An annotation enables a client to associate some extra semantic or
+     * debugging information with a primitive. An annotated primitive constant is never {@linkplain #equals(Object)
+     * equal} to a non-annotated constant.
+     *
+     * @param kind the type of this constant
+     * @param i the value of this constant
+     * @param annotation an arbitrary non-null object
+     */
+    public static Constant forIntegerKind(Kind kind, long i, Object annotation) {
+        switch (kind) {
+            case Int:
+                return new Constant(kind, annotation, (int) i);
+            case Long:
+                return new Constant(kind, annotation, i);
+            default:
+                throw new IllegalArgumentException("not an integer kind: " + kind);
+        }
     }
 
     /**
      * Creates a boxed constant for the given kind from an Object. The object needs to be of the Java boxed type
      * corresponding to the kind.
-     * 
+     *
      * @param kind the kind of the constant to create
      * @param value the Java boxed value: a {@link Byte} instance for {@link Kind#Byte}, etc.
      * @return the boxed copy of {@code value}

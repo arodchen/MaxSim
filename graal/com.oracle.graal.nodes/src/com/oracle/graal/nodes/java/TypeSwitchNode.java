@@ -41,8 +41,8 @@ public final class TypeSwitchNode extends SwitchNode implements LIRLowerable, Si
     private final ResolvedJavaType[] keys;
 
     /**
-     * Constructs a type switch instruction. The keyProbabilities and keySuccessors array contain key.length + 1
-     * entries, the last entry describes the default (fall through) case.
+     * Constructs a type switch instruction. The keyProbabilities array contain key.length + 1
+     * entries. The last entry in every array describes the default case.
      *
      * @param value the instruction producing the value being switched on
      * @param successors the list of successors
@@ -52,8 +52,8 @@ public final class TypeSwitchNode extends SwitchNode implements LIRLowerable, Si
      */
     public TypeSwitchNode(ValueNode value, BeginNode[] successors, double[] successorProbabilities, ResolvedJavaType[] keys, double[] keyProbabilities, int[] keySuccessors) {
         super(value, successors, successorProbabilities, keySuccessors, keyProbabilities);
-        assert successors.length == keys.length + 1;
-        assert successors.length == keyProbabilities.length;
+        assert successors.length <= keys.length + 1;
+        assert keySuccessors.length == keyProbabilities.length;
         this.keys = keys;
     }
 
@@ -81,7 +81,7 @@ public final class TypeSwitchNode extends SwitchNode implements LIRLowerable, Si
             for (int i = 0; i < keyCount(); i++) {
                 Constant typeHub = keyAt(i);
                 assert constant.getKind() == typeHub.getKind();
-                if (tool.runtime().constantEquals(value().asConstant(), typeHub)) {
+                if (tool.runtime().constantEquals(constant, typeHub)) {
                     survivingEdge = keySuccessorIndex(i);
                 }
             }
@@ -98,7 +98,7 @@ public final class TypeSwitchNode extends SwitchNode implements LIRLowerable, Si
             if (stamp.type() != null) {
                 int validKeys = 0;
                 for (int i = 0; i < keyCount(); i++) {
-                    if (keys[i].isSubtypeOf(stamp.type())) {
+                    if (stamp.type().isAssignableFrom(keys[i])) {
                         validKeys++;
                     }
                 }
@@ -113,7 +113,7 @@ public final class TypeSwitchNode extends SwitchNode implements LIRLowerable, Si
                     double totalProbability = 0;
                     int current = 0;
                     for (int i = 0; i < keyCount() + 1; i++) {
-                        if (i == keyCount() || keys[i].isSubtypeOf(stamp.type())) {
+                        if (i == keyCount() || stamp.type().isAssignableFrom(keys[i])) {
                             int index = newSuccessors.indexOf(keySuccessor(i));
                             if (index == -1) {
                                 index = newSuccessors.size();

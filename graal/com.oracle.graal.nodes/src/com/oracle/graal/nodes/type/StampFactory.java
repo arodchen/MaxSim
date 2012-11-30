@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.nodes.type;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.type.GenericStamp.GenericStampType;
@@ -38,6 +39,7 @@ public class StampFactory {
     private static final Stamp conditionStamp = new GenericStamp(GenericStampType.Condition);
     private static final Stamp voidStamp = new GenericStamp(GenericStampType.Void);
     private static final Stamp nodeIntrinsicStamp = new ObjectStamp(null, false, false, false);
+    private static final Stamp wordStamp = new ObjectStamp(null, false, false, false);
     private static final Stamp positiveInt = forInteger(Kind.Int, 0, Integer.MAX_VALUE, Integer.MAX_VALUE);
 
     private static void setCache(Kind kind, Stamp stamp) {
@@ -61,10 +63,6 @@ public class StampFactory {
         setCache(Kind.Void, voidStamp);
     }
 
-    public static Stamp forWord(Kind wordKind, boolean nonNull) {
-        return new WordStamp(wordKind, nonNull);
-    }
-
     public static Stamp forKind(Kind kind) {
         assert stampCache[kind.getStackKind().ordinal()] != null : "unexpected forKind(" + kind + ")";
         return stampCache[kind.getStackKind().ordinal()];
@@ -80,6 +78,14 @@ public class StampFactory {
      */
     public static Stamp forNodeIntrinsic() {
         return nodeIntrinsicStamp;
+    }
+
+    /**
+     * A stamp used only in the graph of intrinsics, e.g., snippets. It is then replaced by the actual primitive type
+     * stamp for the target-specific {@link TargetDescription#wordKind}.
+     */
+    public static Stamp forWord() {
+        return wordStamp;
     }
 
     public static Stamp intValue() {
@@ -131,7 +137,9 @@ public class StampFactory {
         } else {
             if (value.getKind() == Kind.Int || value.getKind() == Kind.Long) {
                 return forInteger(value.getKind(), value.asLong(), value.asLong(), value.asLong() & IntegerStamp.defaultMask(value.getKind()));
-            } else if (value.getKind() == Kind.Float || value.getKind() == Kind.Double) {
+            } else if (value.getKind() == Kind.Float) {
+                return forFloat(value.getKind(), value.asFloat(), value.asFloat(), !Float.isNaN(value.asFloat()));
+            } else if (value.getKind() == Kind.Double) {
                 return forFloat(value.getKind(), value.asDouble(), value.asDouble(), !Double.isNaN(value.asDouble()));
             }
             return forKind(value.getKind().getStackKind());
@@ -169,13 +177,18 @@ public class StampFactory {
     }
 
     public static Stamp declared(ResolvedJavaType type, boolean nonNull) {
+        return object(type, false, nonNull);
+    }
+
+    public static Stamp object(ResolvedJavaType type, boolean exactType, boolean nonNull) {
         assert type != null;
         assert type.getKind() == Kind.Object;
-        ResolvedJavaType exact = type.getExactType();
+        ResolvedJavaType exact = type.asExactType();
         if (exact != null) {
+            assert !exactType || type == exact;
             return new ObjectStamp(exact, true, nonNull, false);
         } else {
-            return new ObjectStamp(type, false, nonNull, false);
+            return new ObjectStamp(type, exactType, nonNull, false);
         }
     }
 

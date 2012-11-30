@@ -32,14 +32,15 @@ public class HotSpotConstantPool extends CompilerObject implements ConstantPool 
 
     private static final long serialVersionUID = -5443206401485234850L;
 
-    private final HotSpotResolvedJavaType type;
+    private final HotSpotResolvedObjectType type;
 
-    public HotSpotConstantPool(HotSpotResolvedJavaType type) {
+    public HotSpotConstantPool(HotSpotResolvedObjectType type) {
         this.type = type;
     }
 
     @Override
     public Object lookupConstant(int cpi) {
+        assert cpi != 0;
         Object constant = HotSpotGraalRuntime.getInstance().getCompilerToVM().lookupConstantInPool(type, cpi);
         return constant;
     }

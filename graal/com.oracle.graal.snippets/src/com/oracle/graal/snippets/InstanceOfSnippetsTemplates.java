@@ -22,10 +22,11 @@
  */
 package com.oracle.graal.snippets;
 
-import static com.oracle.graal.nodes.MaterializeNode.*;
+import static com.oracle.graal.nodes.calc.CompareNode.*;
 
 import java.util.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
@@ -54,8 +55,8 @@ import com.oracle.graal.snippets.SnippetTemplate.UsageReplacer;
  */
 public abstract class InstanceOfSnippetsTemplates<T extends SnippetsInterface> extends AbstractTemplates<T> {
 
-    public InstanceOfSnippetsTemplates(MetaAccessProvider runtime, Class<T> snippetsClass) {
-        super(runtime, snippetsClass);
+    public InstanceOfSnippetsTemplates(MetaAccessProvider runtime, Assumptions assumptions, TargetDescription target, Class<T> snippetsClass) {
+        super(runtime, assumptions, target, snippetsClass);
     }
 
     /**
@@ -91,7 +92,7 @@ public abstract class InstanceOfSnippetsTemplates<T extends SnippetsInterface> e
                 replacer.replaceUsingInstantiation();
             } else {
                 KeyAndArguments keyAndArguments = getKeyAndArguments(replacer, tool);
-                SnippetTemplate template = cache.get(keyAndArguments.key);
+                SnippetTemplate template = cache.get(keyAndArguments.key, assumptions);
                 template.instantiate(runtime, instanceOf, replacer, tool.lastFixedNode(), keyAndArguments.arguments);
             }
         }

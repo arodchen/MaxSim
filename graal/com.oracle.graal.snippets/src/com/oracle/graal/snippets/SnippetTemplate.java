@@ -27,6 +27,7 @@ import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
@@ -153,22 +154,24 @@ public class SnippetTemplate {
 
         private final ConcurrentHashMap<SnippetTemplate.Key, SnippetTemplate> templates = new ConcurrentHashMap<>();
         private final MetaAccessProvider runtime;
+        private final TargetDescription target;
 
 
-        public Cache(MetaAccessProvider runtime) {
+        public Cache(MetaAccessProvider runtime, TargetDescription target) {
             this.runtime = runtime;
+            this.target = target;
         }
 
         /**
          * Gets a template for a given key, creating it first if necessary.
          */
-        public SnippetTemplate get(final SnippetTemplate.Key key) {
+        public SnippetTemplate get(final SnippetTemplate.Key key, final Assumptions assumptions) {
             SnippetTemplate template = templates.get(key);
             if (template == null) {
                 template = Debug.scope("SnippetSpecialization", key.method, new Callable<SnippetTemplate>() {
                     @Override
                     public SnippetTemplate call() throws Exception {
-                        return new SnippetTemplate(runtime, key);
+                        return new SnippetTemplate(runtime, assumptions, target, key);
                     }
                 });
                 //System.out.println(key + " -> " + template);
@@ -181,11 +184,14 @@ public class SnippetTemplate {
     public abstract static class AbstractTemplates<T extends SnippetsInterface> {
         protected final Cache cache;
         protected final MetaAccessProvider runtime;
+        protected final Assumptions assumptions;
         protected Class<T> snippetsClass;
-        public AbstractTemplates(MetaAccessProvider runtime, Class<T> snippetsClass) {
+
+        public AbstractTemplates(MetaAccessProvider runtime, Assumptions assumptions, TargetDescription target, Class<T> snippetsClass) {
             this.runtime = runtime;
+            this.assumptions = assumptions;
             this.snippetsClass = snippetsClass;
-            this.cache = new Cache(runtime);
+            this.cache = new Cache(runtime, target);
         }
 
         protected ResolvedJavaMethod snippet(String name, Class<?>... parameterTypes) {
@@ -214,7 +220,7 @@ public class SnippetTemplate {
     /**
      * Creates a snippet template.
      */
-    public SnippetTemplate(MetaAccessProvider runtime, SnippetTemplate.Key key) {
+    public SnippetTemplate(MetaAccessProvider runtime, Assumptions assumptions, TargetDescription target, SnippetTemplate.Key key) {
         ResolvedJavaMethod method = key.method;
         assert Modifier.isStatic(method.getModifiers()) : "snippet method must be static: " + method;
         Signature signature = method.getSignature();
@@ -242,7 +248,8 @@ public class SnippetTemplate {
                 VarargsParameter vp = MetaUtil.getParameterAnnotation(VarargsParameter.class, i, method);
                 if (vp != null) {
                     String name = vp.value();
-                    Object array = ((Varargs) key.get(name)).array;
+                    Varargs varargs = (Varargs) key.get(name);
+                    Object array = varargs.getArray();
                     ConstantNode placeholder = ConstantNode.forObject(array, runtime, snippetCopy);
                     replacements.put(snippetGraph.getLocal(i), placeholder);
                     placeholders[i] = placeholder;
@@ -258,8 +265,9 @@ public class SnippetTemplate {
         if (!replacements.isEmpty()) {
             // Do deferred intrinsification of node intrinsics
             new SnippetIntrinsificationPhase(runtime, new BoxingMethodPool(runtime), false).apply(snippetCopy);
+            new WordTypeRewriterPhase(target.wordKind).apply(snippetCopy);
 
-            new CanonicalizerPhase(null, runtime, null, 0, null).apply(snippetCopy);
+            new CanonicalizerPhase(null, runtime, assumptions, 0).apply(snippetCopy);
         }
 
         // Gather the template parameters
@@ -268,10 +276,11 @@ public class SnippetTemplate {
             VarargsParameter vp = varargsParameterAnnotations[i];
             if (vp != null) {
                 assert snippetCopy.getLocal(i) == null;
-                Object array = ((Varargs) key.get(vp.value())).array;
+                Varargs varargs = (Varargs) key.get(vp.value());
+                Object array = varargs.getArray();
                 int length = Array.getLength(array);
                 LocalNode[] locals = new LocalNode[length];
-                Stamp stamp = StampFactory.forKind(runtime.lookupJavaType(array.getClass().getComponentType()).getKind());
+                Stamp stamp = varargs.getArgStamp();
                 for (int j = 0; j < length; j++) {
                     assert (parameterCount & 0xFFFF) == parameterCount;
                     int idx = i << 16 | j;
@@ -311,8 +320,8 @@ public class SnippetTemplate {
                 if (loopBegin != null) {
                     LoopEx loop = new LoopsData(snippetCopy).loop(loopBegin);
                     int mark = snippetCopy.getMark();
-                    LoopTransformations.fullUnroll(loop, runtime);
-                    new CanonicalizerPhase(null, runtime, null, mark, null).apply(snippetCopy);
+                    LoopTransformations.fullUnroll(loop, runtime, null);
+                    new CanonicalizerPhase(null, runtime, assumptions, mark).apply(snippetCopy);
                 }
                 FixedNode explodeLoopNext = explodeLoop.next();
                 explodeLoop.clearSuccessors();
@@ -325,7 +334,7 @@ public class SnippetTemplate {
 
         // Remove all frame states from inlined snippet graph. Snippets must be atomic (i.e. free
         // of side-effects that prevent deoptimizing to a point before the snippet).
-        Node curSideEffectNode = null;
+        List<Node> curSideEffectNodes = new ArrayList<>();
         Node curStampNode = null;
         for (Node node : snippetCopy.getNodes()) {
             if (node instanceof ValueNode && ((ValueNode) node).stamp() == StampFactory.forNodeIntrinsic()) {
@@ -336,8 +345,7 @@ public class SnippetTemplate {
                 StateSplit stateSplit = (StateSplit) node;
                 FrameState frameState = stateSplit.stateAfter();
                 if (stateSplit.hasSideEffect()) {
-                    assert curSideEffectNode == null : "Currently limited to one side-effecting node (but this can be converted to a List if necessary)";
-                    curSideEffectNode = node;
+                    curSideEffectNodes.add(node);
                 }
                 if (frameState != null) {
                     stateSplit.setStateAfter(null);
@@ -367,7 +375,7 @@ public class SnippetTemplate {
             }
         }
 
-        this.sideEffectNode = curSideEffectNode;
+        this.sideEffectNodes = curSideEffectNodes;
         this.stampNode = curStampNode;
         this.returnNode = retNode;
     }
@@ -382,9 +390,9 @@ public class SnippetTemplate {
     }
 
     private static boolean checkConstantArgument(final ResolvedJavaMethod method, Signature signature, int i, String name, Object arg, Kind kind) {
-        if (kind.isObject()) {
-            Class<?> type = signature.getParameterType(i, method.getDeclaringClass()).resolve(method.getDeclaringClass()).toJava();
-            assert arg == null || type.isInstance(arg) :
+        if (kind == Kind.Object) {
+            ResolvedJavaType type = signature.getParameterType(i, method.getDeclaringClass()).resolve(method.getDeclaringClass());
+            assert arg == null || type.isInstance(Constant.forObject(arg)) :
                 method + ": wrong value type for " + name + ": expected " + type.getName() + ", got " + arg.getClass().getName();
         } else {
             assert arg != null && kind.toBoxedJavaClass() == arg.getClass() :
@@ -394,11 +402,10 @@ public class SnippetTemplate {
     }
 
     private static boolean checkVarargs(final ResolvedJavaMethod method, Signature signature, int i, String name, Varargs varargs) {
-        Object arg = varargs.array;
+        Object arg = varargs.getArray();
         ResolvedJavaType type = (ResolvedJavaType) signature.getParameterType(i, method.getDeclaringClass());
-        Class< ? > javaType = type.toJava();
-        assert javaType.isArray() : "varargs parameter must be an array type";
-        assert javaType.isInstance(arg) : "value for " + name + " is not a " + javaType.getName() + " instance: " + arg;
+        assert type.isArray() : "varargs parameter must be an array type";
+        assert type.isInstance(Constant.forObject(arg)) : "value for " + name + " is not a " + MetaUtil.toJavaName(type) + " instance: " + arg;
         return true;
     }
 
@@ -419,9 +426,9 @@ public class SnippetTemplate {
     private final ReturnNode returnNode;
 
     /**
-     * Node that inherits the {@link StateSplit#stateAfter()} from the replacee during instantiation.
+     * Nodes that inherit the {@link StateSplit#stateAfter()} from the replacee during instantiation.
      */
-    private final Node sideEffectNode;
+    private final List<Node> sideEffectNodes;
 
     /**
      * Node that inherits the {@link ValueNode#stamp()} from the replacee during instantiation.
@@ -451,7 +458,7 @@ public class SnippetTemplate {
                     replacements.put((LocalNode) parameter, (ValueNode) argument);
                 } else {
                     Kind kind = ((LocalNode) parameter).kind();
-                    assert argument != null || kind.isObject() : this + " cannot accept null for non-object parameter named " + name;
+                    assert argument != null || kind == Kind.Object : this + " cannot accept null for non-object parameter named " + name;
                     Constant constant = Constant.forBoxed(kind, argument);
                     replacements.put((LocalNode) parameter, ConstantNode.forConstant(constant, runtime, replaceeGraph));
                 }
@@ -534,10 +541,12 @@ public class SnippetTemplate {
         FixedNode next = replacee.next();
         replacee.setNext(null);
 
-        if (sideEffectNode != null) {
-            assert ((StateSplit) replacee).hasSideEffect();
-            Node sideEffectDup = duplicates.get(sideEffectNode);
-            ((StateSplit) sideEffectDup).setStateAfter(((StateSplit) replacee).stateAfter());
+        if (replacee instanceof StateSplit) {
+            for (Node sideEffectNode : sideEffectNodes) {
+                assert ((StateSplit) replacee).hasSideEffect();
+                Node sideEffectDup = duplicates.get(sideEffectNode);
+                ((StateSplit) sideEffectDup).setStateAfter(((StateSplit) replacee).stateAfter());
+            }
         }
         if (stampNode != null) {
             Node stampDup = duplicates.get(stampNode);
@@ -601,10 +610,12 @@ public class SnippetTemplate {
         FixedNode firstCFGNodeDuplicate = (FixedNode) duplicates.get(firstCFGNode);
         replaceeGraph.addAfterFixed(lastFixedNode, firstCFGNodeDuplicate);
 
-        if (sideEffectNode != null) {
-            assert ((StateSplit) replacee).hasSideEffect();
-            Node sideEffectDup = duplicates.get(sideEffectNode);
-            ((StateSplit) sideEffectDup).setStateAfter(((StateSplit) replacee).stateAfter());
+        if (replacee instanceof StateSplit) {
+            for (Node sideEffectNode : sideEffectNodes) {
+                assert ((StateSplit) replacee).hasSideEffect();
+                Node sideEffectDup = duplicates.get(sideEffectNode);
+                ((StateSplit) sideEffectDup).setStateAfter(((StateSplit) replacee).stateAfter());
+            }
         }
         if (stampNode != null) {
             Node stampDup = duplicates.get(stampNode);

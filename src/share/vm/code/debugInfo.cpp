@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -41,6 +41,10 @@ void DebugInfoWriteStream::write_handle(jobject h) {
   write_int(recorder()->oop_recorder()->find_index(h));
 }
 
+void DebugInfoWriteStream::write_metadata(Metadata* h) {
+  write_int(recorder()->oop_recorder()->find_index(h));
+}
+
 ScopeValue* DebugInfoReadStream::read_object_value() {
   int id = read_int();
 #ifdef ASSERT
@@ -73,7 +77,11 @@ ScopeValue* DebugInfoReadStream::get_cached_object() {
 
 enum { LOCATION_CODE = 0, CONSTANT_INT_CODE = 1,  CONSTANT_OOP_CODE = 2,
                           CONSTANT_LONG_CODE = 3, CONSTANT_DOUBLE_CODE = 4,
-                          OBJECT_CODE = 5,        OBJECT_ID_CODE = 6 };
+                          OBJECT_CODE = 5,        OBJECT_ID_CODE = 6,
+#ifdef GRAAL
+                          DEFERRED_READ_CODE = 7, DEFERRED_WRITE_CODE = 8
+#endif // GRAAL
+};
 
 ScopeValue* ScopeValue::read_from(DebugInfoReadStream* stream) {
   ScopeValue* result = NULL;
@@ -85,6 +93,10 @@ ScopeValue* ScopeValue::read_from(DebugInfoReadStream* stream) {
    case CONSTANT_DOUBLE_CODE: result = new ConstantDoubleValue(stream);  break;
    case OBJECT_CODE:          result = stream->read_object_value();      break;
    case OBJECT_ID_CODE:       result = stream->get_cached_object();      break;
+#ifdef GRAAL
+   case DEFERRED_READ_CODE:   result = new DeferredReadValue(stream);    break;
+   case DEFERRED_WRITE_CODE:  result = new DeferredWriteValue(stream);   break;
+#endif // GRAAL
    default: ShouldNotReachHere();
   }
   return result;
@@ -105,11 +117,68 @@ void LocationValue::print_on(outputStream* st) const {
   location().print_on(st);
 }
 
+#ifdef GRAAL
+
+// DeferredLocationValue
+
+DeferredLocationValue::DeferredLocationValue(DebugInfoReadStream* stream) {
+  _base = read_from(stream);
+  _index = read_from(stream);
+  _scale = stream->read_int();
+  _disp = stream->read_long();
+}
+
+void DeferredLocationValue::write_on(DebugInfoWriteStream* stream) {
+  _base->write_on(stream);
+  _index->write_on(stream);
+  stream->write_int(_scale);
+  stream->write_long(_disp);
+}
+
+void DeferredLocationValue::print_on(outputStream* st) const {
+  _base->print_on(st);
+  _index->print_on(st);
+  st->print("%i %i", _scale, _disp);
+}
+
+// DeferredReadValue
+
+DeferredReadValue::DeferredReadValue(DebugInfoReadStream* stream)
+: DeferredLocationValue(stream) {
+}
+
+void DeferredReadValue::write_on(DebugInfoWriteStream* st) {
+  DeferredLocationValue::write_on(st);
+}
+
+void DeferredReadValue::print_on(outputStream* st) const {
+  DeferredLocationValue::print_on(st);
+}
+
+// DeferredWriteValue
+
+DeferredWriteValue::DeferredWriteValue(DebugInfoReadStream* stream)
+: DeferredLocationValue(stream) {
+  _value = read_from(stream);
+}
+
+void DeferredWriteValue::write_on(DebugInfoWriteStream* st) {
+  DeferredLocationValue::write_on(st);
+  _value->write_on(st);
+}
+
+void DeferredWriteValue::print_on(outputStream* st) const {
+  DeferredLocationValue::print_on(st);
+  _value->print_on(st);
+}
+
+#endif // GRAAL
+
 // ObjectValue
 
 void ObjectValue::read_object(DebugInfoReadStream* stream) {
   _klass = read_from(stream);
-  assert(_klass->is_constant_oop(), "should be constant klass oop");
+  assert(_klass->is_constant_oop(), "should be constant java mirror oop");
   int length = stream->read_int();
   for (int i = 0; i < length; i++) {
     ScopeValue* val = read_from(stream);
@@ -198,6 +267,9 @@ void ConstantDoubleValue::print_on(outputStream* st) const {
 // ConstantOopWriteValue
 
 void ConstantOopWriteValue::write_on(DebugInfoWriteStream* stream) {
+  assert(JNIHandles::resolve(value()) == NULL ||
+         Universe::heap()->is_in_reserved(JNIHandles::resolve(value())),
+         "Should be in heap");
   stream->write_int(CONSTANT_OOP_CODE);
   stream->write_handle(value());
 }
@@ -211,6 +283,8 @@ void ConstantOopWriteValue::print_on(outputStream* st) const {
 
 ConstantOopReadValue::ConstantOopReadValue(DebugInfoReadStream* stream) {
   _value = Handle(stream->read_oop());
+  assert(_value() == NULL ||
+         Universe::heap()->is_in_reserved(_value()), "Should be in heap");
 }
 
 void ConstantOopReadValue::write_on(DebugInfoWriteStream* stream) {

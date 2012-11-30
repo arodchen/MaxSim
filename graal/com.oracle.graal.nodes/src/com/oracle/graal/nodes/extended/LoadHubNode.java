@@ -39,8 +39,8 @@ public final class LoadHubNode extends FixedWithNextNode implements Lowerable, C
         return object;
     }
 
-    public LoadHubNode(ValueNode object) {
-        super(StampFactory.objectNonNull());
+    public LoadHubNode(ValueNode object, Kind kind) {
+        super(StampFactory.forKind(kind));
         this.object = object;
     }
 
@@ -58,7 +58,7 @@ public final class LoadHubNode extends FixedWithNextNode implements Lowerable, C
             ResolvedJavaType exactType;
             if (stamp.isExactType()) {
                 exactType = stamp.type();
-            } else if (stamp.type() != null && tool.assumptions() != null) {
+            } else if (stamp.type() != null && tool.assumptions().useOptimisticAssumptions()) {
                 exactType = stamp.type().findUniqueConcreteSubtype();
                 if (exactType != null) {
                     tool.assumptions().recordConcreteSubtype(stamp.type(), exactType);
@@ -73,9 +73,6 @@ public final class LoadHubNode extends FixedWithNextNode implements Lowerable, C
         }
         return this;
     }
-
-    @NodeIntrinsic
-    public static native Object loadHub(Object object);
 
     @Override
     public void virtualize(VirtualizerTool tool) {

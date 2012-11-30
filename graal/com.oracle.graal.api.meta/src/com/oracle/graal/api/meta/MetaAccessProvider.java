@@ -31,7 +31,7 @@ public interface MetaAccessProvider {
 
     /**
      * Returns the resolved Java type representing a given Java class.
-     * 
+     *
      * @param clazz the Java class object
      * @return the resolved Java type object
      */
@@ -43,27 +43,37 @@ public interface MetaAccessProvider {
     ResolvedJavaMethod lookupJavaMethod(Method reflectionMethod);
 
     /**
+     * Provides the {@link ResolvedJavaMethod} for a {@link Constructor} obtained via reflection.
+     */
+    ResolvedJavaMethod lookupJavaConstructor(Constructor reflectionConstructor);
+
+    /**
      * Provides the {@link ResolvedJavaField} for a {@link Field} obtained via reflection.
      */
     ResolvedJavaField lookupJavaField(Field reflectionField);
 
     /**
      * Returns the resolved Java type of the given {@link Constant} object.
-     * 
+     *
      * @return {@code null} if {@code constant.isNull() || !constant.kind.isObject()}
      */
     ResolvedJavaType lookupJavaType(Constant constant);
 
     /**
-     * Compares two object constants. Since a given runtime might not want to expose the real objects to the compiler,
-     * the {@link Constant#asObject()} cannot be compared directly.
-     * 
+     * Compares two constants for equality.
+     * This is used instead of {@link Constant#equals(Object)} in case the runtime
+     * has an interpretation for object equality other than {@code x.asObject() == y.asObject()}.
+     * For primitive constants, this is equivalent to calling {@code x.equals(y)}.
+     * The equality relationship is symmetric.
+     *
      * @return {@code true} if the two parameters represent the same runtime object, {@code false} otherwise
      */
     boolean constantEquals(Constant x, Constant y);
 
     /**
      * Returns the length of an array that is wrapped in a {@link Constant} object.
+     *
+     * @throws IllegalArgumentException if {@code array} is not an array
      */
     int lookupArrayLength(Constant array);
 }

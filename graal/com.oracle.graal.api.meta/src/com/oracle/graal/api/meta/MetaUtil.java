@@ -46,9 +46,69 @@ public class MetaUtil {
     }
 
     /**
+     * Gets the {@link Class} mirror for a given resolved type.
+     *
+     * @param type the type for which the Java mirror is requested
+     * @param loader class loader from which the class must be loaded (null means use the class loader of the {@link MetaUtil} class)
+     * @return the mirror for {@code type}
+     * @throws NoClassDefFoundError if the mirror is not available
+     */
+    public static Class getMirrorOrFail(ResolvedJavaType type, ClassLoader loader) throws NoClassDefFoundError {
+        ResolvedJavaType elementalType = getElementalType(type);
+        Class elementalClass;
+        if (elementalType.isPrimitive()) {
+            elementalClass = type.getKind().toJavaClass();
+        } else {
+            try {
+                elementalClass = Class.forName(toJavaName(elementalType), true, loader);
+            } catch (ClassNotFoundException e) {
+                throw (NoClassDefFoundError) new NoClassDefFoundError().initCause(e);
+            }
+        }
+        if (type.isArray()) {
+            ResolvedJavaType t = type;
+            while (t.getComponentType() != null) {
+                elementalClass = Array.newInstance(elementalClass, 0).getClass();
+                t = t.getComponentType();
+            }
+        }
+        assert elementalClass != null : toJavaName(type);
+        return elementalClass;
+    }
+
+    /**
+     * Gets the {@link Class} mirror for a given resolved type.
+     *
+     * @param type the type for which the Java mirror is requested
+     * @param loader class loader from which the class must be loaded (null means use the class loader of the {@link MetaUtil} class)
+     * @return the mirror for {@code type} or null if it is not available
+     */
+    public static Class getMirror(ResolvedJavaType type, ClassLoader loader) {
+        try {
+            return getMirrorOrFail(type, loader);
+        } catch (NoClassDefFoundError e) {
+            return null;
+        }
+    }
+
+    /**
+     * Gets the elemental type for a given type.
+     * The elemental type of an array type is the corresponding zero dimensional (e.g.,
+     * the elemental type of {@code int[][][]} is {@code int}). A non-array type is its
+     * own elemental type.
+     */
+    public static ResolvedJavaType getElementalType(ResolvedJavaType type) {
+        ResolvedJavaType t = type;
+        while (t.getComponentType() != null) {
+            t = t.getComponentType();
+        }
+        return t;
+    }
+
+    /**
      * Extends the functionality of {@link Class#getSimpleName()} to include a non-empty string for anonymous and local
      * classes.
-     * 
+     *
      * @param clazz the class for which the simple name is being requested
      * @param withEnclosingClass specifies if the returned name should be qualified with the name(s) of the enclosing
      *            class/classes of {@code clazz} (if any). This option is ignored if {@code clazz} denotes an anonymous
@@ -84,7 +144,7 @@ public class MetaUtil {
     /**
      * Converts a given type to its Java programming language name. The following are examples of strings returned by
      * this method:
-     * 
+     *
      * <pre>
      *     qualified == true:
      *         java.lang.Object
@@ -95,14 +155,14 @@ public class MetaUtil {
      *         int
      *         boolean[][]
      * </pre>
-     * 
+     *
      * @param type the type to be converted to a Java name
      * @param qualified specifies if the package prefix of the type should be included in the returned name
      * @return the Java name corresponding to {@code type}
      */
     public static String toJavaName(JavaType type, boolean qualified) {
         Kind kind = type.getKind();
-        if (kind.isObject()) {
+        if (kind == Kind.Object) {
             return internalNameToJava(type.getName(), qualified);
         }
         return type.getKind().getJavaName();
@@ -111,13 +171,13 @@ public class MetaUtil {
     /**
      * Converts a given type to its Java programming language name. The following are examples of strings returned by
      * this method:
-     * 
+     *
      * <pre>
      *      java.lang.Object
      *      int
      *      boolean[][]
      * </pre>
-     * 
+     *
      * @param type the type to be converted to a Java name
      * @return the Java name corresponding to {@code type}
      */
@@ -153,7 +213,7 @@ public class MetaUtil {
      * composed of characters that are to be copied verbatim to the result and specifiers that denote an attribute of
      * the method that is to be copied to the result. A specifier is a single character preceded by a '%' character. The
      * accepted specifiers and the method attributes they denote are described below:
-     * 
+     *
      * <pre>
      *     Specifier | Description                                          | Example(s)
      *     ----------+------------------------------------------------------------------------------------------
@@ -167,7 +227,7 @@ public class MetaUtil {
      *     'f'       | Indicator if method is unresolved, static or virtual | "unresolved" "static" "virtual"
      *     '%'       | A '%' character                                      | "%"
      * </pre>
-     * 
+     *
      * @param format a format specification
      * @param method the method to be formatted
      * @return the result of formatting this method according to {@code format}
@@ -246,7 +306,7 @@ public class MetaUtil {
      * composed of characters that are to be copied verbatim to the result and specifiers that denote an attribute of
      * the field that is to be copied to the result. A specifier is a single character preceded by a '%' character. The
      * accepted specifiers and the field attributes they denote are described below:
-     * 
+     *
      * <pre>
      *     Specifier | Description                                          | Example(s)
      *     ----------+------------------------------------------------------------------------------------------
@@ -258,7 +318,7 @@ public class MetaUtil {
      *     'f'       | Indicator if field is unresolved, static or instance | "unresolved" "static" "instance"
      *     '%'       | A '%' character                                      | "%"
      * </pre>
-     * 
+     *
      * @param format a format specification
      * @param field the field to be formatted
      * @return the result of formatting this field according to {@code format}
@@ -316,7 +376,7 @@ public class MetaUtil {
 
     /**
      * Gets the annotations of a particular type for the formal parameters of a given method.
-     * 
+     *
      * @param annotationClass the Class object corresponding to the annotation type
      * @param method the method for which a parameter annotations are being requested
      * @return the annotation of type {@code annotationClass} (if any) for each formal parameter present
@@ -337,7 +397,7 @@ public class MetaUtil {
 
     /**
      * Gets the annotation of a particular type for a formal parameter of a given method.
-     * 
+     *
      * @param annotationClass the Class object corresponding to the annotation type
      * @param parameterIndex the index of a formal parameter of {@code method}
      * @param method the method for which a parameter annotation is being requested
@@ -370,18 +430,18 @@ public class MetaUtil {
      * {@linkplain ResolvedJavaMethod#asStackTraceElement(int) available} for the given method, then the string returned
      * is the {@link StackTraceElement#toString()} value of the stack trace element, suffixed by the bci location. For
      * example:
-     * 
+     *
      * <pre>
      *     java.lang.String.valueOf(String.java:2930) [bci: 12]
      * </pre>
-     * 
+     *
      * Otherwise, the string returned is the value of applying {@link #format(String, JavaMethod)} with the format
      * string {@code "%H.%n(%p)"}, suffixed by the bci location. For example:
-     * 
+     *
      * <pre>
      *     java.lang.String.valueOf(int) [bci: 12]
      * </pre>
-     * 
+     *
      * @param sb
      * @param method
      * @param bci
@@ -422,18 +482,9 @@ public class MetaUtil {
         return result;
     }
 
-    public static Class< ? >[] signatureToTypes(Signature signature, ResolvedJavaType accessingClass) {
-        int count = signature.getParameterCount(false);
-        Class< ? >[] result = new Class< ? >[count];
-        for (int i = 0; i < result.length; ++i) {
-            result[i] = signature.getParameterType(i, accessingClass).resolve(accessingClass).toJava();
-        }
-        return result;
-    }
-
     /**
      * Formats some profiling information associated as a string.
-     * 
+     *
      * @param info the profiling info to format
      * @param method an optional method that augments the profile string returned
      * @param sep the separator to use for each separate profile record
@@ -500,12 +551,46 @@ public class MetaUtil {
 
     /**
      * Converts a Java source-language class name into the internal form.
-     * 
+     *
      * @param className the class name
      * @return the internal name form of the class name
      */
     public static String toInternalName(String className) {
-        return "L" + className.replace('.', '/') + ";";
+        String prefix = "";
+        String base = className;
+        while (base.endsWith("[]")) {
+            prefix += "[";
+            base = base.substring(base.length() - 2);
+        }
+
+        if (className.equals("boolean")) {
+            return prefix + "Z";
+        }
+        if (className.equals("byte")) {
+            return prefix + "B";
+        }
+        if (className.equals("short")) {
+            return prefix + "S";
+        }
+        if (className.equals("char")) {
+            return prefix + "C";
+        }
+        if (className.equals("int")) {
+            return prefix + "I";
+        }
+        if (className.equals("float")) {
+            return prefix + "F";
+        }
+        if (className.equals("long")) {
+            return prefix + "J";
+        }
+        if (className.equals("double")) {
+            return prefix + "D";
+        }
+        if (className.equals("void")) {
+            return prefix + "V";
+        }
+        return prefix + "L" + className.replace('.', '/') + ";";
     }
 
     /**
