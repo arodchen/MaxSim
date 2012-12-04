@@ -30,7 +30,7 @@
 #include "graal/graalCompilerToVM.hpp"
 #include "graal/graalVmIds.hpp"
 #include "graal/graalEnv.hpp"
-#include "c1/c1_Runtime1.hpp"
+#include "graal/graalRuntime.hpp"
 #include "runtime/arguments.hpp"
 #include "runtime/compilationPolicy.hpp"
 
@@ -49,10 +49,15 @@ void GraalCompiler::initialize() {
   JavaThread* THREAD = JavaThread::current();
   TRACE_graal_1("GraalCompiler::initialize");
 
+  unsigned long heap_end = (long) Universe::heap()->reserved_region().end();
+  unsigned long allocation_end = heap_end + 16l * 1024 * 1024 * 1024;
+  guarantee(heap_end < allocation_end, "heap end too close to end of address space (might lead to erroneous TLAB allocations)");
+  NOT_LP64(error("check TLAB allocation code for address space conflicts"));
+
   _deopted_leaf_graph_count = 0;
 
   initialize_buffer_blob();
-  Runtime1::initialize(THREAD->get_buffer_blob());
+  GraalRuntime::initialize(THREAD->get_buffer_blob());
 
   JNIEnv *env = ((JavaThread *) Thread::current())->jni_environment();
   jclass klass = env->FindClass("com/oracle/graal/hotspot/bridge/CompilerToVMImpl");
@@ -65,14 +70,14 @@ void GraalCompiler::initialize() {
   ResourceMark rm;
   HandleMark hm;
   {
-    VM_ENTRY_MARK;
+    GRAAL_VM_ENTRY_MARK;
     check_pending_exception("Could not register natives");
   }
 
   graal_compute_offsets();
 
   {
-    VM_ENTRY_MARK;
+    GRAAL_VM_ENTRY_MARK;
     HandleMark hm;
     VMToCompiler::setDefaultOptions();
     for (int i = 0; i < Arguments::num_graal_args(); ++i) {
@@ -139,19 +144,14 @@ void GraalCompiler::initialize_buffer_blob() {
 
   JavaThread* THREAD = JavaThread::current();
   if (THREAD->get_buffer_blob() == NULL) {
-    // setup CodeBuffer.  Preallocate a BufferBlob of size
-    // NMethodSizeLimit plus some extra space for constants.
-    int code_buffer_size = Compilation::desired_max_code_buffer_size() +
-      Compilation::desired_max_constant_size();
-    BufferBlob* blob = BufferBlob::create("graal temporary CodeBuffer",
-                                          code_buffer_size);
+    BufferBlob* blob = BufferBlob::create("Graal thread-local CodeBuffer", GraalNMethodSizeLimit);
     guarantee(blob != NULL, "must create code buffer");
     THREAD->set_buffer_blob(blob);
   }
 }
 
 void GraalCompiler::compile_method(methodHandle method, int entry_bci, jboolean blocking) {
-  EXCEPTION_CONTEXT
+  GRAAL_EXCEPTION_CONTEXT
   if (!_initialized) {
     method->clear_queued_for_compilation();
     method->invocation_counter()->reset();
