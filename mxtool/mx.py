@@ -385,6 +385,21 @@ class Library(Dependency):
             if url.endswith('/') != self.path.endswith(os.sep):
                 abort('Path for dependency directory must have a URL ending with "/": path=' + self.path + ' url=' + url)
 
+    def __eq__(self, other):
+        if isinstance(other, Library):
+            if len(self.urls) == 0:
+                return self.path == other.path
+            else:
+                return self.urls == other.urls
+        else:
+            return NotImplemented
+        
+    def __ne__(self, other):
+        result = self.__eq__(other)
+        if result is NotImplemented:
+            return result
+        return not result
+            
     def get_path(self, resolve):
         path = self.path
         if not isabs(path):
@@ -413,7 +428,7 @@ class Library(Dependency):
 
 class Suite:
     def __init__(self, dir, primary):
-        self.dir = dir
+        self.dir = os.path.abspath(dir)
         self.projects = []
         self.libs = []
         self.includes = []
@@ -511,7 +526,7 @@ class Suite:
             if hasattr(mod, 'mx_post_parse_cmd_line'):
                 self.mx_post_parse_cmd_line = mod.mx_post_parse_cmd_line
 
-            mod.mx_init()
+            mod.mx_init(self)
             self.commands = mod
 
     def _load_includes(self, mxDir):
@@ -546,8 +561,9 @@ class Suite:
                 _projects[p.name] = p
         for l in self.libs:
             existing = _libs.get(l.name)
-            if existing is not None:
-                abort('cannot redefine library  ' + l.name)
+            # Check that suites that define same library are consistent
+            if existing is not None and existing != l:
+                abort('inconsistent library redefinition of ' + l.name + ' in ' + existing.suite.dir + ' and ' + l.suite.dir)
             _libs[l.name] = l
 
 class XMLElement(xml.dom.minidom.Element):
@@ -1921,20 +1937,22 @@ def eclipseinit(args, suite=None, buildProcessorJars=True):
                     out.element('classpathentry', {'combineaccessrules' : 'false', 'exported' : 'true', 'kind' : 'src', 'path' : '/' + getattr(dep, 'eclipse.project')})
                 else:
                     path = dep.path
-                    if dep.mustExist:
-                        dep.get_path(resolve=True)
-                        if not isabs(path):
-                            # Relative paths for "lib" class path entries have various semantics depending on the Eclipse
-                            # version being used (e.g. see https://bugs.eclipse.org/bugs/show_bug.cgi?id=274737) so it's
-                            # safest to simply use absolute paths.
-                            path = join(suite.dir, path)
+                    dep.get_path(resolve=True)
+                    if not exists(path) and not dep.mustExist:
+                        continue;
 
-                        attributes = {'exported' : 'true', 'kind' : 'lib', 'path' : path}
+                    if not isabs(path):
+                        # Relative paths for "lib" class path entries have various semantics depending on the Eclipse
+                        # version being used (e.g. see https://bugs.eclipse.org/bugs/show_bug.cgi?id=274737) so it's
+                        # safest to simply use absolute paths.
+                        path = join(suite.dir, path)
 
-                        sourcePath = dep.get_source_path(resolve=True)
-                        if sourcePath is not None:
-                            attributes['sourcepath'] = sourcePath
-                        out.element('classpathentry', attributes)
+                    attributes = {'exported' : 'true', 'kind' : 'lib', 'path' : path}
+
+                    sourcePath = dep.get_source_path(resolve=True)
+                    if sourcePath is not None:
+                        attributes['sourcepath'] = sourcePath
+                    out.element('classpathentry', attributes)
             else:
                 out.element('classpathentry', {'combineaccessrules' : 'false', 'exported' : 'true', 'kind' : 'src', 'path' : '/' + dep.name})
 
@@ -2817,6 +2835,14 @@ def add_argument(*args, **kwargs):
     assert _argParser is not None
     _argParser.add_argument(*args, **kwargs)
 
+def update_commands(suite, new_commands):
+    for key, value in new_commands.iteritems():
+        if commands.has_key(key) and not suite.primary:
+            pass
+            # print("WARNING: attempt to redefine command '" + key + "' in suite " + suite.dir)
+        else:
+            commands[key] = value
+            
 # Table of commands in alphabetical order.
 # Keys are command names, value are lists: [<function>, <usage msg>, <format args to doc string of function>...]
 # If any of the format args are instances of Callable, then they are called with an 'env' are before being
