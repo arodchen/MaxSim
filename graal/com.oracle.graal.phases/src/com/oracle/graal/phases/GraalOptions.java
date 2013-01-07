@@ -39,6 +39,7 @@ public final class GraalOptions {
 
     // inlining settings
     public static boolean Inline                             = true;
+    public static boolean AlwaysInlineIntrinsics             = ____;
     public static boolean Intrinsify                         = true;
            static boolean InlineMonomorphicCalls             = true;
            static boolean InlinePolymorphicCalls             = true;
@@ -198,6 +199,7 @@ public final class GraalOptions {
     public static boolean OptFloatingReads                   = true;
     public static boolean OptTailDuplication                 = true;
     public static boolean OptEliminatePartiallyRedundantGuards = true;
+    public static boolean OptFilterProfiledTypes             = true;
 
     // Intrinsification settings
     public static boolean IntrinsifyArrayCopy                = true;
