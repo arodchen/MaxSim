@@ -28,6 +28,7 @@ import java.lang.reflect.*;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
@@ -135,6 +136,8 @@ public class SnippetIntrinsificationPhase extends Phase {
 
                 // Clean up checkcast instructions inserted by javac if the return type is generic.
                 cleanUpReturnCheckCast(node);
+                Debug.dump(invoke.node().graph(), "after folding %s", target.getName());
+
             } else {
                 // Remove the invoke
                 invoke.intrinsify(null);
