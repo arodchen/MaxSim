@@ -205,6 +205,9 @@ public class SnippetInstaller {
 
         new SnippetIntrinsificationPhase(runtime, pool, true).apply(graph);
 
+        // need constant propagation for folded methods
+        new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
+
         for (Invoke invoke : graph.getInvokes()) {
             MethodCallTargetNode callTarget = invoke.methodCallTarget();
             ResolvedJavaMethod callee = callTarget.targetMethod();
