@@ -76,38 +76,42 @@ public final class ComputeBlockOrder {
         countEdges(startBlock, null);
         computeOrder(startBlock);
 
+        List<Block> newLinearScanOrder = new ArrayList<>();
         List<Block> order = new ArrayList<>();
         PriorityQueue<Block> worklist = new PriorityQueue<>(10, blockComparator);
         BitSet orderedBlocks = new BitSet(maxBlockId);
         orderedBlocks.set(startBlock.getId());
         worklist.add(startBlock);
-        computeCodeEmittingOrder(order, worklist, orderedBlocks);
+        computeCodeEmittingOrder(order, newLinearScanOrder, worklist, orderedBlocks);
         assert codeEmittingOrder.size() == order.size();
         codeEmittingOrder = order;
+
+        linearScanOrder = newLinearScanOrder;
     }
 
-    private void computeCodeEmittingOrder(List<Block> order, PriorityQueue<Block> worklist, BitSet orderedBlocks) {
+    private void computeCodeEmittingOrder(List<Block> order, List<Block> newLinearScanOrder, PriorityQueue<Block> worklist, BitSet orderedBlocks) {
         while (!worklist.isEmpty()) {
             Block nextImportantPath = worklist.poll();
-            addImportantPath(nextImportantPath, order, worklist, orderedBlocks);
+            addImportantPath(nextImportantPath, order, newLinearScanOrder, worklist, orderedBlocks);
         }
     }
 
-    private void addImportantPath(Block block, List<Block> order, PriorityQueue<Block> worklist, BitSet orderedBlocks) {
+    private void addImportantPath(Block block, List<Block> order, List<Block> newLinearScanOrder, PriorityQueue<Block> worklist, BitSet orderedBlocks) {
         if (!skipLoopHeader(block)) {
             if (block.isLoopHeader()) {
                 block.align = true;
             }
-            addBlock(block, order);
+            order.add(block);
         }
         if (block.isLoopEnd() && skipLoopHeader(block.getLoop().header)) {
-            addBlock(block.getLoop().header, order);
+            order.add(block.getLoop().header);
             for (Block succ : block.getLoop().header.getSuccessors()) {
                 if (succ.getLoopDepth() == block.getLoopDepth()) {
                     succ.align = true;
                 }
             }
         }
+        newLinearScanOrder.add(block);
         Block bestSucc = null;
         double bestSuccProb = 0;
 
@@ -133,15 +137,8 @@ public final class ComputeBlockOrder {
 
         if (bestSucc != null) {
             orderedBlocks.set(bestSucc.getId());
-            addImportantPath(bestSucc, order, worklist, orderedBlocks);
+            addImportantPath(bestSucc, order, newLinearScanOrder, worklist, orderedBlocks);
         }
-    }
-
-    private static void addBlock(Block block, List<Block> order) {
-        if (order.size() > 0 && block.getPredecessors().size() == 1 && block.getPredecessors().get(0) != order.get(order.size() - 1)) {
-            block.softAlign = false;
-        }
-        order.add(block);
     }
 
     private boolean skipLoopHeader(Block bestSucc) {
