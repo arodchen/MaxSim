@@ -113,7 +113,7 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
     }
 
     public void runCompilation() {
-        CompilationStatistics stats = CompilationStatistics.create(method);
+        CompilationStatistics stats = CompilationStatistics.create(method, entryBCI != StructuredGraph.INVOCATION_ENTRY_BCI);
         try {
             final boolean printCompilation = GraalOptions.PrintCompilation && !TTY.isSuppressed();
             if (printCompilation) {
