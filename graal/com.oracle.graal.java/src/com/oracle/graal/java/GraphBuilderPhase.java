@@ -585,21 +585,21 @@ public final class GraphBuilderPhase extends Phase {
     private JavaType lookupType(int cpi, int bytecode) {
         eagerResolvingForSnippets(cpi, bytecode);
         JavaType result = constantPool.lookupType(cpi, bytecode);
-        assert !graphBuilderConfig.eagerResolvingForSnippets() || result instanceof ResolvedJavaType;
+        assert !graphBuilderConfig.unresolvedForSnippetsIsError() || result instanceof ResolvedJavaType;
         return result;
     }
 
     private JavaMethod lookupMethod(int cpi, int opcode) {
         eagerResolvingForSnippets(cpi, opcode);
         JavaMethod result = constantPool.lookupMethod(cpi, opcode);
-        assert !graphBuilderConfig.eagerResolvingForSnippets() || ((result instanceof ResolvedJavaMethod) && ((ResolvedJavaMethod) result).getDeclaringClass().isInitialized());
+        assert !graphBuilderConfig.unresolvedForSnippetsIsError() || ((result instanceof ResolvedJavaMethod) && ((ResolvedJavaMethod) result).getDeclaringClass().isInitialized());
         return result;
     }
 
     private JavaField lookupField(int cpi, int opcode) {
         eagerResolvingForSnippets(cpi, opcode);
         JavaField result = constantPool.lookupField(cpi, opcode);
-        assert !graphBuilderConfig.eagerResolvingForSnippets() || (result instanceof ResolvedJavaField && ((ResolvedJavaField) result).getDeclaringClass().isInitialized());
+        assert !graphBuilderConfig.unresolvedForSnippetsIsError() || (result instanceof ResolvedJavaField && ((ResolvedJavaField) result).getDeclaringClass().isInitialized());
         return result;
     }
 

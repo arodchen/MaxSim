@@ -75,4 +75,8 @@ public class GraphBuilderConfiguration {
     public static GraphBuilderConfiguration getSnippetDefault(PhasePlan plan) {
         return new GraphBuilderConfiguration(ResolvePolicy.EagerForSnippets, plan);
     }
+
+    public boolean unresolvedForSnippetsIsError() {
+        return eagerResolvingForSnippets();
+    }
 }
