@@ -26,10 +26,9 @@
 #
 # ----------------------------------------------------------------------------------------------------
 
-import os, sys, shutil, zipfile, tempfile, re, time, datetime, platform, subprocess, multiprocessing, types
+import os, sys, shutil, zipfile, tempfile, re, time, datetime, platform, subprocess, multiprocessing
 from os.path import join, exists, dirname, basename
 from argparse import ArgumentParser, REMAINDER
-from threading import Thread
 import mx
 import sanitycheck
 import json
@@ -80,8 +79,8 @@ _copyrightTemplate = """/*
 
 def _chmodDir(chmodFlags, dirname, fnames):
     os.chmod(dirname, chmodFlags)
-    for file in fnames:
-        os.chmod(os.path.join(dirname, file), chmodFlags)
+    for name in fnames:
+        os.chmod(os.path.join(dirname, name), chmodFlags)
 
 def chmodRecursive(dirname, chmodFlags):
     os.path.walk(dirname, _chmodDir, chmodFlags)
@@ -575,6 +574,9 @@ def build(args, vm=None):
             # This removes the need to unzip the *.diz files before debugging in gdb
             env.setdefault('ZIP_DEBUGINFO_FILES', '0')
 
+            # We don't need to run the Queens test (i.e. test_gamma)
+            env.setdefault('TEST_IN_BUILD', 'false')
+
             # Clear these 2 variables as having them set can cause very confusing build problems
             env.pop('LD_LIBRARY_PATH', None)
             env.pop('CLASSPATH', None)
@@ -776,6 +778,13 @@ def gate(args):
         clean(cleanArgs)
         tasks.append(t.stop())
 
+        eclipse_exe = os.environ.get('ECLIPSE_EXE')
+        if eclipse_exe is not None:
+            t = Task('CodeFormatCheck')
+            if mx.eclipseformat(['-e', eclipse_exe]) != 0:
+                t.abort('Formatter modified files - run "mx eclipseformat", check in changes and repush')
+            tasks.append(t.stop())
+        
         t = Task('BuildJava')
         build(['--no-native'])
         tasks.append(t.stop())
@@ -875,7 +884,7 @@ def deoptalot(args):
         count = int(args[0])
         del args[0]
     
-    for n in range(count):
+    for _ in range(count):
         if not vm(['-XX:+DeoptimizeALot', '-XX:+VerifyOops'] + args + ['-version'], vmbuild='fastdebug') == 0:
             mx.abort("Failed")
             
@@ -944,11 +953,11 @@ def bench(args):
         benchmarks += sanitycheck.getBootstraps()
     #SPECjvm2008
     if ('specjvm2008' in args or 'all' in args):
-        benchmarks += [sanitycheck.getSPECjvm2008([], True, 120, 120)]
+        benchmarks += [sanitycheck.getSPECjvm2008([], False, True, 120, 120)]
     else:
         specjvms = [a[12:] for a in args if a.startswith('specjvm2008:')]
         for specjvm in specjvms:
-            benchmarks += [sanitycheck.getSPECjvm2008([specjvm], True, 120, 120)]
+            benchmarks += [sanitycheck.getSPECjvm2008([specjvm], False, True, 120, 120)]
             
     if ('specjbb2005' in args or 'all' in args):
         benchmarks += [sanitycheck.getSPECjbb2005()]
@@ -966,16 +975,20 @@ def bench(args):
 def specjvm2008(args):
     """run one or all SPECjvm2008 benchmarks
 
-    All options begining with - will be passed to the vm except for -ikv -wt and -it.
+    All options begining with - will be passed to the vm except for -ikv -ict -wt and -it.
     Other options are supposed to be benchmark names and will be passed to SPECjvm2008."""
     benchArgs = [a for a in args if a[0] != '-']
     vmArgs = [a for a in args if a[0] == '-']
     wt = None
     it = None
     skipValid = False
+    skipCheck = False
     if '-v' in vmArgs:
         vmArgs.remove('-v')
         benchArgs.append('-v')
+    if '-ict' in vmArgs:
+        skipCheck = True
+        vmArgs.remove('-ict')
     if '-ikv' in vmArgs:
         skipValid = True
         vmArgs.remove('-ikv')
@@ -996,7 +1009,7 @@ def specjvm2008(args):
         vmArgs.remove('-it')
         benchArgs.remove(args[itIdx+1])
     vm = _vm;
-    sanitycheck.getSPECjvm2008(benchArgs, skipValid, wt, it).bench(vm, opts=vmArgs)
+    sanitycheck.getSPECjvm2008(benchArgs, skipCheck, skipValid, wt, it).bench(vm, opts=vmArgs)
 
 def hsdis(args, copyToDir=None):
     """download the hsdis library

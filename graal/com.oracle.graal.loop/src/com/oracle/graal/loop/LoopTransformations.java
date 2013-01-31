@@ -32,8 +32,8 @@ import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 
-
 public abstract class LoopTransformations {
+
     private static final int UNROLL_LIMIT = GraalOptions.FullUnrollMaxNodes * 2;
 
     private LoopTransformations() {
@@ -53,14 +53,14 @@ public abstract class LoopTransformations {
     }
 
     public static void fullUnroll(LoopEx loop, MetaAccessProvider runtime, Assumptions assumptions) {
-        //assert loop.isCounted(); //TODO (gd) strenghten : counted with known trip count
+        // assert loop.isCounted(); //TODO (gd) strenghten : counted with known trip count
         int iterations = 0;
         LoopBeginNode loopBegin = loop.loopBegin();
         StructuredGraph graph = (StructuredGraph) loopBegin.graph();
         while (!loopBegin.isDeleted()) {
             int mark = graph.getMark();
             peel(loop);
-            new CanonicalizerPhase(null, runtime, assumptions, mark).apply(graph);
+            new CanonicalizerPhase(null, runtime, assumptions, mark, null).apply(graph);
             if (iterations++ > UNROLL_LIMIT || graph.getNodeCount() > GraalOptions.MaximumDesiredSize * 3) {
                 throw new BailoutException("FullUnroll : Graph seems to grow out of proportion");
             }
@@ -69,13 +69,13 @@ public abstract class LoopTransformations {
 
     public static void unswitch(LoopEx loop, ControlSplitNode controlSplitNode) {
         LoopFragmentWhole originalLoop = loop.whole();
-        //create new control split out of loop
+        // create new control split out of loop
         ControlSplitNode newControlSplit = (ControlSplitNode) controlSplitNode.copyWithInputs();
         originalLoop.entryPoint().replaceAtPredecessor(newControlSplit);
 
         NodeClassIterator successors = controlSplitNode.successors().iterator();
         assert successors.hasNext();
-        //original loop is used as first successor
+        // original loop is used as first successor
         Position firstPosition = successors.nextPosition();
         NodeClass controlSplitClass = controlSplitNode.getNodeClass();
         controlSplitClass.set(newControlSplit, firstPosition, BeginNode.begin(originalLoop.entryPoint()));
@@ -91,7 +91,7 @@ public abstract class LoopTransformations {
         }
         // original loop is simplified last to avoid deleting controlSplitNode too early
         graph.removeSplitPropagate(controlSplitNode, (BeginNode) controlSplitClass.get(controlSplitNode, firstPosition));
-        //TODO (gd) probabilities need some amount of fixup.. (probably also in other transforms)
+        // TODO (gd) probabilities need some amount of fixup.. (probably also in other transforms)
     }
 
     public static void unroll(LoopEx loop, int factor) {
@@ -103,12 +103,12 @@ public abstract class LoopTransformations {
         LoopFragmentWhole main = loop.whole();
         LoopFragmentWhole prologue = main.duplicate();
         prologue.insertBefore(loop);
-        //CountedLoopBeginNode counted = prologue.countedLoop();
-        //StructuredGraph graph = (StructuredGraph) counted.graph();
-        //ValueNode tripCountPrologue = counted.tripCount();
-        //ValueNode tripCountMain = counted.tripCount();
-        //graph.replaceFloating(tripCountPrologue, "tripCountPrologue % factor");
-        //graph.replaceFloating(tripCountMain, "tripCountMain - (tripCountPrologue % factor)");
+        // CountedLoopBeginNode counted = prologue.countedLoop();
+        // StructuredGraph graph = (StructuredGraph) counted.graph();
+        // ValueNode tripCountPrologue = counted.tripCount();
+        // ValueNode tripCountMain = counted.tripCount();
+        // graph.replaceFloating(tripCountPrologue, "tripCountPrologue % factor");
+        // graph.replaceFloating(tripCountMain, "tripCountMain - (tripCountPrologue % factor)");
         LoopFragmentInside inside = loop.inside();
         for (int i = 0; i < factor; i++) {
             inside.duplicate().appendInside(loop);

@@ -27,7 +27,7 @@ import java.util.*;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.frame.*;
 
-final class DefaultVirtualFrame implements VirtualFrame {
+public final class DefaultVirtualFrame implements VirtualFrame {
 
     private static final Object UNDEFINED_OBJECT = null;
     private static final Boolean UNDEFINED_BOOLEAN = false;
@@ -43,13 +43,14 @@ final class DefaultVirtualFrame implements VirtualFrame {
     protected Object[] locals;
     protected Class[] tags;
 
-    DefaultVirtualFrame(FrameDescriptor descriptor, PackedFrame caller, Arguments arguments) {
+    public DefaultVirtualFrame(FrameDescriptor descriptor, PackedFrame caller, Arguments arguments) {
         this.descriptor = descriptor;
         this.caller = caller;
         this.arguments = arguments;
         this.currentVersion = descriptor.getCurrentVersion();
         this.locals = new Object[descriptor.getSize()];
-        // The tags are only needed for assertion checking, so initialize the field only when assertions are enabled
+        // The tags are only needed for assertion checking, so initialize the field only when
+        // assertions are enabled
         assert (this.tags = new Class[descriptor.getSize()]) != null;
     }
 
@@ -133,7 +134,7 @@ final class DefaultVirtualFrame implements VirtualFrame {
         set(slot, Double.class, value);
     }
 
-    private Object get(FrameSlot slot, Class< ? > accessType, Object defaultValue) {
+    private Object get(FrameSlot slot, Class<?> accessType, Object defaultValue) {
         Object value = locals[slot.getIndex()];
         assert verifyGet(slot, accessType, value);
         if (value == null) {
@@ -143,9 +144,9 @@ final class DefaultVirtualFrame implements VirtualFrame {
         }
     }
 
-    private boolean verifyGet(FrameSlot slot, Class< ? > accessType, Object value) {
+    private boolean verifyGet(FrameSlot slot, Class<?> accessType, Object value) {
         assert descriptor.getSlots().get(slot.getIndex()) == slot;
-        Class< ? > tag = tags[slot.getIndex()];
+        Class<?> tag = tags[slot.getIndex()];
         if (value == null) {
             assert tag == null || tag == Object.class;
         } else {
@@ -154,12 +155,12 @@ final class DefaultVirtualFrame implements VirtualFrame {
         return true;
     }
 
-    private void set(FrameSlot slot, Class< ? > accessType, Object value) {
+    private void set(FrameSlot slot, Class<?> accessType, Object value) {
         assert verifySet(slot, accessType, value);
         locals[slot.getIndex()] = value;
     }
 
-    private boolean verifySet(FrameSlot slot, Class< ? > accessType, Object value) {
+    private boolean verifySet(FrameSlot slot, Class<?> accessType, Object value) {
         assert descriptor.getSlots().get(slot.getIndex()) == slot;
         tags[slot.getIndex()] = accessType;
         assert accessType.isAssignableFrom(slot.getType()) : "Local variable " + slot + ": " + accessType + " is not assignable from " + slot.getType();

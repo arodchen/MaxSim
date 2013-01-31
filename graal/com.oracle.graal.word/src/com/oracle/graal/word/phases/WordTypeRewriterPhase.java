@@ -38,8 +38,8 @@ import com.oracle.graal.word.*;
 import com.oracle.graal.word.Word.Operation;
 
 /**
- * Transforms all uses of the {@link Word} class into unsigned operations on {@code int} or {@code long} values,
- * depending on the word kind of the underlying platform.
+ * Transforms all uses of the {@link Word} class into unsigned operations on {@code int} or
+ * {@code long} values, depending on the word kind of the underlying platform.
  */
 public class WordTypeRewriterPhase extends Phase {
 
@@ -87,7 +87,8 @@ public class WordTypeRewriterPhase extends Phase {
             }
         }
 
-        // Replace ObjectEqualsNodes with IntegerEqualsNodes where the values being compared are words
+        // Replace ObjectEqualsNodes with IntegerEqualsNodes where the values being compared are
+        // words
         for (ObjectEqualsNode objectEqualsNode : graph.getNodes().filter(ObjectEqualsNode.class).snapshot()) {
             ValueNode x = objectEqualsNode.x();
             ValueNode y = objectEqualsNode.y();
@@ -98,7 +99,8 @@ public class WordTypeRewriterPhase extends Phase {
             }
         }
 
-        // Replace ObjectEqualsNodes with IntegerEqualsNodes where the values being compared are words
+        // Replace ObjectEqualsNodes with IntegerEqualsNodes where the values being compared are
+        // words
         for (LoadIndexedNode load : graph.getNodes().filter(LoadIndexedNode.class).snapshot()) {
             if (isWord(load)) {
                 load.setStamp(StampFactory.forKind(wordKind));
@@ -121,7 +123,7 @@ public class WordTypeRewriterPhase extends Phase {
                         assert arguments.size() == 2;
                         ValueNode left = arguments.get(0);
                         ValueNode right = operation.rightOperandIsInt() ? toUnsigned(graph, arguments.get(1), Kind.Int) : fromSigned(graph, arguments.get(1));
-                        replace(invoke, nodeClassOp(graph, operation.node(), left, right));
+                        replace(invoke, nodeClassOp(graph, operation.node(), left, right, invoke));
                         break;
 
                     case COMPARISON:
@@ -215,10 +217,14 @@ public class WordTypeRewriterPhase extends Phase {
         }
     }
 
-    private ValueNode nodeClassOp(StructuredGraph graph, Class<? extends ValueNode> nodeClass, ValueNode left, ValueNode right) {
+    private ValueNode nodeClassOp(StructuredGraph graph, Class<? extends ValueNode> nodeClass, ValueNode left, ValueNode right, Invoke invoke) {
         try {
-            Constructor< ? extends ValueNode> constructor = nodeClass.getConstructor(Kind.class, ValueNode.class, ValueNode.class);
-            return graph.add(constructor.newInstance(wordKind, left, right));
+            Constructor<? extends ValueNode> constructor = nodeClass.getConstructor(Kind.class, ValueNode.class, ValueNode.class);
+            ValueNode result = graph.add(constructor.newInstance(wordKind, left, right));
+            if (result instanceof FixedWithNextNode) {
+                graph.addBeforeFixed(invoke.node(), (FixedWithNextNode) result);
+            }
+            return result;
         } catch (Throwable ex) {
             throw new GraalInternalError(ex).addContext(nodeClass.getName());
         }
@@ -232,7 +238,6 @@ public class WordTypeRewriterPhase extends Phase {
 
         ValueNode a = mirror ? right : left;
         ValueNode b = mirror ? left : right;
-
 
         CompareNode comparison;
         if (condition == Condition.EQ || condition == Condition.NE) {
@@ -257,7 +262,8 @@ public class WordTypeRewriterPhase extends Phase {
         IndexedLocationNode location = IndexedLocationNode.create(locationIdentity, invoke.node().kind(), 0, offset, graph, false);
         ReadNode read = graph.add(new ReadNode(base, location, invoke.node().stamp()));
         graph.addBeforeFixed(invoke.node(), read);
-        // The read must not float outside its block otherwise it may float above an explicit zero check on its base address
+        // The read must not float outside its block otherwise it may float above an explicit zero
+        // check on its base address
         read.dependencies().add(BeginNode.prevBegin(invoke.node()));
         return read;
     }
@@ -285,7 +291,8 @@ public class WordTypeRewriterPhase extends Phase {
         if (node instanceof LoadIndexedNode) {
             ValueNode array = ((LoadIndexedNode) node).array();
             if (array.objectStamp().type() == null) {
-                // There are cases where the array does not have a known type yet. Assume it is not a word type.
+                // There are cases where the array does not have a known type yet. Assume it is not
+                // a word type.
                 // TODO disallow LoadIndexedNode for word arrays?
                 return false;
             }

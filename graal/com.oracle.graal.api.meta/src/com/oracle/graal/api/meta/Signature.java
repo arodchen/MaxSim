@@ -25,7 +25,8 @@ package com.oracle.graal.api.meta;
 /**
  * Represents a method signature provided by the runtime.
  * 
- * @see <a href="http://java.sun.com/docs/books/jvms/second_edition/html/ClassFile.doc.html#7035">Method Descriptors</a>
+ * @see <a href="http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.3.3">Method
+ *      Descriptors</a>
  */
 public interface Signature {
 
@@ -38,20 +39,21 @@ public interface Signature {
     int getParameterCount(boolean receiver);
 
     /**
-     * Gets the parameter type at the specified position. This method returns a {@linkplain ResolvedJavaType resolved}
-     * type if possible but without triggering any class loading or resolution.
+     * Gets the parameter type at the specified position. This method returns a
+     * {@linkplain ResolvedJavaType resolved} type if possible but without triggering any class
+     * loading or resolution.
      * 
      * @param index the index into the parameters, with {@code 0} indicating the first parameter
-     * @param accessingClass the context of the type lookup. If accessing class is provided, its class loader is used to
-     *            retrieve an existing resolved type. This value can be {@code null} if the caller does not care for a
-     *            resolved type.
+     * @param accessingClass the context of the type lookup. If accessing class is provided, its
+     *            class loader is used to retrieve an existing resolved type. This value can be
+     *            {@code null} if the caller does not care for a resolved type.
      * @return the {@code index}'th parameter type
      */
     JavaType getParameterType(int index, ResolvedJavaType accessingClass);
 
     /**
-     * Gets the parameter kind at the specified position. This is the same as calling {@link #getParameterType}.
-     * {@link JavaType#getKind getKind}.
+     * Gets the parameter kind at the specified position. This is the same as calling
+     * {@link #getParameterType}. {@link JavaType#getKind getKind}.
      * 
      * @param index the index into the parameters, with {@code 0} indicating the first parameter
      * @return the kind of the parameter at the specified position
@@ -59,12 +61,13 @@ public interface Signature {
     Kind getParameterKind(int index);
 
     /**
-     * Gets the return type of this signature. This method will return a {@linkplain ResolvedJavaType resolved} type if
-     * possible but without triggering any class loading or resolution.
+     * Gets the return type of this signature. This method will return a
+     * {@linkplain ResolvedJavaType resolved} type if possible but without triggering any class
+     * loading or resolution.
      * 
-     * @param accessingClass the context of the type lookup. If accessing class is provided, its class loader is used to
-     *            retrieve an existing resolved type. This value can be {@code null} if the caller does not care for a
-     *            resolved type.
+     * @param accessingClass the context of the type lookup. If accessing class is provided, its
+     *            class loader is used to retrieve an existing resolved type. This value can be
+     *            {@code null} if the caller does not care for a resolved type.
      * @return the return type
      */
     JavaType getReturnType(ResolvedJavaType accessingClass);
@@ -78,9 +81,24 @@ public interface Signature {
     /**
      * Gets the size, in Java slots, of the parameters to this signature.
      * 
-     * @param withReceiver {@code true} if to add a slot for a receiver object; {@code false} not to include the
-     *            receiver
+     * @param withReceiver {@code true} if to add a slot for a receiver object; {@code false} not to
+     *            include the receiver
      * @return the size of the parameters in slots
      */
     int getParameterSlots(boolean withReceiver);
+
+    /**
+     * Gets the <a
+     * href="http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.3.3">method
+     * descriptor</a> corresponding to this signature. For example:
+     * 
+     * <pre>
+     * (ILjava/lang/String;D)V
+     * </pre>
+     * 
+     * .
+     * 
+     * @return the signature as a string
+     */
+    String getMethodDescriptor();
 }

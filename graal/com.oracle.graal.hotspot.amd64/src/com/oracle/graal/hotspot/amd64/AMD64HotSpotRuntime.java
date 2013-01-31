@@ -25,6 +25,7 @@ package com.oracle.graal.hotspot.amd64;
 import static com.oracle.graal.amd64.AMD64.*;
 import static com.oracle.graal.compiler.amd64.AMD64DeoptimizationStub.*;
 import static com.oracle.graal.compiler.amd64.AMD64LIRGenerator.*;
+import static com.oracle.graal.hotspot.nodes.IdentityHashCodeStubCall.*;
 import static com.oracle.graal.hotspot.nodes.MonitorEnterStubCall.*;
 import static com.oracle.graal.hotspot.nodes.MonitorExitStubCall.*;
 import static com.oracle.graal.hotspot.nodes.NewArraySlowStubCall.*;
@@ -32,10 +33,13 @@ import static com.oracle.graal.hotspot.nodes.NewArrayStubCall.*;
 import static com.oracle.graal.hotspot.nodes.NewInstanceSlowStubCall.*;
 import static com.oracle.graal.hotspot.nodes.NewInstanceStubCall.*;
 import static com.oracle.graal.hotspot.nodes.NewMultiArrayStubCall.*;
+import static com.oracle.graal.hotspot.nodes.ThreadIsInterruptedStubCall.*;
 import static com.oracle.graal.hotspot.nodes.VMErrorNode.*;
 import static com.oracle.graal.hotspot.nodes.VerifyOopStubCall.*;
-import static com.oracle.graal.hotspot.nodes.IdentityHashCodeStubCall.*;
-import static com.oracle.graal.hotspot.nodes.ThreadIsInterruptedStubCall.*;
+import static com.oracle.graal.hotspot.snippets.AESCryptSubstitutions.DecryptBlockStubCall.*;
+import static com.oracle.graal.hotspot.snippets.AESCryptSubstitutions.EncryptBlockStubCall.*;
+import static com.oracle.graal.hotspot.snippets.CipherBlockChainingSubstitutions.DecryptAESCryptStubCall.*;
+import static com.oracle.graal.hotspot.snippets.CipherBlockChainingSubstitutions.EncryptAESCryptStubCall.*;
 import static com.oracle.graal.lir.amd64.AMD64Call.*;
 
 import com.oracle.graal.api.code.*;
@@ -49,6 +53,8 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
         super(config, graalRuntime);
 
         Kind word = graalRuntime.getTarget().wordKind;
+
+        // @formatter:off
 
         addRuntimeCall(DEOPTIMIZE, config.deoptimizeStub,
                 /*           temps */ null,
@@ -66,26 +72,26 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
         addRuntimeCall(ARITHMETIC_FREM, config.arithmeticFremStub,
                 /*           temps */ null,
                 /*             ret */ ret(Kind.Float),
-                /* arg0:         a */ arg(0, Kind.Float),
-                /* arg1:         b */ arg(1, Kind.Float));
+                /* arg0:         a */ javaCallingConvention(Kind.Float,
+                /* arg1:         b */                       Kind.Float));
 
         addRuntimeCall(ARITHMETIC_DREM, config.arithmeticDremStub,
                 /*           temps */ null,
                 /*             ret */ ret(Kind.Double),
-                /* arg0:         a */ arg(0, Kind.Double),
-                /* arg1:         b */ arg(1, Kind.Double));
+                /* arg0:         a */ javaCallingConvention(Kind.Double,
+                /* arg1:         b */                       Kind.Double));
 
         addRuntimeCall(MONITORENTER, config.monitorEnterStub,
                 /*        temps */ null,
                 /*          ret */ ret(Kind.Void),
-                /* arg0: object */ arg(0, Kind.Object),
-                /* arg1:   lock */ arg(1, word));
+                /* arg0: object */ javaCallingConvention(Kind.Object,
+                /* arg1:   lock */                       word));
 
         addRuntimeCall(MONITOREXIT, config.monitorExitStub,
                 /*        temps */ null,
                 /*          ret */ ret(Kind.Void),
-                /* arg0: object */ arg(0, Kind.Object),
-                /* arg1:   lock */ arg(1, word));
+                /* arg0: object */ javaCallingConvention(Kind.Object,
+                /* arg1:   lock */                       word));
 
         addRuntimeCall(NEW_ARRAY, 0L,
                 /*        temps */ null,
@@ -124,20 +130,55 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
         addRuntimeCall(VM_ERROR, config.vmErrorStub,
                 /*        temps */ null,
                 /*          ret */ ret(Kind.Void),
-                /* arg0:  where */ arg(0, Kind.Object),
-                /* arg1: format */ arg(1, Kind.Object),
-                /* arg2:  value */ arg(2, Kind.Long));
+                /* arg0:  where */ javaCallingConvention(Kind.Object,
+                /* arg1: format */                       Kind.Object,
+                /* arg2:  value */                       Kind.Long));
 
         addRuntimeCall(IDENTITY_HASHCODE, config.identityHashCodeStub,
                 /*        temps */ null,
                 /*          ret */ rax.asValue(Kind.Int),
-                /* arg0:    obj */ arg(0, Kind.Object));
+                /* arg0:    obj */ javaCallingConvention(Kind.Object));
 
         addRuntimeCall(THREAD_IS_INTERRUPTED, config.threadIsInterruptedStub,
                 /*        temps */ null,
                 /*          ret */ rax.asValue(Kind.Int),
-                /* arg0: thread */ arg(0, Kind.Object),
-      /* arg1: clearInterrupted */ arg(1, Kind.Boolean));
+                /* arg0: thread */ javaCallingConvention(Kind.Object,
+      /* arg1: clearInterrupted */                       Kind.Boolean));
+
+        addRuntimeCall(ENCRYPT_BLOCK, config.aescryptEncryptBlockStub,
+                /*        temps */ null,
+                /*          ret */ ret(Kind.Void),
+                /* arg0:     in */ nativeCallingConvention(word,
+                /* arg1:    out */                         word,
+                /* arg2:    key */                         word));
+
+        addRuntimeCall(DECRYPT_BLOCK, config.aescryptDecryptBlockStub,
+                /*        temps */ null,
+                /*          ret */ ret(Kind.Void),
+                /* arg0:     in */ nativeCallingConvention(word,
+                /* arg1:    out */                         word,
+                /* arg2:    key */                         word));
+
+        addRuntimeCall(ENCRYPT, config.cipherBlockChainingEncryptAESCryptStub,
+                /*        temps */ null,
+                /*          ret */ ret(Kind.Void),
+                /* arg0:     in */ nativeCallingConvention(word,
+                /* arg1:    out */                         word,
+                /* arg2:    key */                         word,
+                /* arg3:      r */                         word,
+              /* arg4: inLength */                         Kind.Int));
+
+        addRuntimeCall(DECRYPT, config.cipherBlockChainingDecryptAESCryptStub,
+                /*        temps */ null,
+                /*          ret */ ret(Kind.Void),
+                /* arg0:     in */ nativeCallingConvention(word,
+                /* arg1:    out */                         word,
+                /* arg2:    key */                         word,
+                /* arg3:      r */                         word,
+              /* arg4: inLength */                         Kind.Int));
+
+        // @formatter:on
+
     }
 
     @Override

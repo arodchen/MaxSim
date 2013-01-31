@@ -33,6 +33,7 @@ import java.util.Map;
 import java.util.HashMap;
 
 // Checkstyle: stop
+// @formatter:off
 class Token {
 
     public int kind; // token kind
@@ -403,7 +404,7 @@ public class Scanner {
             NextCh();
         }
     }
-	
+
 -->comments
 
     void CheckLiteral() {
@@ -418,7 +419,7 @@ public class Scanner {
     Token NextToken() {
         while (ch == ' ' || 
 -->scan1
-		) NextCh();
+        ) NextCh();
 -->scan2
         int recKind = noSym;
         int recEnd = pos;

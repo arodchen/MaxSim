@@ -21,15 +21,27 @@
  * questions.
  */
 package com.oracle.graal.graph;
+
 import static org.junit.Assert.*;
 
 import java.util.*;
 
 import org.junit.*;
 
-
-
 public class TypedNodeIteratorTest {
+
+    private static class TestNode extends Node implements Node.IterableNodeType, TestNodeInterface {
+
+        private final String name;
+
+        public TestNode(String name) {
+            this.name = name;
+        }
+
+        public String getName() {
+            return name;
+        }
+    }
 
     @Test
     public void singleNodeTest() {
@@ -144,9 +156,9 @@ public class TypedNodeIteratorTest {
         assertEquals(3, z);
     }
 
-    private static String toString(Iterable<TestNode> nodes) {
+    public static String toString(Iterable<? extends TestNodeInterface> nodes) {
         StringBuilder sb = new StringBuilder();
-        for (TestNode tn : nodes) {
+        for (TestNodeInterface tn : nodes) {
             sb.append(tn.getName());
         }
         return sb.toString();

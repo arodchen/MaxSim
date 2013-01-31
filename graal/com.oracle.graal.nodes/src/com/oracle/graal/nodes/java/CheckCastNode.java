@@ -27,7 +27,6 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.nodes.virtual.*;
 
 /**
  * Implements a type check against a compile-time known type.
@@ -40,7 +39,7 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
 
     /**
      * Creates a new CheckCast instruction.
-     *
+     * 
      * @param type the type being cast to
      * @param object the instruction producing the object
      */
@@ -59,11 +58,10 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
 
     @Override
     public boolean inferStamp() {
-        if (object().stamp().nonNull() && !stamp().nonNull()) {
-            setStamp(StampFactory.declaredNonNull(type));
-            return true;
+        if (object().objectStamp().alwaysNull() && objectStamp().nonNull()) {
+            return false;
         }
-        return super.inferStamp();
+        return updateStamp(stamp().join(object().stamp()));
     }
 
     @Override
@@ -73,7 +71,8 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
         if (type != null) {
             ResolvedJavaType objectType = object().objectStamp().type();
             if (objectType != null && type.isAssignableFrom(objectType)) {
-                // we don't have to check for null types here because they will also pass the checkcast.
+                // we don't have to check for null types here because they will also pass the
+                // checkcast.
                 return object();
             }
         }
@@ -101,9 +100,9 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        VirtualObjectNode virtual = tool.getVirtualState(object());
-        if (virtual != null && type().isAssignableFrom(virtual.type())) {
-            tool.replaceWithVirtual(virtual);
+        State state = tool.getObjectState(object);
+        if (state != null && state.getState() == EscapeState.Virtual) {
+            tool.replaceWithVirtual(state.getVirtualObject());
         }
     }
 }

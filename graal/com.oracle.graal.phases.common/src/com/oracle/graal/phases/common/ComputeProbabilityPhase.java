@@ -31,22 +31,27 @@ import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.graph.*;
 
+/**
+ * Computes probabilities for nodes in a graph.
+ * <p>
+ * The computation of absolute probabilities works in three steps:
+ * <ol>
+ * <li>{@link PropagateProbability} traverses the graph in post order (merges after their ends, ...)
+ * and keeps track of the "probability state". Whenever it encounters a {@link ControlSplitNode} it
+ * uses the split's probability information to divide the probability upon the successors. Whenever
+ * it encounters an {@link Invoke} it assumes that the exception edge is unlikely and propagates the
+ * whole probability to the normal successor. Whenever it encounters a {@link MergeNode} it sums up
+ * the probability of all predecessors. It also maintains a set of active loops (whose
+ * {@link LoopBeginNode} has been visited) and builds def/use information for step 2.</li>
+ * <li></li>
+ * <li>{@link PropagateLoopFrequency} propagates the loop frequencies and multiplies each
+ * {@link FixedNode}'s probability with its loop frequency.</li>
+ * </ol>
+ * TODO: add exception probability information to Invokes
+ */
 public class ComputeProbabilityPhase extends Phase {
-    private static final double EPSILON = 1d / Integer.MAX_VALUE;
 
-    /*
-     * The computation of absolute probabilities works in three steps:
-     *
-     * - The first step, "PropagateProbability", traverses the graph in post order (merges after their ends, ...) and keeps track of the "probability state".
-     *   Whenever it encounters a ControlSplit it uses the split's probability information to divide the probability upon the successors.
-     *   Whenever it encounters an Invoke it assumes that the exception edge is unlikely and propagates the whole probability to the normal successor.
-     *   Whenever it encounters a Merge it sums up the probability of all predecessors.
-     *   It also maintains a set of active loops (whose LoopBegin has been visited) and builds def/use information for the second step.
-     *
-     * - The third step propagates the loop frequencies and multiplies each FixedNode's probability with its loop frequency.
-     *
-     *   TODO: add exception probability information to Invokes
-     */
+    private static final double EPSILON = 1d / Integer.MAX_VALUE;
 
     @Override
     protected void run(StructuredGraph graph) {
@@ -65,11 +70,16 @@ public class ComputeProbabilityPhase extends Phase {
                 }
             }
         }
+
+        new ComputeInliningRelevanceIterator(graph).apply();
     }
 
     private void correctLoopFrequencies(Loop loop, double parentFrequency, BitSet visitedBlocks) {
         LoopBeginNode loopBegin = ((LoopBeginNode) loop.header.getBeginNode());
         double frequency = parentFrequency * loopBegin.loopFrequency();
+        if (frequency < 1) {
+            frequency = 1;
+        }
         for (Loop child : loop.children) {
             correctLoopFrequencies(child, frequency, visitedBlocks);
         }
@@ -120,6 +130,7 @@ public class ComputeProbabilityPhase extends Phase {
     }
 
     public static class LoopInfo {
+
         public final LoopBeginNode loopBegin;
 
         public final NodeMap<Set<LoopInfo>> requires;
@@ -162,6 +173,7 @@ public class ComputeProbabilityPhase extends Phase {
     public Map<MergeNode, Set<LoopInfo>> mergeLoops = new IdentityHashMap<>();
 
     private class Probability implements MergeableState<Probability> {
+
         public double probability;
         public HashSet<LoopInfo> loops;
         public LoopInfo loopInfo;
@@ -273,6 +285,7 @@ public class ComputeProbabilityPhase extends Phase {
     }
 
     private class LoopCount implements MergeableState<LoopCount> {
+
         public double count;
 
         public LoopCount(double count) {
@@ -364,6 +377,77 @@ public class ComputeProbabilityPhase extends Phase {
         @Override
         public double compute(double probability, double frequency) {
             return probability;
+        }
+    }
+
+    private static class ComputeInliningRelevanceIterator extends ScopedPostOrderNodeIterator {
+
+        private final HashMap<FixedNode, Double> lowestPathProbabilities;
+        private double currentProbability;
+
+        public ComputeInliningRelevanceIterator(StructuredGraph graph) {
+            super(graph);
+            this.lowestPathProbabilities = computeLowestPathProbabilities(graph);
+        }
+
+        @Override
+        protected void initializeScope() {
+            currentProbability = lowestPathProbabilities.get(currentScope);
+        }
+
+        @Override
+        protected void invoke(Invoke invoke) {
+            assert !Double.isNaN(invoke.probability());
+            invoke.setInliningRelevance(invoke.probability() / currentProbability);
+        }
+
+        private HashMap<FixedNode, Double> computeLowestPathProbabilities(StructuredGraph graph) {
+            HashMap<FixedNode, Double> result = new HashMap<>();
+            Deque<FixedNode> scopes = getScopes(graph);
+
+            while (!scopes.isEmpty()) {
+                FixedNode scopeBegin = scopes.pop();
+                double probability = computeLowestPathProbability(scopeBegin);
+                result.put(scopeBegin, probability);
+            }
+
+            return result;
+        }
+
+        private static double computeLowestPathProbability(FixedNode scopeStart) {
+            double minPathProbability = scopeStart.probability();
+            Node current = scopeStart;
+
+            while (current != null) {
+                if (current instanceof ControlSplitNode) {
+                    ControlSplitNode controlSplit = (ControlSplitNode) current;
+                    current = getMaxProbabilitySux(controlSplit);
+                    if (((FixedNode) current).probability() < minPathProbability) {
+                        minPathProbability = ((FixedNode) current).probability();
+                    }
+                } else {
+                    assert current.successors().count() <= 1;
+                    current = current.successors().first();
+                }
+            }
+
+            return minPathProbability;
+        }
+
+        private static Node getMaxProbabilitySux(ControlSplitNode controlSplit) {
+            Node maxSux = null;
+            double maxProbability = 0.0;
+
+            // TODO: process recursively if we have multiple successors with same probability
+            for (Node sux : controlSplit.successors()) {
+                double probability = controlSplit.probability((BeginNode) sux);
+                if (probability > maxProbability) {
+                    maxProbability = probability;
+                    maxSux = sux;
+                }
+            }
+
+            return maxSux;
         }
     }
 }

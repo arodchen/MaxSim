@@ -33,6 +33,7 @@ import com.oracle.graal.nodes.util.*;
 
 @NodeInfo(nameTemplate = "Invoke!#{p#targetMethod/s}")
 public class InvokeWithExceptionNode extends ControlSplitNode implements Node.IterableNodeType, Invoke, MemoryCheckpoint, LIRLowerable {
+
     @Successor private BeginNode next;
     @Successor private DispatchBeginNode exceptionEdge;
     @Input private final CallTargetNode callTarget;
@@ -41,6 +42,7 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     private boolean polymorphic;
     private boolean useForInlining;
     private final long leafGraphId;
+    private double inliningRelevance;
 
     public InvokeWithExceptionNode(CallTargetNode callTarget, DispatchBeginNode exceptionEdge, int bci, long leafGraphId) {
         super(callTarget.returnStamp());
@@ -50,6 +52,7 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
         this.leafGraphId = leafGraphId;
         this.polymorphic = false;
         this.useForInlining = true;
+        this.inliningRelevance = Double.NaN;
     }
 
     public DispatchBeginNode exceptionEdge() {
@@ -96,6 +99,16 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     @Override
     public void setUseForInlining(boolean value) {
         this.useForInlining = value;
+    }
+
+    @Override
+    public double inliningRelevance() {
+        return inliningRelevance;
+    }
+
+    @Override
+    public void setInliningRelevance(double value) {
+        inliningRelevance = value;
     }
 
     @Override
@@ -205,6 +218,7 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     }
 
     private static final double EXCEPTION_PROBA = 1e-5;
+
     @Override
     public double probability(BeginNode successor) {
         return successor == next ? 1 - EXCEPTION_PROBA : EXCEPTION_PROBA;

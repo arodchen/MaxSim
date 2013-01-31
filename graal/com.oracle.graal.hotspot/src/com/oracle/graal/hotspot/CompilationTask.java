@@ -22,20 +22,22 @@
  */
 package com.oracle.graal.hotspot;
 
+import static com.oracle.graal.nodes.StructuredGraph.*;
+
 import java.util.concurrent.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
 
-
 public final class CompilationTask implements Runnable, Comparable<CompilationTask> {
 
-
     public static final ThreadLocal<Boolean> withinEnqueue = new ThreadLocal<Boolean>() {
+
         @Override
         protected Boolean initialValue() {
             return Boolean.valueOf(Thread.currentThread() instanceof CompilerThread);
@@ -111,11 +113,12 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
     }
 
     public void runCompilation() {
-        CompilationStatistics stats = CompilationStatistics.create(method);
+        CompilationStatistics stats = CompilationStatistics.create(method, entryBCI != StructuredGraph.INVOCATION_ENTRY_BCI);
         try {
             final boolean printCompilation = GraalOptions.PrintCompilation && !TTY.isSuppressed();
             if (printCompilation) {
-                TTY.println(String.format("%-6d Graal %-70s %-45s %-50s %s...", id, method.getDeclaringClass().getName(), method.getName(), method.getSignature(), entryBCI == StructuredGraph.INVOCATION_ENTRY_BCI ? "" : "(OSR@" + entryBCI + ") "));
+                TTY.println(String.format("%-6d Graal %-70s %-45s %-50s %s...", id, method.getDeclaringClass().getName(), method.getName(), method.getSignature(),
+                                entryBCI == StructuredGraph.INVOCATION_ENTRY_BCI ? "" : "(OSR@" + entryBCI + ") "));
             }
 
             CompilationResult result = null;
@@ -127,7 +130,14 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
                     @Override
                     public CompilationResult call() throws Exception {
                         graalRuntime.evictDeoptedGraphs();
-                        StructuredGraph graph = new StructuredGraph(method, entryBCI);
+                        StructuredGraph graph = (StructuredGraph) method.getCompilerStorage().get(Graph.class);
+                        if (graph == null || entryBCI != INVOCATION_ENTRY_BCI) {
+                            graph = new StructuredGraph(method, entryBCI);
+                        } else {
+                            // Compiling an intrinsic graph - must clone the graph
+                            graph = graph.copy();
+                            // System.out.println("compiling intrinsic " + method);
+                        }
                         return graalRuntime.getCompiler().compileMethod(method, graph, graalRuntime.getCache(), plan, optimisticOpts);
                     }
                 });
@@ -159,13 +169,14 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
     }
 
     private void installMethod(final CompilationResult tm) {
-        Debug.scope("CodeInstall", new Object[] {new DebugDumpScope(String.valueOf(id), true), graalRuntime.getCompiler(), method}, new Runnable() {
+        Debug.scope("CodeInstall", new Object[]{new DebugDumpScope(String.valueOf(id), true), graalRuntime.getCompiler(), method}, new Runnable() {
+
             @Override
             public void run() {
                 final CodeInfo[] info = Debug.isDumpEnabled() ? new CodeInfo[1] : null;
                 graalRuntime.getRuntime().installMethod(method, entryBCI, tm, info);
                 if (info != null) {
-                    Debug.dump(new Object[] {tm, info[0]}, "After code installation");
+                    Debug.dump(new Object[]{tm, info[0]}, "After code installation");
                 }
             }
 
@@ -183,4 +194,8 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
         return id < o.id ? -1 : (id > o.id ? 1 : 0);
     }
 
+    @Override
+    public String toString() {
+        return "Compilation[id=" + id + ", prio=" + priority + " " + MetaUtil.format("%H.%n(%p)", method) + (entryBCI == StructuredGraph.INVOCATION_ENTRY_BCI ? "" : "@" + entryBCI) + "]";
+    }
 }

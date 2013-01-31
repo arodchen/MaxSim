@@ -73,6 +73,7 @@ public class IfBoxingEliminationTest extends GraalCompilerTest {
 
     private void test(final String snippet) {
         Debug.scope("IfBoxingEliminationTest", new DebugDumpScope(snippet), new Runnable() {
+
             @Override
             public void run() {
                 StructuredGraph graph = parse(snippet);
@@ -96,6 +97,7 @@ public class IfBoxingEliminationTest extends GraalCompilerTest {
                 new BoxingEliminationPhase(runtime()).apply(graph);
                 Debug.dump(graph, "Graph");
                 new ExpandBoxingNodesPhase(pool).apply(graph);
+                new CanonicalizerPhase(null, runtime(), assumptions).apply(graph);
                 new CanonicalizerPhase(null, runtime(), assumptions).apply(graph);
                 new DeadCodeEliminationPhase().apply(graph);
                 StructuredGraph referenceGraph = parse(REFERENCE_SNIPPET);

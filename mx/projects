@@ -237,7 +237,7 @@ project@com.oracle.graal.printer@javaCompliance=1.7
 # graal.compiler.test
 project@com.oracle.graal.compiler.test@subDir=graal
 project@com.oracle.graal.compiler.test@sourceDirs=src
-project@com.oracle.graal.compiler.test@dependencies=JUNIT,com.oracle.graal.compiler,com.oracle.graal.java,com.oracle.graal.api.runtime
+project@com.oracle.graal.compiler.test@dependencies=com.oracle.graal.api.runtime,com.oracle.graal.printer,JUNIT
 project@com.oracle.graal.compiler.test@checkstyle=com.oracle.graal.graph
 project@com.oracle.graal.compiler.test@javaCompliance=1.7
 
@@ -279,21 +279,21 @@ project@com.oracle.truffle.api.test@javaCompliance=1.7
 # truffle.api.codegen
 project@com.oracle.truffle.api.codegen@subDir=graal
 project@com.oracle.truffle.api.codegen@sourceDirs=src
-project@com.oracle.truffle.api.codegen@dependencies=com.oracle.truffle.api
+project@com.oracle.truffle.api.codegen@dependencies=
 project@com.oracle.truffle.api.codegen@checkstyle=com.oracle.graal.graph
 project@com.oracle.truffle.api.codegen@javaCompliance=1.7
 
 # truffle.codegen.processor
 project@com.oracle.truffle.codegen.processor@subDir=graal
 project@com.oracle.truffle.codegen.processor@sourceDirs=src
-project@com.oracle.truffle.codegen.processor@dependencies=com.oracle.truffle.api.codegen
+project@com.oracle.truffle.codegen.processor@dependencies=com.oracle.truffle.api.codegen,com.oracle.truffle.api
 project@com.oracle.truffle.codegen.processor@checkstyle=com.oracle.graal.graph
 project@com.oracle.truffle.codegen.processor@javaCompliance=1.7
 
 # truffle.sl
 project@com.oracle.truffle.sl@subDir=graal
 project@com.oracle.truffle.sl@sourceDirs=src
-project@com.oracle.truffle.sl@dependencies=com.oracle.truffle.api.codegen
+project@com.oracle.truffle.sl@dependencies=com.oracle.truffle.api.codegen,com.oracle.truffle.api
 project@com.oracle.truffle.sl@checkstyle=com.oracle.graal.graph
 project@com.oracle.truffle.sl@javaCompliance=1.7
 project@com.oracle.truffle.sl@annotationProcessors=com.oracle.truffle.codegen.processor

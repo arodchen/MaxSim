@@ -34,10 +34,11 @@ import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 
 /**
- * The {@code IfNode} represents a branch that can go one of two directions depending on the outcome of a
- * comparison.
+ * The {@code IfNode} represents a branch that can go one of two directions depending on the outcome
+ * of a comparison.
  */
 public final class IfNode extends ControlSplitNode implements Simplifiable, LIRLowerable, Negatable {
+
     private final long leafGraphId;
     @Successor private BeginNode trueSuccessor;
     @Successor private BeginNode falseSuccessor;
@@ -73,7 +74,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
 
     /**
      * Gets the true successor.
-     *
+     * 
      * @return the true successor
      */
     public BeginNode trueSuccessor() {
@@ -82,7 +83,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
 
     /**
      * Gets the false successor.
-     *
+     * 
      * @return the false successor
      */
     public BeginNode falseSuccessor() {
@@ -101,7 +102,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
 
     /**
      * Gets the node corresponding to the specified outcome of the branch.
-     *
+     * 
      * @param istrue {@code true} if the true successor is requested, {@code false} otherwise
      * @return the corresponding successor
      */
@@ -119,6 +120,10 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         setFalseSuccessor(trueSucc);
         takenProbability = 1 - takenProbability;
         return this;
+    }
+
+    public void setTakenProbability(double prob) {
+        takenProbability = prob;
     }
 
     @Override
@@ -163,7 +168,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
 
     /**
      * Tries to remove an empty if construct or replace an if construct with a materialization.
-     *
+     * 
      * @return true if a transformation was made, false otherwise
      */
     private boolean removeOrMaterializeIf(SimplifierTool tool) {
@@ -180,7 +185,8 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                 } else {
                     PhiNode singlePhi = phis.next();
                     if (!phis.hasNext()) {
-                        // one phi at the merge of an otherwise empty if construct: try to convert into a MaterializeNode
+                        // one phi at the merge of an otherwise empty if construct: try to convert
+                        // into a MaterializeNode
                         boolean inverted = trueEnd == merge.forwardEndAt(1);
                         ValueNode trueValue = singlePhi.valueAt(inverted ? 1 : 0);
                         ValueNode falseValue = singlePhi.valueAt(inverted ? 0 : 1);
@@ -204,9 +210,9 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
     }
 
     /**
-     * Tries to connect code that initializes a variable directly with the successors of an if construct
-     * that switches on the variable. For example, the pseudo code below:
-     *
+     * Tries to connect code that initializes a variable directly with the successors of an if
+     * construct that switches on the variable. For example, the pseudo code below:
+     * 
      * <pre>
      * contains(list, e, yes, no) {
      *     if (list == null || e == null) {
@@ -227,7 +233,9 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
      *     }
      * }
      * </pre>
+     * 
      * will be transformed into:
+     * 
      * <pre>
      * contains(list, e, yes, no) {
      *     if (list == null || e == null) {
@@ -243,7 +251,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
      *     }
      * }
      * </pre>
-     *
+     * 
      * @return true if a transformation was made, false otherwise
      */
     private boolean removeIntermediateMaterialization(SimplifierTool tool) {
@@ -265,7 +273,8 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
             return false;
         }
 
-        // Only consider merges with a single usage that is both a phi and an operand of the comparison
+        // Only consider merges with a single usage that is both a phi and an operand of the
+        // comparison
         NodeIterable<Node> mergeUsages = merge.usages();
         if (mergeUsages.count() != 1) {
             return false;
@@ -335,11 +344,11 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
     }
 
     /**
-     * Connects a set of ends to a given successor, inserting a merge node if
-     * there is more than one end. If {@code ends} is empty, then {@code successor}
-     * is {@linkplain GraphUtil#killCFG(FixedNode) killed} otherwise it is added to {@code tool}'s
+     * Connects a set of ends to a given successor, inserting a merge node if there is more than one
+     * end. If {@code ends} is empty, then {@code successor} is
+     * {@linkplain GraphUtil#killCFG(FixedNode) killed} otherwise it is added to {@code tool}'s
      * {@linkplain SimplifierTool#addToWorkList(com.oracle.graal.graph.Node) work list}.
-     *
+     * 
      * @param oldMerge the merge being removed
      * @param phiValues the values of the phi at the merge, keyed by the merge ends
      */
@@ -353,15 +362,19 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                 oldMerge.removeEnd(end);
                 GraphUtil.killCFG(end);
             } else {
-                // Need a new phi in case the frame state is used by more than the merge being removed
+                // Need a new phi in case the frame state is used by more than the merge being
+                // removed
                 MergeNode newMerge = graph().add(new MergeNode());
                 PhiNode oldPhi = (PhiNode) oldMerge.usages().first();
                 PhiNode newPhi = graph().add(new PhiNode(oldPhi.stamp(), newMerge));
 
+                double probability = 0.0;
                 for (EndNode end : ends) {
                     newPhi.addInput(phiValues.get(end));
                     newMerge.addForwardEnd(end);
+                    probability += end.probability();
                 }
+                newMerge.setProbability(probability);
 
                 FrameState stateAfter = oldMerge.stateAfter();
                 if (stateAfter != null) {
@@ -377,11 +390,12 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
     }
 
     /**
-     * Gets an array of constants derived from a node that is either a {@link ConstantNode}
-     * or a {@link PhiNode} whose input values are all constants. The length of the returned
-     * array is equal to the number of ends terminating in a given merge node.
-     *
-     * @return null if {@code node} is neither a {@link ConstantNode} nor a {@link PhiNode} whose input values are all constants
+     * Gets an array of constants derived from a node that is either a {@link ConstantNode} or a
+     * {@link PhiNode} whose input values are all constants. The length of the returned array is
+     * equal to the number of ends terminating in a given merge node.
+     * 
+     * @return null if {@code node} is neither a {@link ConstantNode} nor a {@link PhiNode} whose
+     *         input values are all constants
      */
     private static Constant[] constantValues(ValueNode node, MergeNode merge) {
         if (node.isConstant()) {
@@ -425,6 +439,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         originalFalseSuccessor.prepareDelete();
 
         FixedNode next = merge.next();
+        FrameState state = merge.stateAfter();
         merge.setNext(null);
         setTrueSuccessor(null);
         setFalseSuccessor(null);
@@ -435,6 +450,9 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         merge.safeDelete();
         trueEnd.safeDelete();
         falseEnd.safeDelete();
+        if (state != null) {
+            tool.removeIfUnused(state);
+        }
         tool.addToWorkList(next);
     }
 }

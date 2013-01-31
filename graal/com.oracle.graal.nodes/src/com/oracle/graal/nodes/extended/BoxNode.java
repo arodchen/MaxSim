@@ -30,12 +30,11 @@ import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
-
 public final class BoxNode extends AbstractStateSplit implements StateSplit, Node.IterableNodeType, Canonicalizable {
 
     @Input private ValueNode source;
-    private int bci;
-    private Kind sourceKind;
+    private final int bci;
+    private final Kind sourceKind;
 
     public BoxNode(ValueNode value, ResolvedJavaType type, Kind sourceKind, int bci) {
         super(StampFactory.exactNonNull(type));
@@ -49,14 +48,14 @@ public final class BoxNode extends AbstractStateSplit implements StateSplit, Nod
         return source;
     }
 
-
     public Kind getSourceKind() {
         return sourceKind;
     }
 
     public void expand(BoxingMethodPool pool) {
         ResolvedJavaMethod boxingMethod = pool.getBoxingMethod(sourceKind);
-        MethodCallTargetNode callTarget = graph().add(new MethodCallTargetNode(InvokeKind.Static, boxingMethod, new ValueNode[]{source}, boxingMethod.getSignature().getReturnType(boxingMethod.getDeclaringClass())));
+        MethodCallTargetNode callTarget = graph().add(
+                        new MethodCallTargetNode(InvokeKind.Static, boxingMethod, new ValueNode[]{source}, boxingMethod.getSignature().getReturnType(boxingMethod.getDeclaringClass())));
         InvokeNode invokeNode = graph().add(new InvokeNode(callTarget, bci, -1));
         invokeNode.setProbability(this.probability());
         invokeNode.setStateAfter(stateAfter());
@@ -65,6 +64,33 @@ public final class BoxNode extends AbstractStateSplit implements StateSplit, Nod
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
+
+        if (source.isConstant()) {
+            Constant sourceConstant = source.asConstant();
+            switch (sourceKind) {
+                case Boolean:
+                    return ConstantNode.forObject(Boolean.valueOf(sourceConstant.asBoolean()), tool.runtime(), graph());
+                case Byte:
+                    return ConstantNode.forObject(Byte.valueOf((byte) sourceConstant.asInt()), tool.runtime(), graph());
+                case Char:
+                    return ConstantNode.forObject(Character.valueOf((char) sourceConstant.asInt()), tool.runtime(), graph());
+                case Short:
+                    return ConstantNode.forObject(Short.valueOf((short) sourceConstant.asInt()), tool.runtime(), graph());
+                case Int:
+                    return ConstantNode.forObject(Integer.valueOf(sourceConstant.asInt()), tool.runtime(), graph());
+                case Long:
+                    return ConstantNode.forObject(Long.valueOf(sourceConstant.asLong()), tool.runtime(), graph());
+                case Float:
+                    return ConstantNode.forObject(Float.valueOf(sourceConstant.asFloat()), tool.runtime(), graph());
+                case Double:
+                    return ConstantNode.forObject(Double.valueOf(sourceConstant.asDouble()), tool.runtime(), graph());
+                default:
+                    assert false : "Unexpected source kind for boxing";
+                    break;
+
+            }
+        }
+
         for (Node usage : usages()) {
             if (usage != stateAfter()) {
                 return this;

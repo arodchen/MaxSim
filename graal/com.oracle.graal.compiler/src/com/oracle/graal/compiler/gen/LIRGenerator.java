@@ -54,6 +54,7 @@ import com.oracle.graal.phases.util.*;
  * This class traverses the HIR instructions and generates LIR instructions from them.
  */
 public abstract class LIRGenerator extends LIRGeneratorTool {
+
     protected final StructuredGraph graph;
     protected final CodeCacheProvider runtime;
     protected final TargetDescription target;
@@ -85,7 +86,8 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     private final BlockMap<Integer> blockLastLockCount;
 
     /**
-     * Contains the lock data slot for each lock depth (so these may be reused within a compiled method).
+     * Contains the lock data slot for each lock depth (so these may be reused within a compiled
+     * method).
      */
     private final ArrayList<StackSlot> lockDataSlots;
 
@@ -118,8 +120,9 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     }
 
     /**
-     * Returns the operand that has been previously initialized by {@link #setResult(ValueNode, Value)}
-     * with the result of an instruction.
+     * Returns the operand that has been previously initialized by
+     * {@link #setResult(ValueNode, Value)} with the result of an instruction.
+     * 
      * @param node A node that produces a result value.
      */
     @Override
@@ -141,6 +144,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     /**
      * Creates a new {@linkplain Variable variable}.
+     * 
      * @param kind The kind of the new variable.
      * @return a new variable
      */
@@ -168,9 +172,8 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     @Override
     public Value setResult(ValueNode x, Value operand) {
-        assert (isVariable(operand) && x.kind() == operand.getKind()) ||
-               (isRegister(operand) && !attributes(asRegister(operand)).isAllocatable()) ||
-               (isConstant(operand) && x.kind() == operand.getKind().getStackKind()) : operand.getKind() + " for node " + x;
+        assert (isVariable(operand) && x.kind() == operand.getKind()) || (isRegister(operand) && !attributes(asRegister(operand)).isAllocatable()) ||
+                        (isConstant(operand) && x.kind() == operand.getKind().getStackKind()) : operand.getKind() + " for node " + x;
         assert operand(x) == null : "operand cannot be set twice";
         assert operand != null && isLegal(operand) : "operand must be legal";
         assert operand.getKind().getStackKind() == x.kind() : operand.getKind().getStackKind() + " must match " + x.kind();
@@ -246,9 +249,10 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     /**
      * Gets the ABI specific operand used to return a value of a given kind from a method.
-     *
+     * 
      * @param kind the kind of value being returned
-     * @return the operand representing the ABI defined location used return a value of kind {@code kind}
+     * @return the operand representing the ABI defined location used return a value of kind
+     *         {@code kind}
      */
     public Value resultOperandFor(Kind kind) {
         if (kind == Kind.Void) {
@@ -256,7 +260,6 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         }
         return frameMap.registerConfig.getReturnRegister(kind).asValue(kind);
     }
-
 
     public void append(LIRInstruction op) {
         assert LIRVerifier.verify(op);
@@ -282,19 +285,19 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         assert lir.lir(block) == null : "LIR list already computed for this block";
         lir.setLir(block, new ArrayList<LIRInstruction>());
 
-        append(new LabelOp(new Label(), block.align));
+        append(new LabelOp(new Label(), block.isAligned()));
 
         if (GraalOptions.TraceLIRGeneratorLevel >= 1) {
             TTY.println("BEGIN Generating LIR for block B" + block.getId());
         }
 
         if (block == lir.cfg.getStartBlock()) {
-            assert block.getPredecessors().size() == 0;
+            assert block.getPredecessorCount() == 0;
             currentLockCount = 0;
             emitPrologue();
 
         } else {
-            assert block.getPredecessors().size() > 0;
+            assert block.getPredecessorCount() > 0;
 
             currentLockCount = -1;
             for (Block pred : block.getPredecessors()) {
@@ -357,7 +360,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
                         if (nextInstr instanceof Access) {
                             Access access = (Access) nextInstr;
                             if (isNullNode.object() == access.object() && canBeNullCheck(access.location())) {
-                                //TTY.println("implicit null check");
+                                // TTY.println("implicit null check");
                                 access.setNullCheck(true);
                                 continue;
                             }
@@ -373,12 +376,21 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
                 stateAfter = ((StateSplit) instr).stateAfter();
             }
             if (instr instanceof ValueNode) {
-                try {
-                    doRoot((ValueNode) instr);
-                } catch (GraalInternalError e) {
-                    throw e.addContext(instr);
-                } catch (Throwable e) {
-                    throw new GraalInternalError(e).addContext(instr);
+
+                ValueNode valueNode = (ValueNode) instr;
+                if (operand(valueNode) == null) {
+                    if (!peephole(valueNode)) {
+                        try {
+                            doRoot((ValueNode) instr);
+                        } catch (GraalInternalError e) {
+                            throw e.addContext(instr);
+                        } catch (Throwable e) {
+                            throw new GraalInternalError(e).addContext(instr);
+                        }
+                    }
+                } else {
+                    // There can be cases in which the result of an instruction is already set
+                    // before by other instructions.
                 }
             }
             if (stateAfter != null) {
@@ -392,7 +404,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
                 }
             }
         }
-        if (block.numberOfSux() >= 1 && !endsWithJump(block)) {
+        if (block.getSuccessorCount() >= 1 && !endsWithJump(block)) {
             NodeClassIterable successors = block.getEndNode().successors();
             assert successors.isNotEmpty() : "should have at least one successor : " + block.getEndNode();
 
@@ -416,6 +428,8 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         }
     }
 
+    protected abstract boolean peephole(ValueNode valueNode);
+
     private boolean checkStateReady(FrameState state) {
         FrameState fs = state;
         while (fs != null) {
@@ -424,7 +438,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
                     assert operand(v) != null : "Value " + v + " in " + fs + " is not ready!";
                 }
             }
-            fs =  fs.outerFrameState();
+            fs = fs.outerFrameState();
         }
         return true;
     }
@@ -486,7 +500,8 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     }
 
     /**
-     * Increases the number of currently locked monitors and makes sure that a lock data slot is available for the new lock.
+     * Increases the number of currently locked monitors and makes sure that a lock data slot is
+     * available for the new lock.
      */
     public void lock() {
         if (lockDataSlots.size() == currentLockCount) {
@@ -497,7 +512,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     /**
      * Decreases the number of currently locked monitors.
-     *
+     * 
      * @throws GraalInternalError if the number of currently locked monitors is already zero.
      */
     public void unlock() {
@@ -573,7 +588,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     @Override
     public void emitIf(IfNode x) {
-        emitBranch(x.condition(), getLIRBlock(x.trueSuccessor()),  getLIRBlock(x.falseSuccessor()), null);
+        emitBranch(x.condition(), getLIRBlock(x.trueSuccessor()), getLIRBlock(x.falseSuccessor()), null);
     }
 
     @Override
@@ -669,10 +684,10 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         return emitCMove(operand(compare.x()), operand(compare.y()), compare.condition(), compare.unorderedIsTrue(), trueValue, falseValue);
     }
 
-
-    public abstract void emitLabel(Label label, boolean align);
     public abstract void emitJump(LabelRef label, LIRFrameState info);
+
     public abstract void emitBranch(Value left, Value right, Condition cond, boolean unorderedIsTrue, LabelRef label, LIRFrameState info);
+
     public abstract Variable emitCMove(Value leftVal, Value right, Condition cond, boolean unorderedIsTrue, Value trueValue, Value falseValue);
 
     protected FrameState stateBeforeCallWithArguments(FrameState stateAfter, MethodCallTargetNode call, int bci) {
@@ -697,7 +712,6 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         }
         return stack;
     }
-
 
     public static int stackSlots(Kind kind) {
         return isTwoSlot(kind) ? 2 : 1;
@@ -744,7 +758,8 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
 
     private static Value toStackKind(Value value) {
         if (value.getKind().getStackKind() != value.getKind()) {
-            // We only have stack-kinds in the LIR, so convert the operand kind for values from the calling convention.
+            // We only have stack-kinds in the LIR, so convert the operand kind for values from the
+            // calling convention.
             if (isRegister(value)) {
                 return asRegister(value).asValue(value.getKind().getStackKind());
             } else if (isStackSlot(value)) {
@@ -772,7 +787,6 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         }
         return result;
     }
-
 
     protected abstract LabelRef createDeoptStub(DeoptimizationAction action, DeoptimizationReason reason, LIRFrameState info, Object deoptInfo);
 
@@ -810,22 +824,26 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         LIRFrameState info = null;
         FrameState stateAfter = x.stateAfter();
         if (stateAfter != null) {
-            // (cwimmer) I made the code that modifies the operand stack conditional. My scenario: runtime calls to, e.g.,
-            // CreateNullPointerException have no equivalent in the bytecodes, so there is no invoke bytecode.
-            // Therefore, the result of the runtime call was never pushed to the stack, and we cannot pop it here.
+            // (cwimmer) I made the code that modifies the operand stack conditional. My scenario:
+            // runtime calls to, e.g.,
+            // CreateNullPointerException have no equivalent in the bytecodes, so there is no invoke
+            // bytecode.
+            // Therefore, the result of the runtime call was never pushed to the stack, and we
+            // cannot pop it here.
             FrameState stateBeforeReturn = stateAfter;
-            if ((stateAfter.stackSize() > 0 && stateAfter.stackAt(stateAfter.stackSize() - 1) == x) ||
-                (stateAfter.stackSize() > 1 && stateAfter.stackAt(stateAfter.stackSize() - 2) == x)) {
+            if ((stateAfter.stackSize() > 0 && stateAfter.stackAt(stateAfter.stackSize() - 1) == x) || (stateAfter.stackSize() > 1 && stateAfter.stackAt(stateAfter.stackSize() - 2) == x)) {
 
                 stateBeforeReturn = stateAfter.duplicateModified(stateAfter.bci, stateAfter.rethrowException(), x.kind());
             }
 
-            // TODO is it correct here that the pointerSlots are not passed to the oop map generation?
+            // TODO is it correct here that the pointerSlots are not passed to the oop map
+            // generation?
             info = stateFor(stateBeforeReturn, -1);
         } else {
             // Every runtime call needs an info
-            // TODO This is conservative. It's not needed for calls that are implemented purely in a stub
-            //       that does not trash any registers and does not call into the runtime.
+            // TODO This is conservative. It's not needed for calls that are implemented purely in a
+            // stub
+            // that does not trash any registers and does not call into the runtime.
             info = state();
         }
 
@@ -837,10 +855,12 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     }
 
     /**
-     * This method tries to create a switch implementation that is optimal for the given switch.
-     * It will either generate a sequential if/then/else cascade, a set of range tests or a table switch.
-     *
-     * If the given switch does not contain int keys, it will always create a sequential implementation.
+     * This method tries to create a switch implementation that is optimal for the given switch. It
+     * will either generate a sequential if/then/else cascade, a set of range tests or a table
+     * switch.
+     * 
+     * If the given switch does not contain int keys, it will always create a sequential
+     * implementation.
      */
     @Override
     public void emitSwitch(SwitchNode x) {
@@ -882,6 +902,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     private void emitSequentialSwitch(final SwitchNode x, Variable key, LabelRef defaultTarget) {
         int keyCount = x.keyCount();
         Integer[] indexes = Util.createSortedPermutation(keyCount, new Comparator<Integer>() {
+
             @Override
             public int compare(Integer o1, Integer o2) {
                 return x.keyProbability(o1) < x.keyProbability(o2) ? 1 : x.keyProbability(o1) > x.keyProbability(o2) ? -1 : 0;
@@ -897,7 +918,9 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     }
 
     protected abstract void emitSequentialSwitch(Constant[] keyConstants, LabelRef[] keyTargets, LabelRef defaultTarget, Value key);
+
     protected abstract void emitSwitchRanges(int[] lowKeys, int[] highKeys, LabelRef[] targets, LabelRef defaultTarget, Value key);
+
     protected abstract void emitTableSwitch(int lowKey, LabelRef defaultTarget, LabelRef[] targets, Value key);
 
     private static int switchRangeCount(SwitchNode x) {
@@ -958,14 +981,22 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     }
 
     public abstract void emitBitCount(Variable result, Value operand);
+
     public abstract void emitBitScanForward(Variable result, Value operand);
+
     public abstract void emitBitScanReverse(Variable result, Value operand);
 
     public abstract void emitMathAbs(Variable result, Variable input);
+
     public abstract void emitMathSqrt(Variable result, Variable input);
+
     public abstract void emitMathLog(Variable result, Variable input, boolean base10);
+
     public abstract void emitMathCos(Variable result, Variable input);
+
     public abstract void emitMathSin(Variable result, Variable input);
+
     public abstract void emitMathTan(Variable result, Variable input);
+
     public abstract void emitByteSwap(Variable result, Value operand);
 }
