@@ -98,14 +98,14 @@ public class SnippetInstaller {
             new SnippetIntrinsificationPhase(si.runtime, si.pool, true).apply(graph);
 
             // need constant propagation for folded methods
-            new CanonicalizerPhase(si.target, si.runtime, si.assumptions).apply(graph);
+            new CanonicalizerPhase(si.runtime, si.assumptions).apply(graph);
 
         }
 
         @Override
         public void afterInline(SnippetInstaller si, StructuredGraph graph) {
             new WordTypeRewriterPhase(si.runtime, si.target.wordKind).apply(graph);
-            new CanonicalizerPhase(si.target, si.runtime, si.assumptions).apply(graph);
+            new CanonicalizerPhase(si.runtime, si.assumptions).apply(graph);
          }
 
         @Override
@@ -116,7 +116,7 @@ public class SnippetInstaller {
 
             new DeadCodeEliminationPhase().apply(graph);
 
-            new CanonicalizerPhase(si.target, si.runtime, si.assumptions).apply(graph);
+            new CanonicalizerPhase(si.runtime, si.assumptions).apply(graph);
 
        }
 
@@ -331,7 +331,7 @@ public class SnippetInstaller {
                 if ((callTarget.invokeKind() == InvokeKind.Static || callTarget.invokeKind() == InvokeKind.Special) && policy.shouldInline(callee, method)) {
                     StructuredGraph targetGraph = parseGraph(callee, policy);
                     InliningUtil.inline(invoke, targetGraph, true);
-                    Debug.dump(graph, "after inlining %s into %s", callee, method);
+                    Debug.dump(graph, "after inlining %s", callee);
                     customizer.afterInline(this, graph);
                 }
             }

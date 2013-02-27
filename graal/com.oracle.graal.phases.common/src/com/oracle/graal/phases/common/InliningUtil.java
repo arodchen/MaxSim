@@ -696,7 +696,8 @@ public class InliningUtil {
                 ResolvedJavaMethod targetMethod = methodCallTarget.targetMethod();
                 ResolvedJavaType leastCommonType = getLeastCommonType();
                 // check if we have a common base type that implements the interface -> in that case
-// we have a vtable entry for the interface method and can use a less expensive virtual call
+                // we have a vtable entry for the interface method and can use a less expensive
+                // virtual call
                 if (!leastCommonType.isInterface() && targetMethod.getDeclaringClass().isAssignableFrom(leastCommonType)) {
                     ResolvedJavaMethod baseClassTargetMethod = leastCommonType.resolveMethod(targetMethod);
                     if (baseClassTargetMethod != null) {
@@ -966,8 +967,6 @@ public class InliningUtil {
             return logNotInlinedMethodAndReturnFalse(invoke, method, "the method's class is not initialized");
         } else if (!method.canBeInlined()) {
             return logNotInlinedMethodAndReturnFalse(invoke, method, "it is marked non-inlinable");
-        } else if (computeInliningLevel(invoke) > GraalOptions.MaximumInlineLevel) {
-            return logNotInlinedMethodAndReturnFalse(invoke, method, "it exceeds the maximum inlining depth");
         } else if (computeRecursiveInliningLevel(invoke.stateAfter(), method) > GraalOptions.MaximumRecursiveInlining) {
             return logNotInlinedMethodAndReturnFalse(invoke, method, "it exceeds the maximum recursive inlining depth");
         } else if (new OptimisticOptimizations(method).lessOptimisticThan(optimisticOpts)) {
