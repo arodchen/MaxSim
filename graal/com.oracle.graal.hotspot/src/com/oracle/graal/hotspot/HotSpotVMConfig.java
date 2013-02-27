@@ -36,6 +36,7 @@ public final class HotSpotVMConfig extends CompilerObject {
     public boolean windowsOs;
     public int codeEntryAlignment;
     public boolean verifyOops;
+    public boolean ciTime;
     public boolean useFastLocking;
     public boolean useTLAB;
     public boolean useBiasedLocking;
@@ -286,6 +287,7 @@ public final class HotSpotVMConfig extends CompilerObject {
     public int layoutHelperLog2ElementSizeMask;
     public int layoutHelperElementTypeShift;
     public int layoutHelperElementTypeMask;
+    public int layoutHelperElementTypePrimitiveInPlace;
     public int layoutHelperHeaderSizeShift;
     public int layoutHelperHeaderSizeMask;
     public int layoutHelperOffset;

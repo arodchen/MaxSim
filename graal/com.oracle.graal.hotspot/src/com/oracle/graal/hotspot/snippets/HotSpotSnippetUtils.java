@@ -442,6 +442,12 @@ public class HotSpotSnippetUtils {
         return config().layoutHelperElementTypeMask;
     }
 
+    @Fold
+    public static int layoutHelperElementTypePrimitiveInPlace() {
+        System.out.println(String.format("%x", config().layoutHelperElementTypePrimitiveInPlace));
+        return config().layoutHelperElementTypePrimitiveInPlace;
+    }
+
     static {
         assert arrayIndexScale(Kind.Byte) == 1;
         assert arrayIndexScale(Kind.Boolean) == 1;
@@ -458,7 +464,7 @@ public class HotSpotSnippetUtils {
 
         // this code is independent from biased locking (although it does not look that way)
         final Word biasedLock = mark.and(biasedLockMaskInPlace());
-        if (biasedLock == Word.unsigned(unlockedMask())) {
+        if (biasedLock.equal(Word.unsigned(unlockedMask()))) {
             probability(FAST_PATH_PROBABILITY);
             int hash = (int) mark.unsignedShiftRight(identityHashCodeShift()).rawValue();
             if (hash != uninitializedIdentityHashCodeValue()) {

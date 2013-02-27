@@ -33,7 +33,7 @@ import com.oracle.graal.nodes.virtual.*;
  * The {@code NewInstanceNode} represents the allocation of an instance class object.
  */
 @NodeInfo(nameTemplate = "New {p#instanceClass/s}")
-public final class NewInstanceNode extends FixedWithNextNode implements VirtualizableAllocation, Lowerable, Node.IterableNodeType {
+public final class NewInstanceNode extends FixedWithNextNode implements Node.IterableNodeType, Canonicalizable, Lowerable, VirtualizableAllocation {
 
     private final ResolvedJavaType instanceClass;
     private final boolean fillContents;
@@ -78,6 +78,15 @@ public final class NewInstanceNode extends FixedWithNextNode implements Virtuali
     }
 
     @Override
+    public ValueNode canonical(CanonicalizerTool tool) {
+        if (usages().isEmpty()) {
+            return null;
+        } else {
+            return this;
+        }
+    }
+
+    @Override
     public void lower(LoweringTool tool) {
         tool.getRuntime().lower(this, tool);
     }
@@ -91,7 +100,7 @@ public final class NewInstanceNode extends FixedWithNextNode implements Virtuali
             for (int i = 0; i < state.length; i++) {
                 state[i] = ConstantNode.defaultForKind(fields[i].getType().getKind(), graph());
             }
-            VirtualObjectNode virtualObject = new VirtualInstanceNode(tool.getNextVirtualId(), instanceClass(), fields);
+            VirtualObjectNode virtualObject = new VirtualInstanceNode(instanceClass(), fields);
             tool.createVirtualObject(virtualObject, state, 0);
             tool.replaceWithVirtual(virtualObject);
         }

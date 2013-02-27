@@ -24,6 +24,7 @@ package com.oracle.graal.virtual.phases.ea;
 
 import static com.oracle.graal.virtual.phases.ea.PartialEscapeAnalysisPhase.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
@@ -38,22 +39,29 @@ class VirtualizerToolImpl implements VirtualizerTool {
     private final GraphEffectList effects;
     private final NodeBitMap usages;
     private final MetaAccessProvider metaAccess;
+    private final Assumptions assumptions;
 
-    VirtualizerToolImpl(GraphEffectList effects, NodeBitMap usages, MetaAccessProvider metaAccess) {
+    VirtualizerToolImpl(GraphEffectList effects, NodeBitMap usages, MetaAccessProvider metaAccess, Assumptions assumptions) {
         this.effects = effects;
         this.usages = usages;
         this.metaAccess = metaAccess;
+        this.assumptions = assumptions;
     }
 
     private boolean deleted;
     private boolean customAction;
     private BlockState state;
     private ValueNode current;
-    private int virtualIds = 0;
+    private int newVirtualObjectCount = 0;
 
     @Override
     public MetaAccessProvider getMetaAccessProvider() {
         return metaAccess;
+    }
+
+    @Override
+    public Assumptions getAssumptions() {
+        return assumptions;
     }
 
     public void reset(BlockState newState, ValueNode newCurrent) {
@@ -71,9 +79,8 @@ class VirtualizerToolImpl implements VirtualizerTool {
         return customAction;
     }
 
-    @Override
-    public int getNextVirtualId() {
-        return virtualIds;
+    public int getNewVirtualObjectCount() {
+        return newVirtualObjectCount;
     }
 
     @Override
@@ -156,7 +163,7 @@ class VirtualizerToolImpl implements VirtualizerTool {
         state.addObject(virtualObject, new ObjectState(virtualObject, entryState, EscapeState.Virtual, lockCount));
         state.addAndMarkAlias(virtualObject, virtualObject, usages);
         PartialEscapeClosure.METRIC_ALLOCATION_REMOVED.increment();
-        virtualIds++;
+        newVirtualObjectCount++;
     }
 
     @Override

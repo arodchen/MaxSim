@@ -74,7 +74,7 @@ public abstract class Node implements Cloneable, Formattable {
 
     /**
      * Denotes that a parameter of an {@linkplain NodeIntrinsic intrinsic} method must be a compile
-     * time constant at all call sites to the intrinic method.
+     * time constant at all call sites to the intrinsic method.
      */
     @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.PARAMETER)
@@ -241,11 +241,9 @@ public abstract class Node implements Cloneable, Formattable {
         return nodeClass;
     }
 
-    // TODO (thomaswue): Do not allow to replace with null.
     private boolean checkReplaceWith(Node other) {
         assert assertFalse(other == this, "cannot replace a node with itself");
         assert assertFalse(isDeleted(), "cannot replace deleted node");
-        // assert assertTrue(other != null, "cannot replace with null node");
         assert assertTrue(other == null || !other.isDeleted(), "cannot replace with deleted node %s", other);
         assert assertTrue(other == null || other.graph() == graph, "cannot replace with node in different graph: %s", other == null ? null : other.graph());
         return true;

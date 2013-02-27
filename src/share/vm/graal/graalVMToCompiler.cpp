@@ -86,15 +86,6 @@ jboolean VMToCompiler::setOption(Handle option) {
   return result.get_jboolean();
 }
 
-void VMToCompiler::setDefaultOptions() {
-  KlassHandle compilerKlass = loadClass(vmSymbols::com_oracle_graal_hotspot_HotSpotOptions());
-
-  Thread* THREAD = Thread::current();
-  JavaValue result(T_VOID);
-  JavaCalls::call_static(&result, compilerKlass, vmSymbols::setDefaultOptions_name(), vmSymbols::void_method_signature(), THREAD);
-  check_pending_exception("Error while calling setDefaultOptions");
-}
-
 jboolean VMToCompiler::compileMethod(Method* method, Handle holder, int entry_bci, jboolean blocking, int priority) {
   assert(method != NULL, "just checking");
   assert(!holder.is_null(), "just checking");
@@ -274,5 +265,21 @@ oop VMToCompiler::createConstantObject(Handle object, TRAPS) {
   JavaCalls::call_static(&result, klass(), vmSymbols::forObject_name(), vmSymbols::createConstantObject_signature(), object, THREAD);
   check_pending_exception("Error while calling Constant.forObject");
   return (oop) result.get_jobject();
+}
+
+oop VMToCompiler::createLocal(Handle name, Handle typeInfo, int bci_start, int bci_end, int slot, Handle holder, TRAPS) {
+  JavaValue result(T_OBJECT);
+  JavaCallArguments args;
+  args.push_oop(instance());
+  args.push_oop(name);
+  args.push_oop(typeInfo);
+  args.push_oop(holder);
+  args.push_int(bci_start);
+  args.push_int(bci_end);
+  args.push_int(slot);
+  JavaCalls::call_interface(&result, vmToCompilerKlass(), vmSymbols::createLocalImpl_name(), vmSymbols::createLocalImpl_signature(), &args, THREAD);
+  check_pending_exception("Error while calling createConstantFloat");
+  return (oop) result.get_jobject();
+
 }
 

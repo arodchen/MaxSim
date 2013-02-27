@@ -24,6 +24,9 @@
 package com.oracle.graal.hotspot.bridge;
 
 import static com.oracle.graal.graph.UnsafeAccess.*;
+import static com.oracle.graal.hotspot.CompilationTask.*;
+import static com.oracle.graal.java.GraphBuilderPhase.*;
+import static com.oracle.graal.phases.common.InliningUtil.*;
 
 import java.io.*;
 import java.lang.reflect.*;
@@ -37,6 +40,7 @@ import com.oracle.graal.compiler.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.debug.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.phases.*;
 import com.oracle.graal.java.*;
@@ -71,6 +75,8 @@ public class VMToCompilerImpl implements VMToCompiler {
 
     private PrintStream log = System.out;
 
+    private boolean quietMeterAndTime;
+
     public VMToCompilerImpl(HotSpotGraalRuntime compiler) {
         this.graalRuntime = compiler;
 
@@ -93,7 +99,8 @@ public class VMToCompilerImpl implements VMToCompiler {
 
     public void startCompiler() throws Throwable {
 
-        long offset = HotSpotGraalRuntime.getInstance().getConfig().graalMirrorInClassOffset;
+        HotSpotVMConfig config = graalRuntime.getConfig();
+        long offset = config.graalMirrorInClassOffset;
         initMirror(typeBoolean, offset);
         initMirror(typeChar, offset);
         initMirror(typeFloat, offset);
@@ -121,6 +128,13 @@ public class VMToCompilerImpl implements VMToCompiler {
             }
         }
 
+        if (config.ciTime) {
+            quietMeterAndTime = (GraalOptions.Meter == null && GraalOptions.Time == null);
+            GraalOptions.Debug = true;
+            GraalOptions.Meter = "";
+            GraalOptions.Time = "";
+        }
+
         if (GraalOptions.Debug) {
             Debug.enable();
             if (GraalOptions.DebugSnippets) {
@@ -145,6 +159,10 @@ public class VMToCompilerImpl implements VMToCompiler {
                 }
             });
 
+        }
+
+        if (GraalOptions.DebugSnippets) {
+            phaseTransition("snippets");
         }
 
         // Create compilation queue.
@@ -177,6 +195,19 @@ public class VMToCompilerImpl implements VMToCompiler {
             };
             t.setDaemon(true);
             t.start();
+        }
+    }
+
+    /**
+     * Take action related to entering a new execution phase.
+     * 
+     * @param phase the execution phase being entered
+     */
+    protected void phaseTransition(String phase) {
+        CompilationStatistics.clear(phase);
+        if (graalRuntime.getConfig().ciTime) {
+            parsedBytecodesPerSecond = MetricRateInPhase.snapshot(phase, parsedBytecodesPerSecond, BytecodesParsed, CompilationTime, TimeUnit.SECONDS);
+            inlinedBytecodesPerSecond = MetricRateInPhase.snapshot(phase, inlinedBytecodesPerSecond, InlinedBytecodes, CompilationTime, TimeUnit.SECONDS);
         }
     }
 
@@ -239,7 +270,9 @@ public class VMToCompilerImpl implements VMToCompiler {
                 }
             }
         } while ((System.currentTimeMillis() - startTime) <= GraalOptions.TimedBootstrap);
-        CompilationStatistics.clear("bootstrap");
+
+        phaseTransition("bootstrap");
+
         bootstrapRunning = false;
 
         TTY.println(" in %d ms", System.currentTimeMillis() - startTime);
@@ -247,8 +280,11 @@ public class VMToCompilerImpl implements VMToCompiler {
             graalRuntime.getCache().clear();
         }
         System.gc();
-        CompilationStatistics.clear("bootstrap2");
+        phaseTransition("bootstrap2");
     }
+
+    private MetricRateInPhase parsedBytecodesPerSecond;
+    private MetricRateInPhase inlinedBytecodesPerSecond;
 
     private void enqueue(Method m) throws Throwable {
         JavaMethod javaMethod = graalRuntime.getRuntime().lookupJavaMethod(m);
@@ -276,7 +312,7 @@ public class VMToCompilerImpl implements VMToCompiler {
             CompilationTask.withinEnqueue.set(Boolean.FALSE);
         }
 
-        if (Debug.isEnabled()) {
+        if (Debug.isEnabled() && !quietMeterAndTime) {
             List<DebugValueMap> topLevelMaps = DebugValueMap.getTopLevelMaps();
             List<DebugValue> debugValues = KeyRegistry.getDebugValues();
             if (debugValues.size() > 0) {
@@ -298,9 +334,7 @@ public class VMToCompilerImpl implements VMToCompiler {
                         if (GraalOptions.SummarizePerPhase) {
                             flattenChildren(map, globalMap);
                         } else {
-                            for (DebugValueMap child : map.getChildren()) {
-                                globalMap.addChild(child);
-                            }
+                            globalMap.addChild(map);
                         }
                     }
                     if (!GraalOptions.SummarizePerPhase) {
@@ -311,7 +345,13 @@ public class VMToCompilerImpl implements VMToCompiler {
                 }
             }
         }
-        CompilationStatistics.clear("final");
+        phaseTransition("final");
+
+        if (graalRuntime.getConfig().ciTime) {
+            parsedBytecodesPerSecond.printAll("ParsedBytecodesPerSecond");
+            inlinedBytecodesPerSecond.printAll("InlinedBytecodesPerSecond");
+        }
+
         SnippetCounter.printGroups(TTY.out().out());
     }
 
@@ -332,6 +372,18 @@ public class VMToCompilerImpl implements VMToCompiler {
             result.setCurrentValue(index, total);
         }
         printMap(result, debugValues, 0);
+    }
+
+    static long collectTotal(DebugValue value) {
+        List<DebugValueMap> maps = DebugValueMap.getTopLevelMaps();
+        long total = 0;
+        for (int i = 0; i < maps.size(); i++) {
+            DebugValueMap map = maps.get(i);
+            int index = value.getIndex();
+            total += map.getCurrentValue(index);
+            total += collectTotal(map.getChildren(), index);
+        }
+        return total;
     }
 
     private static long collectTotal(List<DebugValueMap> maps, int index) {
@@ -555,6 +607,11 @@ public class VMToCompilerImpl implements VMToCompiler {
     @Override
     public Constant createConstantObject(Object object) {
         return Constant.forObject(object);
+    }
+
+    @Override
+    public LocalImpl createLocalImpl(String name, String type, HotSpotResolvedObjectType holder, int bciStart, int bciEnd, int slot) {
+        return new LocalImpl(name, type, holder, bciStart, bciEnd, slot);
     }
 
     public PhasePlan createPhasePlan(OptimisticOptimizations optimisticOpts, boolean onStackReplacement) {

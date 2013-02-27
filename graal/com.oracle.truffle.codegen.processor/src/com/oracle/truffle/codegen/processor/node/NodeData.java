@@ -126,26 +126,17 @@ public class NodeData extends Template {
         return executableTypes;
     }
 
-    public ExecutableTypeData findGenericExecutableType(ProcessorContext context) {
+    public ExecutableTypeData findGenericExecutableType(ProcessorContext context, TypeData type) {
         List<ExecutableTypeData> types = findGenericExecutableTypes(context);
-        if (types.size() == 1) {
-            return types.get(0);
-        } else {
-            ExecutableTypeData execType = null;
-            for (ExecutableTypeData type : types) {
-                if (!type.getReturnType().getActualTypeData(getTypeSystem()).isVoid()) {
-                    if (execType != null) {
-                        // multiple generic types not allowed
-                        return null;
-                    }
-                    execType = type;
-                }
+        for (ExecutableTypeData availableType : types) {
+            if (Utils.typeEquals(availableType.getType().getBoxedType(), type.getBoxedType())) {
+                return availableType;
             }
-            return execType;
         }
+        return null;
     }
 
-    private List<ExecutableTypeData> findGenericExecutableTypes(ProcessorContext context) {
+    public List<ExecutableTypeData> findGenericExecutableTypes(ProcessorContext context) {
         List<ExecutableTypeData> types = new ArrayList<>();
         for (ExecutableTypeData type : executableTypes) {
             if (!type.hasUnexpectedValue(context)) {
@@ -280,25 +271,12 @@ public class NodeData extends Template {
         return specializations;
     }
 
-    // @formatter:off
     public String dump() {
         StringBuilder b = new StringBuilder();
-        b.append(String.format("[name = %s\n" +
-                        "  typeSystem = %s\n" +
-                        "  fields = %s\n" +
-                        "  types = %s\n" +
-                        "  specializations = %s\n" +
-                        "  guards = %s\n" +
-                        "]", Utils.getQualifiedName(getTemplateType()),
-                            getTypeSystem(),
-                            dumpList(fields),
-                            dumpList(getExecutableTypes()),
-                            dumpList(getSpecializations()),
-                            dumpList(guards)
-                        ));
+        b.append(String.format("[name = %s\n" + "  typeSystem = %s\n" + "  fields = %s\n" + "  types = %s\n" + "  specializations = %s\n" + "  guards = %s\n" + "]",
+                        Utils.getQualifiedName(getTemplateType()), getTypeSystem(), dumpList(fields), dumpList(getExecutableTypes()), dumpList(getSpecializations()), dumpList(guards)));
         return b.toString();
     }
-    // @formatter:on
 
     private static String dumpList(Object[] array) {
         if (array == null) {

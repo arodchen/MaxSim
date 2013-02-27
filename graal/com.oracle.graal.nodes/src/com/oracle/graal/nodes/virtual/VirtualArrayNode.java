@@ -34,8 +34,7 @@ public class VirtualArrayNode extends VirtualObjectNode {
     private final ResolvedJavaType componentType;
     private final int length;
 
-    public VirtualArrayNode(long virtualId, ResolvedJavaType componentType, int length) {
-        super(virtualId);
+    public VirtualArrayNode(ResolvedJavaType componentType, int length) {
         this.componentType = componentType;
         this.length = length;
     }
@@ -132,5 +131,10 @@ public class VirtualArrayNode extends VirtualObjectNode {
     public Kind entryKind(int index) {
         assert index >= 0 && index < length;
         return componentType.getKind();
+    }
+
+    @Override
+    public VirtualArrayNode duplicate() {
+        return new VirtualArrayNode(componentType, length);
     }
 }

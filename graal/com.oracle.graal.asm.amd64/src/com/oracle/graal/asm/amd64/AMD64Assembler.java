@@ -201,7 +201,7 @@ public class AMD64Assembler extends AbstractAssembler {
         emitByte(op2 | encode(dst) << 3 | encode(src));
     }
 
-    private void emitOperandHelper(Register reg, Address addr) {
+    protected void emitOperandHelper(Register reg, Address addr) {
         Register base = isLegal(addr.getBase()) ? asRegister(addr.getBase()) : Register.None;
         Register index = isLegal(addr.getIndex()) ? asRegister(addr.getIndex()) : Register.None;
 
@@ -2861,6 +2861,12 @@ public class AMD64Assembler extends AbstractAssembler {
     public final void testq(Register dst, Register src) {
         prefixqAndEncode(dst.encoding, src.encoding);
         emitArith(0x85, 0xC0, dst, src);
+    }
+
+    public final void testq(Register dst, Address src) {
+        prefixq(src, dst);
+        emitByte(0x85);
+        emitOperandHelper(dst, src);
     }
 
     public final void xaddq(Address dst, Register src) {

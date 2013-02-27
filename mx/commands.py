@@ -786,7 +786,7 @@ def gate(args):
             tasks.append(t.stop())
         
         t = Task('BuildJava')
-        build(['--no-native'])
+        build(['--no-native', '--jdt-warning-as-error'])
         tasks.append(t.stop())
         
         if exists('jacoco.exec'):
@@ -925,7 +925,11 @@ def bench(args):
             mx.abort('-resultfile must be followed by a file name')
     vm = _vm
     if len(args) is 0:
-        args += ['all']
+        args = ['all']
+
+    def benchmarks_in_group(group):
+        prefix = group + ':'
+        return [a[len(prefix):] for a in args if a.startswith(prefix)]
 
     results = {}
     benchmarks = []
@@ -933,20 +937,20 @@ def bench(args):
     if ('dacapo' in args or 'all' in args):
         benchmarks += sanitycheck.getDacapos(level=sanitycheck.SanityCheckLevel.Benchmark)
     else:
-        dacapos = [a[7:] for a in args if a.startswith('dacapo:')]
+        dacapos = benchmarks_in_group('dacapo')
         for dacapo in dacapos:
             if dacapo not in sanitycheck.dacapoSanityWarmup.keys():
-                mx.abort('Unknown dacapo : ' + dacapo)
+                mx.abort('Unknown DaCapo : ' + dacapo)
             benchmarks += [sanitycheck.getDacapo(dacapo, sanitycheck.dacapoSanityWarmup[dacapo][sanitycheck.SanityCheckLevel.Benchmark])]
 
     if ('scaladacapo' in args or 'all' in args):
         benchmarks += sanitycheck.getScalaDacapos(level=sanitycheck.SanityCheckLevel.Benchmark)
     else:
-        dacapos = [a[7:] for a in args if a.startswith('scaladacapo:')]
-        for dacapo in dacapos:
-            if dacapo not in sanitycheck.dacapoScalaSanityWarmup.keys():
-                mx.abort('Unknown dacapo : ' + dacapo)
-            benchmarks += [sanitycheck.getScalaDacapo(dacapo, sanitycheck.dacapoScalaSanityWarmup[dacapo][sanitycheck.SanityCheckLevel.Benchmark])]
+        scaladacapos = benchmarks_in_group('scaladacapo')
+        for scaladacapo in scaladacapos:
+            if scaladacapo not in sanitycheck.dacapoScalaSanityWarmup.keys():
+                mx.abort('Unknown Scala DaCapo : ' + scaladacapo)
+            benchmarks += [sanitycheck.getScalaDacapo(scaladacapo, sanitycheck.dacapoScalaSanityWarmup[scaladacapo][sanitycheck.SanityCheckLevel.Benchmark])]
 
     #Bootstrap
     if ('bootstrap' in args or 'all' in args):
@@ -955,18 +959,20 @@ def bench(args):
     if ('specjvm2008' in args or 'all' in args):
         benchmarks += [sanitycheck.getSPECjvm2008([], False, True, 120, 120)]
     else:
-        specjvms = [a[12:] for a in args if a.startswith('specjvm2008:')]
+        specjvms = benchmarks_in_group('specjvm2008')
         for specjvm in specjvms:
             benchmarks += [sanitycheck.getSPECjvm2008([specjvm], False, True, 120, 120)]
             
     if ('specjbb2005' in args or 'all' in args):
         benchmarks += [sanitycheck.getSPECjbb2005()]
+        
+    if ('specjbb2013' in args): # or 'all' in args //currently not in default set
+        benchmarks += [sanitycheck.getSPECjbb2013()]
 
     for test in benchmarks:
-        for (group, res) in test.bench(vm).items():
-            if not results.has_key(group):
-                results[group] = {};
-            results[group].update(res)
+        for (groupName, res) in test.bench(vm).items():
+            group = results.setdefault(groupName, {})
+            group.update(res)
     mx.log(json.dumps(results))
     if resultFile:
         with open(resultFile, 'w') as f:
@@ -1146,7 +1152,7 @@ def mx_init(suite):
     mx.add_argument('--jacoco', help='instruments com.oracle.* classes using JaCoCo', default='off', choices=['off', 'on', 'append'])
 
     if (_vmSourcesAvailable):
-        mx.add_argument('--vm', action='store', dest='vm', default='graal', choices=['graal', 'server', 'client'], help='the VM to build/run (default: graal)')
+        mx.add_argument('--vm', action='store', dest='vm', default='graal', choices=['graal', 'server', 'client', 'server0'], help='the VM to build/run (default: graal)')
         mx.add_argument('--product', action='store_const', dest='vmbuild', const='product', help='select the product build of the VM')
         mx.add_argument('--debug', action='store_const', dest='vmbuild', const='debug', help='select the debug build of the VM')
         mx.add_argument('--fastdebug', action='store_const', dest='vmbuild', const='fastdebug', help='select the fast debug build of the VM')
@@ -1163,13 +1169,22 @@ def mx_init(suite):
     mx.update_commands(suite, commands)
 
 def mx_post_parse_cmd_line(opts):
-    version = mx.java().version
+    version = mx.java().version.split('-')[0]
     parts = version.split('.')
     assert len(parts) >= 2
     assert parts[0] == '1'
     major = int(parts[1])
-    if not major >= 7:
-        mx.abort('Requires Java version 1.7 or greater, got version ' + version)
+    minor = 0
+    update = 0
+    if len(parts) >= 3:
+        minorParts = parts[2].split('_')
+        if len(minorParts) >= 1:
+            minor = int(minorParts[0])
+        if len(minorParts) >= 2:
+            update = int(minorParts[1])
+    
+    if (not major >= 7) or (major == 7 and minor == 0 and not update >= 4) :
+        mx.abort('Requires Java version 1.7.0_04 or greater, got version ' + version)
 
     if (_vmSourcesAvailable):
         if hasattr(opts, 'vm') and opts.vm is not None:

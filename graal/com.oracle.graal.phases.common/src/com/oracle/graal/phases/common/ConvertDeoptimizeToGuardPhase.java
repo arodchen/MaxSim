@@ -79,7 +79,7 @@ public class ConvertDeoptimizeToGuardPhase extends Phase {
         } else if (deoptBegin.predecessor() instanceof IfNode) {
             IfNode ifNode = (IfNode) deoptBegin.predecessor();
             BeginNode otherBegin = ifNode.trueSuccessor();
-            BooleanNode conditionNode = ifNode.condition();
+            LogicNode conditionNode = ifNode.condition();
             if (conditionNode instanceof InstanceOfNode) {
                 // TODO The lowering currently does not support a FixedGuard as the usage of an
                 // InstanceOfNode. Relax this restriction.
@@ -93,7 +93,7 @@ public class ConvertDeoptimizeToGuardPhase extends Phase {
             BeginNode ifBlockBegin = findBeginNode(ifNode);
             Debug.log("Converting %s on %-5s branch of %s to guard for remaining branch %s. IfBegin=%s", deopt, deoptBegin == ifNode.trueSuccessor() ? "true" : "false", ifNode, otherBegin,
                             ifBlockBegin);
-            FixedGuardNode guard = graph.add(new FixedGuardNode(conditionNode, deopt.reason(), deopt.action(), negated, deopt.leafGraphId()));
+            FixedGuardNode guard = graph.add(new FixedGuardNode(conditionNode, deopt.reason(), deopt.action(), negated));
             otherBegin.replaceAtUsages(ifBlockBegin);
             FixedNode next = otherBegin.next();
             otherBegin.setNext(null);

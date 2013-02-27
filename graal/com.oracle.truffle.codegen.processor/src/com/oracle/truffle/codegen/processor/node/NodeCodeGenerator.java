@@ -58,6 +58,16 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
     }
 
     private static String nodeClassName(SpecializationData specialization) {
+        String name = specializationId(specialization);
+        name += nodeClassName(specialization.getNode());
+        if (name.equals(Utils.getSimpleName(specialization.getNode().getNodeType())) || name.equals(Utils.getSimpleName(specialization.getNode().getTemplateType()))) {
+            name = name + "Impl";
+        }
+
+        return name;
+    }
+
+    private static String specializationId(SpecializationData specialization) {
         String name = "";
         if (specialization.getNode().getSpecializations().length > 1) {
             name = specialization.getMethodName();
@@ -65,11 +75,6 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
                 name = name.substring(2);
             }
         }
-        name += nodeClassName(specialization.getNode());
-        if (name.equals(Utils.getSimpleName(specialization.getNode().getNodeType())) || name.equals(Utils.getSimpleName(specialization.getNode().getTemplateType()))) {
-            name = name + "Impl";
-        }
-
         return name;
     }
 
@@ -145,6 +150,27 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
         }
         body.string(".");
         body.startCall(method.getMethodName());
+    }
+
+    private static String generatedGenericMethodName(SpecializationData specialization) {
+        final String prefix = "generic";
+
+        if (specialization == null) {
+            return prefix;
+        }
+
+        SpecializationData prev = null;
+        for (SpecializationData current : specialization.getNode().getSpecializations()) {
+            if (specialization == current) {
+                if (prev == null || prev.isUninitialized()) {
+                    return prefix;
+                } else {
+                    return prefix + specializationId(current);
+                }
+            }
+            prev = current;
+        }
+        return prefix;
     }
 
     private static void startCallTypeSystemMethod(ProcessorContext context, CodeTreeBuilder body, NodeData node, String methodName) {
@@ -288,7 +314,11 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
 
                 if (node.needsRewrites(getContext())) {
                     clazz.add(createSpecializeMethod(node));
-                    clazz.add(createGeneratedGenericMethod(node));
+
+                    List<CodeExecutableElement> genericMethods = createGeneratedGenericMethod(node);
+                    for (CodeExecutableElement method : genericMethods) {
+                        clazz.add(method);
+                    }
                 }
 
                 for (SpecializationData specialization : node.getSpecializations()) {
@@ -421,35 +451,62 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             return method;
         }
 
-        private CodeExecutableElement createGeneratedGenericMethod(NodeData node) {
-            CodeExecutableElement method = new CodeExecutableElement(modifiers(PRIVATE, STATIC), node.getGenericSpecialization().getReturnType().getActualType(), "generatedGeneric");
-            method.addParameter(new CodeVariableElement(node.getNodeType(), THIS_NODE_LOCAL_VAR_NAME));
-            addValueParameters(method, node.getGenericSpecialization(), true);
+        private List<CodeExecutableElement> createGeneratedGenericMethod(NodeData node) {
+            TypeMirror genericReturnType = node.getGenericSpecialization().getReturnType().getActualType();
+            if (node.getGenericSpecialization().isUseSpecializationsForGeneric()) {
+                List<CodeExecutableElement> methods = new ArrayList<>();
 
-            CodeTreeBuilder builder = method.createBuilder();
-            boolean ifStarted = false;
-            for (int i = 0; i < node.getSpecializations().length; i++) {
-                SpecializationData specialization = node.getSpecializations()[i];
-                if (specialization.isUninitialized()) {
-                    continue;
-                }
-                if (!specialization.isGeneric()) {
-                    if (!ifStarted) {
-                        builder.startIf();
-                        ifStarted = true;
+                SpecializationData[] specializations = node.getSpecializations();
+                SpecializationData prev = null;
+                for (int i = 0; i < specializations.length; i++) {
+                    SpecializationData current = specializations[i];
+                    SpecializationData next = i + 1 < specializations.length ? specializations[i + 1] : null;
+                    if (prev == null || current.isUninitialized()) {
+                        prev = current;
+                        continue;
                     } else {
-                        builder.startElseIf();
+                        String methodName = generatedGenericMethodName(current);
+                        CodeExecutableElement method = new CodeExecutableElement(modifiers(PRIVATE, STATIC), genericReturnType, methodName);
+                        method.addParameter(new CodeVariableElement(node.getNodeType(), THIS_NODE_LOCAL_VAR_NAME));
+                        addValueParameters(method, node.getGenericSpecialization(), true);
+
+                        emitGeneratedGenericSpecialization(method.createBuilder(), current, next);
+
+                        methods.add(method);
                     }
-                    emitGuards(getContext(), builder, "", specialization, false, true);
-                    builder.end().startBlock();
-                } else {
-                    builder.startElseBlock();
+                    prev = current;
                 }
 
-                emitInvokeDoMethod(builder, specialization, 0);
+                return methods;
+            } else {
+                CodeExecutableElement method = new CodeExecutableElement(modifiers(PRIVATE, STATIC), genericReturnType, generatedGenericMethodName(null));
+                method.addParameter(new CodeVariableElement(node.getNodeType(), THIS_NODE_LOCAL_VAR_NAME));
+                addValueParameters(method, node.getGenericSpecialization(), true);
+                emitInvokeDoMethod(method.createBuilder(), node.getGenericSpecialization(), 0);
+                return Arrays.asList(method);
+            }
+        }
+
+        private void emitGeneratedGenericSpecialization(CodeTreeBuilder builder, SpecializationData current, SpecializationData next) {
+            if (next != null) {
+                builder.startIf();
+                emitGuards(context, builder, "", current, false, true);
+                builder.end().startBlock();
+            }
+
+            emitInvokeDoMethod(builder, current, 0);
+
+            if (next != null) {
+                builder.end();
+                builder.startElseBlock();
+
+                builder.startReturn().startCall(generatedGenericMethodName(next));
+                builder.string(THIS_NODE_LOCAL_VAR_NAME);
+                addValueParameterNames(builder, next, null, true);
+                builder.end().end();
+
                 builder.end();
             }
-            return method;
         }
 
         private void emitInvokeDoMethod(CodeTreeBuilder builder, SpecializationData specialization, int level) {
@@ -466,7 +523,11 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             if (specialization.getExceptions().length > 0) {
                 for (SpecializationThrowsData exception : specialization.getExceptions()) {
                     builder.end().startCatchBlock(exception.getJavaClass(), "ex" + level);
-                    emitInvokeDoMethod(builder, exception.getTransitionTo(), level + 1);
+
+                    builder.startReturn().startCall(generatedGenericMethodName(exception.getTransitionTo()));
+                    builder.string(THIS_NODE_LOCAL_VAR_NAME);
+                    addValueParameterNames(builder, exception.getTransitionTo(), null, true);
+                    builder.end().end();
                 }
                 builder.end();
             }
@@ -529,57 +590,77 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             NodeData node = specialization.getNode();
             TypeSystemData typeSystem = node.getTypeSystem();
 
-            if (!type.isVoid()) {
-                builder.startStatement().type(specialization.getReturnType().getActualType()).string(" result").end();
-            }
-
+            ExecutableTypeData castedType = node.findExecutableType(type);
             TypeData primaryType = specialization.getReturnType().getActualTypeData(typeSystem);
             ExecutableTypeData execType = specialization.getNode().findExecutableType(primaryType);
 
-            boolean needsTry = !specialization.getReturnType().getActualTypeData(typeSystem).isGeneric();
+            boolean needsTry = execType.hasUnexpectedValue(getContext());
+            boolean returnVoid = type.isVoid();
+
+            CodeTree primaryExecuteCall = null;
+
+            CodeTreeBuilder executeBuilder = CodeTreeBuilder.createBuilder();
+            buildExecute(executeBuilder, null, execType);
+            primaryExecuteCall = executeBuilder.getRoot();
+
             if (needsTry) {
+                if (!returnVoid) {
+                    builder.declaration(primaryType.getPrimitiveType(), "value");
+                }
                 builder.startTryBlock();
-            }
 
-            builder.startStatement();
-            if (!type.isVoid()) {
-                builder.string("result = ");
-            }
-            buildExecute(builder, null, execType);
-            builder.end(); // statement
-
-            if (needsTry) {
-                builder.end().startCatchBlock(getUnexpectedValueException(), "ex");
-
-                if (!type.isVoid()) {
-                    builder.startReturn();
-                    if (!type.isGeneric()) {
-                        startCallTypeSystemMethod(getContext(), builder, node, TypeSystemCodeGenerator.expectTypeMethodName(type));
-                    }
-
-                    builder.string("ex.getResult()");
-
-                    if (!type.isGeneric()) {
-                        builder.end().end();
-                    }
-                    builder.end(); // return
+                if (returnVoid) {
+                    builder.statement(primaryExecuteCall);
                 } else {
-                    builder.string("// ignore").newLine();
+                    builder.startStatement();
+                    builder.string("value = ");
+                    builder.tree(primaryExecuteCall);
+                    builder.end();
                 }
-            }
-            builder.end(); // try/catch
 
-            if (!type.isVoid()) {
-                builder.startReturn();
-                if (!type.isGeneric()) {
-                    startCallTypeSystemMethod(getContext(), builder, node, TypeSystemCodeGenerator.expectTypeMethodName(type));
+                builder.end().startCatchBlock(getUnexpectedValueException(), "ex");
+                if (returnVoid) {
+                    builder.string("// ignore").newLine();
+                } else {
+                    builder.startReturn();
+                    builder.tree(castPrimaryExecute(node, castedType, CodeTreeBuilder.singleString("ex.getResult()")));
+                    builder.end();
                 }
-                builder.string("result");
-                if (!type.isGeneric()) {
-                    builder.end().end();
+                builder.end();
+
+                if (!returnVoid) {
+                    builder.startReturn();
+                    builder.tree(castPrimaryExecute(node, castedType, CodeTreeBuilder.singleString("value")));
+                    builder.end();
                 }
-                builder.end(); // return
+            } else {
+                if (returnVoid) {
+                    builder.statement(primaryExecuteCall);
+                } else {
+                    builder.startReturn();
+                    builder.tree(castPrimaryExecute(node, castedType, primaryExecuteCall));
+                    builder.end();
+                }
             }
+        }
+
+        private CodeTree castPrimaryExecute(NodeData node, ExecutableTypeData castedType, CodeTree value) {
+            if (castedType.getType().isVoid()) {
+                return value;
+            }
+            if (castedType.getType().isGeneric()) {
+                return value;
+            }
+
+            CodeTreeBuilder builder = CodeTreeBuilder.createBuilder();
+            if (castedType.hasUnexpectedValue(getContext())) {
+                startCallTypeSystemMethod(getContext(), builder, node, TypeSystemCodeGenerator.expectTypeMethodName(castedType.getType()));
+            } else {
+                startCallTypeSystemMethod(getContext(), builder, node, TypeSystemCodeGenerator.asTypeMethodName(castedType.getType()));
+            }
+            builder.tree(value);
+            builder.end().end();
+            return builder.getRoot();
         }
 
         private void buildFunctionalExecuteMethod(CodeTreeBuilder builder, SpecializationData specialization) {
@@ -633,7 +714,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             }
 
             if ((specialization.isUninitialized() || specialization.isGeneric()) && node.needsRewrites(getContext())) {
-                builder.startReturn().startCall(factoryClassName(node), "generatedGeneric");
+                builder.startReturn().startCall(factoryClassName(node), generatedGenericMethodName(null));
                 builder.string("this");
                 addValueParameterNames(builder, specialization, null, true);
                 builder.end().end();
@@ -653,20 +734,20 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             if (specialization.getExceptions().length > 0) {
                 for (SpecializationThrowsData exception : specialization.getExceptions()) {
                     builder.end().startCatchBlock(exception.getJavaClass(), "ex");
-                    buildThrowSpecialize(builder, exception.getTransitionTo(), null);
+                    buildThrowSpecialize(builder, specialization, exception.getTransitionTo(), null);
                 }
                 builder.end();
             }
             if (specialization.hasDynamicGuards()) {
                 builder.end().startElseBlock();
-                buildThrowSpecialize(builder, specialization.findNextSpecialization(), null);
+                buildThrowSpecialize(builder, specialization, specialization.findNextSpecialization(), null);
                 builder.end();
             }
         }
 
         private void buildGenericValueExecute(CodeTreeBuilder builder, SpecializationData specialization, NodeFieldData field, NodeFieldData exceptionSpec) {
             ActualParameter specParameter = specialization.findParameter(field.getName());
-
+            NodeData node = specialization.getNode();
             boolean shortCircuit = startShortCircuit(builder, specialization, field, exceptionSpec);
 
             builder.startStatement();
@@ -677,7 +758,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
 
             builder.string(valueName(specialization, specParameter));
             builder.string(" = ");
-            ExecutableTypeData genericExecutableType = field.getNodeData().findGenericExecutableType(getContext());
+            ExecutableTypeData genericExecutableType = field.getNodeData().findGenericExecutableType(getContext(), specParameter.getActualTypeData(node.getTypeSystem()));
             if (genericExecutableType == null) {
                 throw new AssertionError("Must have generic executable type. Parser validation most likely failed. " + Arrays.toString(field.getNodeData().getExecutableTypes()));
             }
@@ -737,7 +818,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
                         execute = true;
                     }
                 }
-                buildThrowSpecialize(builder, specialization.findNextSpecialization(), param.getSpecification());
+                buildThrowSpecialize(builder, specialization, specialization.findNextSpecialization(), param.getSpecification());
                 builder.end(); // catch block
             }
 
@@ -785,7 +866,7 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             }
         }
 
-        private void buildThrowSpecialize(CodeTreeBuilder builder, SpecializationData nextSpecialization, ParameterSpec exceptionSpec) {
+        private void buildThrowSpecialize(CodeTreeBuilder builder, SpecializationData currentSpecialization, SpecializationData nextSpecialization, ParameterSpec exceptionSpec) {
             boolean canThrowUnexpected = Utils.canThrowType(builder.findMethod().getThrownTypes(), getContext().getTruffleTypes().getUnexpectedValueException());
 
             CodeTreeBuilder specializeCall = CodeTreeBuilder.createBuilder();
@@ -794,14 +875,22 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             addValueParameterNames(specializeCall, nextSpecialization.getNode().getGenericSpecialization(), exceptionSpec != null ? exceptionSpec.getName() : null, true);
             specializeCall.end().end();
 
+            TypeData expectedType = currentSpecialization.getReturnType().getActualTypeData(currentSpecialization.getNode().getTypeSystem());
             if (canThrowUnexpected) {
-                builder.startThrow();
-                builder.startNew(getContext().getTruffleTypes().getUnexpectedValueException());
+                builder.startReturn();
+                startCallTypeSystemMethod(context, builder, currentSpecialization.getNode(), TypeSystemCodeGenerator.expectTypeMethodName(expectedType));
                 builder.tree(specializeCall.getRoot());
                 builder.end().end();
+                builder.end(); // return
             } else {
                 builder.startReturn();
-                builder.tree(specializeCall.getRoot());
+                if (!expectedType.isVoid() && !expectedType.isGeneric()) {
+                    startCallTypeSystemMethod(context, builder, currentSpecialization.getNode(), TypeSystemCodeGenerator.asTypeMethodName(expectedType));
+                    builder.tree(specializeCall.getRoot());
+                    builder.end().end();
+                } else {
+                    builder.tree(specializeCall.getRoot());
+                }
                 builder.end();
             }
 
@@ -830,15 +919,17 @@ public class NodeCodeGenerator extends CompilationUnitFactory<NodeData> {
             builder.end(); // call replace
             builder.end(); // statement
 
-            ExecutableElement generatedGeneric = clazz.getEnclosingClass().getMethod("generatedGeneric");
+            String generatedMethodName = generatedGenericMethodName(specialization.findNextSpecialization());
+
+            ExecutableElement generatedGeneric = clazz.getEnclosingClass().getMethod(generatedMethodName);
 
             CodeTreeBuilder genericBuilder = CodeTreeBuilder.createBuilder();
-            genericBuilder.startCall(factoryClassName(specialization.getNode()), "generatedGeneric");
+            genericBuilder.startCall(factoryClassName(specialization.getNode()), generatedMethodName);
             genericBuilder.string("this");
             addValueParameterNames(genericBuilder, specialization.getNode().getGenericSpecialization(), null, true);
             genericBuilder.end(); // call generated generic
 
-            if (Utils.isVoid(generatedGeneric.getReturnType())) {
+            if (generatedGeneric != null && Utils.isVoid(generatedGeneric.getReturnType())) {
                 builder.declaration(generatedGeneric.getReturnType(), "genericResult", genericBuilder.getRoot());
                 builder.startReturn().string("null").end();
             } else {

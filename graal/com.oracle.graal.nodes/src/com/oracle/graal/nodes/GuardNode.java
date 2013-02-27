@@ -44,29 +44,27 @@ import com.oracle.graal.nodes.type.*;
 @NodeInfo(nameTemplate = "Guard(!={p#negated}) {p#reason/s}")
 public final class GuardNode extends FloatingNode implements Canonicalizable, LIRLowerable, Node.IterableNodeType, Negatable {
 
-    @Input private BooleanNode condition;
+    @Input private LogicNode condition;
     private final DeoptimizationReason reason;
     private final DeoptimizationAction action;
     private boolean negated;
-    private final long leafGraphId;
 
-    public GuardNode(BooleanNode condition, FixedNode anchor, DeoptimizationReason reason, DeoptimizationAction action, boolean negated, long leafGraphId) {
+    public GuardNode(LogicNode condition, FixedNode anchor, DeoptimizationReason reason, DeoptimizationAction action, boolean negated) {
         super(StampFactory.dependency(), anchor);
         this.condition = condition;
         this.reason = reason;
         this.action = action;
         this.negated = negated;
-        this.leafGraphId = leafGraphId;
     }
 
     /**
      * The instruction that produces the tested boolean value.
      */
-    public BooleanNode condition() {
+    public LogicNode condition() {
         return condition;
     }
 
-    public void setCondition(BooleanNode x) {
+    public void setCondition(LogicNode x) {
         updateUsages(condition, x);
         condition = x;
     }
@@ -83,10 +81,6 @@ public final class GuardNode extends FloatingNode implements Canonicalizable, LI
         return action;
     }
 
-    public long getLeafGraphId() {
-        return leafGraphId;
-    }
-
     @Override
     public String toString(Verbosity verbosity) {
         if (verbosity == Verbosity.Name && negated) {
@@ -98,14 +92,14 @@ public final class GuardNode extends FloatingNode implements Canonicalizable, LI
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        gen.emitGuardCheck(condition(), reason(), action(), negated(), leafGraphId);
+        gen.emitGuardCheck(condition(), reason(), action(), negated());
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
-        if (condition() instanceof ConstantNode) {
-            ConstantNode c = (ConstantNode) condition();
-            if (c.asConstant().asBoolean() != negated) {
+        if (condition() instanceof LogicConstantNode) {
+            LogicConstantNode c = (LogicConstantNode) condition();
+            if (c.getValue() != negated) {
                 if (!dependencies().isEmpty()) {
                     for (Node usage : usages()) {
                         if (usage instanceof ValueNode) {

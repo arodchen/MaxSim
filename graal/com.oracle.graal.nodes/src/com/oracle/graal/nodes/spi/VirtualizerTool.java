@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.nodes.spi;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
@@ -43,17 +44,18 @@ public interface VirtualizerTool {
     MetaAccessProvider getMetaAccessProvider();
 
     /**
+     * @return the {@link Assumptions} associated with the current compilation, which can be used to
+     *         make type assumptions during virtualization.
+     */
+    Assumptions getAssumptions();
+
+    /**
      * This method should be used to query the maximum size of virtualized objects before attempting
      * virtualization.
      * 
      * @return the maximum number of entries for virtualized objects.
      */
     int getMaximumEntryCount();
-
-    /**
-     * @return the next id for virtual objects (can be used for the VirtualObject constructor).
-     */
-    int getNextVirtualId();
 
     // methods working on virtualized/materialized objects
 

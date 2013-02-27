@@ -23,15 +23,16 @@
 package com.oracle.graal.nodes.java;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.virtual.*;
 
 /**
- * The {@code NewArrayNode} class is the base of all instructions that allocate arrays.
+ * The {@code NewArrayNode} is used for all 1-dimensional array allocations.
  */
-public abstract class NewArrayNode extends FixedWithNextNode implements Lowerable, VirtualizableAllocation, ArrayLengthProvider {
+public class NewArrayNode extends FixedWithNextNode implements Canonicalizable, Lowerable, VirtualizableAllocation, ArrayLengthProvider, Node.IterableNodeType {
 
     @Input private ValueNode length;
     private final ResolvedJavaType elementType;
@@ -53,7 +54,7 @@ public abstract class NewArrayNode extends FixedWithNextNode implements Lowerabl
      * @param fillContents determines whether the array elements should be initialized to zero/null.
      * @param locked determines whether the array should be locked immediately.
      */
-    protected NewArrayNode(ResolvedJavaType elementType, ValueNode length, boolean fillContents, boolean locked) {
+    public NewArrayNode(ResolvedJavaType elementType, ValueNode length, boolean fillContents, boolean locked) {
         super(StampFactory.exactNonNull(elementType.getArrayClass()));
         this.length = length;
         this.elementType = elementType;
@@ -100,6 +101,15 @@ public abstract class NewArrayNode extends FixedWithNextNode implements Lowerabl
     }
 
     @Override
+    public ValueNode canonical(CanonicalizerTool tool) {
+        if (usages().isEmpty() && length.integerStamp().isPositive()) {
+            return null;
+        } else {
+            return this;
+        }
+    }
+
+    @Override
     public void lower(LoweringTool tool) {
         tool.getRuntime().lower(this, tool);
     }
@@ -114,7 +124,7 @@ public abstract class NewArrayNode extends FixedWithNextNode implements Lowerabl
                 for (int i = 0; i < constantLength; i++) {
                     state[i] = defaultForKind;
                 }
-                VirtualObjectNode virtualObject = new VirtualArrayNode(tool.getNextVirtualId(), elementType, constantLength);
+                VirtualObjectNode virtualObject = new VirtualArrayNode(elementType, constantLength);
                 tool.createVirtualObject(virtualObject, state, 0);
                 tool.replaceWithVirtual(virtualObject);
             }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -1874,8 +1874,22 @@ static BOOL WINAPI consoleHandler(DWORD event) {
       }
       return TRUE;
       break;
+    case CTRL_LOGOFF_EVENT: {
+      // Don't terminate JVM if it is running in a non-interactive session,
+      // such as a service process.
+      USEROBJECTFLAGS flags;
+      HANDLE handle = GetProcessWindowStation();
+      if (handle != NULL &&
+          GetUserObjectInformation(handle, UOI_FLAGS, &flags,
+            sizeof( USEROBJECTFLAGS), NULL)) {
+        // If it is a non-interactive session, let next handler to deal
+        // with it.
+        if ((flags.dwFlags & WSF_VISIBLE) == 0) {
+          return FALSE;
+        }
+      }
+    }
     case CTRL_CLOSE_EVENT:
-    case CTRL_LOGOFF_EVENT:
     case CTRL_SHUTDOWN_EVENT:
       os::signal_raise(SIGTERM);
       return TRUE;
@@ -2089,18 +2103,32 @@ LONG Handle_IDiv_Exception(struct _EXCEPTION_POINTERS* exceptionInfo) {
 #ifdef _M_IA64
   assert(0, "Fix Handle_IDiv_Exception");
 #elif _M_AMD64
-  PCONTEXT ctx = exceptionInfo->ContextRecord;
-  address pc = (address)ctx->Rip;
-#ifndef GRAAL
-  assert(pc[0] == 0xF7, "not an idiv opcode");
-  assert((pc[1] & ~0x7) == 0xF8, "cannot handle non-register operands");
-  assert(ctx->Rax == min_jint, "unexpected idiv exception");
-#endif
-  // set correct result values and continue after idiv instruction
-  ctx->Rip = (DWORD)pc + 2;        // idiv reg, reg  is 2 bytes
-  ctx->Rax = (DWORD)min_jint;      // result
-  ctx->Rdx = (DWORD)0;             // remainder
-  // Continue the execution
+  #ifdef GRAAL
+    PCONTEXT ctx = exceptionInfo->ContextRecord;
+    address pc = (address)ctx->Rip;
+    assert(pc[0] == 0x48 && pc[1] == 0xF7 || pc[0] == 0xF7, "not an idiv opcode");
+    if (pc[0] == 0x48) {
+      // set correct result values and continue after idiv instruction
+      ctx->Rip = (DWORD64)pc + 3;        // REX idiv reg, reg  is 3 bytes
+      ctx->Rax = (DWORD64)min_jlong;     // result
+    } else {
+      ctx->Rip = (DWORD64)pc + 2;        // idiv reg, reg  is 2 bytes
+      ctx->Rax = (DWORD64)min_jint;      // result
+    }
+    ctx->Rdx = (DWORD64)0;             // remainder
+    // Continue the execution
+  #else
+    PCONTEXT ctx = exceptionInfo->ContextRecord;
+    address pc = (address)ctx->Rip;
+    assert(pc[0] == 0xF7, "not an idiv opcode");
+    assert((pc[1] & ~0x7) == 0xF8, "cannot handle non-register operands");
+    assert(ctx->Rax == min_jint, "unexpected idiv exception");
+    // set correct result values and continue after idiv instruction
+    ctx->Rip = (DWORD)pc + 2;        // idiv reg, reg  is 2 bytes
+    ctx->Rax = (DWORD)min_jint;      // result
+    ctx->Rdx = (DWORD)0;             // remainder
+    // Continue the execution
+  #endif // GRAAL
 #else
   PCONTEXT ctx = exceptionInfo->ContextRecord;
   address pc = (address)ctx->Eip;
@@ -2948,7 +2976,7 @@ char* os::pd_reserve_memory(size_t bytes, char* addr, size_t alignment_hint) {
     }
     if( Verbose && PrintMiscellaneous ) {
       reserveTimer.stop();
-      tty->print_cr("reserve_memory of %Ix bytes took %ld ms (%ld ticks)", bytes,
+      tty->print_cr("reserve_memory of %Ix bytes took " JLONG_FORMAT " ms (" JLONG_FORMAT " ticks)", bytes,
                     reserveTimer.milliseconds(), reserveTimer.ticks());
     }
   }
@@ -4307,7 +4335,7 @@ char* os::pd_map_memory(int fd, const char* file_name, size_t file_offset,
   if (hFile == NULL) {
     if (PrintMiscellaneous && Verbose) {
       DWORD err = GetLastError();
-      tty->print_cr("CreateFile() failed: GetLastError->%ld.");
+      tty->print_cr("CreateFile() failed: GetLastError->%ld.", err);
     }
     return NULL;
   }
@@ -4357,7 +4385,7 @@ char* os::pd_map_memory(int fd, const char* file_name, size_t file_offset,
     if (hMap == NULL) {
       if (PrintMiscellaneous && Verbose) {
         DWORD err = GetLastError();
-        tty->print_cr("CreateFileMapping() failed: GetLastError->%ld.");
+        tty->print_cr("CreateFileMapping() failed: GetLastError->%ld.", err);
       }
       CloseHandle(hFile);
       return NULL;
@@ -4567,6 +4595,7 @@ int os::PlatformEvent::park (jlong Millis) {
     }
     v = _Event ;
     _Event = 0 ;
+    // see comment at end of os::PlatformEvent::park() below:
     OrderAccess::fence() ;
     // If we encounter a nearly simultanous timeout expiry and unpark()
     // we return OS_OK indicating we awoke via unpark().
@@ -4604,25 +4633,25 @@ void os::PlatformEvent::park () {
 
 void os::PlatformEvent::unpark() {
   guarantee (_ParkHandle != NULL, "Invariant") ;
-  int v ;
-  for (;;) {
-      v = _Event ;      // Increment _Event if it's < 1.
-      if (v > 0) {
-         // If it's already signaled just return.
-         // The LD of _Event could have reordered or be satisfied
-         // by a read-aside from this processor's write buffer.
-         // To avoid problems execute a barrier and then
-         // ratify the value.  A degenerate CAS() would also work.
-         // Viz., CAS (v+0, &_Event, v) == v).
-         OrderAccess::fence() ;
-         if (_Event == v) return ;
-         continue ;
-      }
-      if (Atomic::cmpxchg (v+1, &_Event, v) == v) break ;
-  }
-  if (v < 0) {
-     ::SetEvent (_ParkHandle) ;
-  }
+
+  // Transitions for _Event:
+  //    0 :=> 1
+  //    1 :=> 1
+  //   -1 :=> either 0 or 1; must signal target thread
+  //          That is, we can safely transition _Event from -1 to either
+  //          0 or 1. Forcing 1 is slightly more efficient for back-to-back
+  //          unpark() calls.
+  // See also: "Semaphores in Plan 9" by Mullender & Cox
+  //
+  // Note: Forcing a transition from "-1" to "1" on an unpark() means
+  // that it will take two back-to-back park() calls for the owning
+  // thread to block. This has the benefit of forcing a spurious return
+  // from the first park() call after an unpark() call which will help
+  // shake out uses of park() and unpark() without condition variables.
+
+  if (Atomic::xchg(1, &_Event) >= 0) return;
+
+  ::SetEvent(_ParkHandle);
 }
 
 

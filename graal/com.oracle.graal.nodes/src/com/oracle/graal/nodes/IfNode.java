@@ -39,37 +39,31 @@ import com.oracle.graal.nodes.util.*;
  */
 public final class IfNode extends ControlSplitNode implements Simplifiable, LIRLowerable, Negatable {
 
-    private final long leafGraphId;
     @Successor private BeginNode trueSuccessor;
     @Successor private BeginNode falseSuccessor;
-    @Input private BooleanNode condition;
-    private double takenProbability;
+    @Input private LogicNode condition;
+    private double trueSuccessorProbability;
 
-    public BooleanNode condition() {
+    public LogicNode condition() {
         return condition;
     }
 
-    public void setCondition(BooleanNode x) {
+    public void setCondition(LogicNode x) {
         updateUsages(condition, x);
         condition = x;
     }
 
-    public IfNode(BooleanNode condition, FixedNode trueSuccessor, FixedNode falseSuccessor, double takenProbability, long leafGraphId) {
-        this(condition, BeginNode.begin(trueSuccessor), BeginNode.begin(falseSuccessor), takenProbability, leafGraphId);
+    public IfNode(LogicNode condition, FixedNode trueSuccessor, FixedNode falseSuccessor, double trueSuccessorProbability) {
+        this(condition, BeginNode.begin(trueSuccessor), BeginNode.begin(falseSuccessor), trueSuccessorProbability);
     }
 
-    public IfNode(BooleanNode condition, BeginNode trueSuccessor, BeginNode falseSuccessor, double takenProbability, long leafGraphId) {
+    public IfNode(LogicNode condition, BeginNode trueSuccessor, BeginNode falseSuccessor, double trueSuccessorProbability) {
         super(StampFactory.forVoid());
         this.condition = condition;
         this.falseSuccessor = falseSuccessor;
-        this.takenProbability = takenProbability;
-        this.leafGraphId = leafGraphId;
+        this.trueSuccessorProbability = trueSuccessorProbability;
         this.trueSuccessor = trueSuccessor;
 
-    }
-
-    public long leafGraphId() {
-        return leafGraphId;
     }
 
     /**
@@ -118,17 +112,17 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         setFalseSuccessor(null);
         setTrueSuccessor(falseSucc);
         setFalseSuccessor(trueSucc);
-        takenProbability = 1 - takenProbability;
+        trueSuccessorProbability = 1 - trueSuccessorProbability;
         return this;
     }
 
-    public void setTakenProbability(double prob) {
-        takenProbability = prob;
+    public void setTrueSuccessorProbability(double prob) {
+        trueSuccessorProbability = prob;
     }
 
     @Override
     public double probability(BeginNode successor) {
-        return successor == trueSuccessor ? takenProbability : 1 - takenProbability;
+        return successor == trueSuccessor ? trueSuccessorProbability : 1 - trueSuccessorProbability;
     }
 
     @Override
@@ -146,9 +140,9 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
 
     @Override
     public void simplify(SimplifierTool tool) {
-        if (condition() instanceof ConstantNode) {
-            ConstantNode c = (ConstantNode) condition();
-            if (c.asConstant().asBoolean()) {
+        if (condition() instanceof LogicConstantNode) {
+            LogicConstantNode c = (LogicConstantNode) condition();
+            if (c.getValue()) {
                 tool.deleteBranch(falseSuccessor());
                 tool.addToWorkList(trueSuccessor());
                 ((StructuredGraph) graph()).removeSplit(this, trueSuccessor());
@@ -197,7 +191,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                             return false;
                         }
                         if (trueValue.isConstant() && falseValue.isConstant()) {
-                            MaterializeNode materialize = MaterializeNode.create(condition(), trueValue, falseValue);
+                            ConditionalNode materialize = graph().unique(new ConditionalNode(condition(), trueValue, falseValue));
                             ((StructuredGraph) graph()).replaceFloating(singlePhi, materialize);
                             removeEmptyIf(tool);
                             return true;
@@ -329,6 +323,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
             }
         }
         assert !ends.hasNext();
+        assert falseEnds.size() + trueEnds.size() == xs.length;
 
         connectEnds(falseEnds, phiValues, oldFalseSuccessor, merge, tool);
         connectEnds(trueEnds, phiValues, oldTrueSuccessor, merge, tool);

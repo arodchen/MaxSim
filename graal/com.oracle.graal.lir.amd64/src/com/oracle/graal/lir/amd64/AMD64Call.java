@@ -66,7 +66,10 @@ public class AMD64Call {
             // make sure that the displacement word of the call ends up word aligned
             int offset = masm.codeBuffer.position();
             offset += tasm.target.arch.getMachineCodeCallDisplacementOffset();
-            masm.nop(tasm.target.wordSize - offset % tasm.target.wordSize);
+            int modulus = tasm.target.wordSize;
+            if (offset % modulus != 0) {
+                masm.nop(modulus - offset % modulus);
+            }
         }
     }
 
@@ -111,7 +114,6 @@ public class AMD64Call {
                 // offset might not fit a 32-bit immediate, generate an
                 // indirect call with a 64-bit immediate
                 Register scratch = tasm.frameMap.registerConfig.getScratchRegister();
-                // TODO (cwimmer): we want to get rid of a generally reserved scratch register.
                 masm.movq(scratch, 0L);
                 masm.call(scratch);
             } else {

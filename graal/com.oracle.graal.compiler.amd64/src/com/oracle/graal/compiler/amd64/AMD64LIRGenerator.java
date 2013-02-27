@@ -93,12 +93,6 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         public LIRInstruction createMove(Value result, Value input) {
             return new SpillMoveOp(result, input);
         }
-
-        @Override
-        public LIRInstruction createExchange(Value input1, Value input2) {
-            // TODO (cwimmer) implement XCHG operation for LIR
-            return null;
-        }
     }
 
     public AMD64LIRGenerator(StructuredGraph graph, CodeCacheProvider runtime, TargetDescription target, FrameMap frameMap, ResolvedJavaMethod method, LIR lir) {
@@ -235,7 +229,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void emitBranch(Value left, Value right, Condition cond, boolean unorderedIsTrue, LabelRef label, LIRFrameState info) {
+    public void emitCompareBranch(Value left, Value right, Condition cond, boolean unorderedIsTrue, LabelRef label, LIRFrameState info) {
         boolean mirrored = emitCompare(left, right);
         Condition finalCondition = mirrored ? cond.mirror() : cond;
         switch (left.getKind().getStackKind()) {
@@ -254,7 +248,13 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitCMove(Value left, Value right, Condition cond, boolean unorderedIsTrue, Value trueValue, Value falseValue) {
+    public void emitIntegerTestBranch(Value left, Value right, boolean negated, LabelRef label, LIRFrameState info) {
+        emitIntegerTest(left, right);
+        append(new BranchOp(negated ? Condition.NE : Condition.EQ, label, info));
+    }
+
+    @Override
+    public Variable emitConditionalMove(Value left, Value right, Condition cond, boolean unorderedIsTrue, Value trueValue, Value falseValue) {
         boolean mirrored = emitCompare(left, right);
         Condition finalCondition = mirrored ? cond.mirror() : cond;
 
@@ -269,9 +269,27 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
             case Double:
                 append(new FloatCondMoveOp(result, finalCondition, unorderedIsTrue, load(trueValue), load(falseValue)));
                 break;
-
+            default:
+                throw GraalInternalError.shouldNotReachHere("" + left.getKind());
         }
         return result;
+    }
+
+    @Override
+    public Variable emitIntegerTestMove(Value left, Value right, Value trueValue, Value falseValue) {
+        emitIntegerTest(left, right);
+        Variable result = newVariable(trueValue.getKind());
+        append(new CondMoveOp(result, Condition.EQ, load(trueValue), loadNonConst(falseValue)));
+        return result;
+    }
+
+    private void emitIntegerTest(Value a, Value b) {
+        assert a.getKind().getStackKind() == Kind.Int || a.getKind() == Kind.Long;
+        if (LIRValueUtil.isVariable(b)) {
+            append(new AMD64TestOp(load(b), loadNonConst(a)));
+        } else {
+            append(new AMD64TestOp(load(a), loadNonConst(b)));
+        }
     }
 
     /**
@@ -717,8 +735,8 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void emitDeoptimize(DeoptimizationAction action, DeoptimizationReason reason, Object deoptInfo, long leafGraphId) {
-        LIRFrameState info = state(leafGraphId);
+    public void emitDeoptimize(DeoptimizationAction action, DeoptimizationReason reason, Object deoptInfo) {
+        LIRFrameState info = state();
         LabelRef stubEntry = createDeoptStub(action, reason, info, deoptInfo);
         append(new JumpOp(stubEntry, info));
     }
@@ -851,9 +869,9 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    protected void emitNullCheckGuard(ValueNode object, long leafGraphId) {
+    protected void emitNullCheckGuard(ValueNode object) {
         Variable value = load(operand(object));
-        LIRFrameState info = state(leafGraphId);
+        LIRFrameState info = state();
         append(new NullCheckOp(value, info));
     }
 
