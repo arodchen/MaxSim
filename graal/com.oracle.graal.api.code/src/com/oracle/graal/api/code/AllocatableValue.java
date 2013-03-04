@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,18 +20,31 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
+package com.oracle.graal.api.code;
 
-#include "precompiled.hpp"
-#include "graal/graalVmIds.hpp"
-#include "ci/ciUtilities.hpp"
+import com.oracle.graal.api.meta.*;
 
-// VmIds implementation
+/**
+ * Common base class for values that can be manipulated by the register allocator.
+ */
+public abstract class AllocatableValue extends Value {
 
-jlong VmIds::addStub(address stub) {
-  return (jlong)stub;
+    private static final long serialVersionUID = 153019506717492133L;
+
+    /**
+     * Marker to tell the register allocator that no storage location needs to be allocated for this
+     * value.
+     */
+    @SuppressWarnings("serial") public static final AllocatableValue UNUSED = new AllocatableValue(Kind.Illegal) {
+
+        @Override
+        public String toString() {
+            return "-";
+        }
+    };
+
+    public AllocatableValue(Kind kind) {
+        super(kind);
+    }
+
 }
-
-address VmIds::getStub(jlong id) {
-  return (address)id;
-}
-

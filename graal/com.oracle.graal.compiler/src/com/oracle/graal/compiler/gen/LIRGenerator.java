@@ -90,6 +90,16 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
      */
     private final ArrayList<StackSlot> lockDataSlots;
 
+    /**
+     * Checks whether the supplied constant can be used without loading it into a register for store
+     * operations, i.e., on the right hand side of a memory access.
+     * 
+     * @param c The constant to check.
+     * @return True if the constant can be used directly, false if the constant needs to be in a
+     *         register.
+     */
+    public abstract boolean canStoreConstant(Constant c);
+
     public LIRGenerator(StructuredGraph graph, CodeCacheProvider runtime, TargetDescription target, FrameMap frameMap, ResolvedJavaMethod method, LIR lir) {
         this.graph = graph;
         this.runtime = runtime;
@@ -151,7 +161,6 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     public Variable newVariable(Kind kind) {
         Kind stackKind = kind.getStackKind();
         switch (stackKind) {
-            case Jsr:
             case Int:
             case Long:
             case Object:
@@ -184,6 +193,14 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     @Override
     public abstract Variable emitMove(Value input);
 
+    public AllocatableValue asAllocatable(Value value) {
+        if (isAllocatableValue(value)) {
+            return asAllocatableValue(value);
+        } else {
+            return emitMove(value);
+        }
+    }
+
     public Variable load(Value value) {
         if (!isVariable(value)) {
             return emitMove(value);
@@ -196,18 +213,6 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             return emitMove(value);
         }
         return value;
-    }
-
-    public Value loadForStore(Value value, Kind storeKind) {
-        if (isConstant(value) && canStoreConstant((Constant) value)) {
-            return value;
-        }
-        if (storeKind == Kind.Byte || storeKind == Kind.Boolean) {
-            Variable tempVar = new Variable(value.getKind(), lir.nextVariable(), Register.RegisterFlag.Byte);
-            emitMove(value, tempVar);
-            return tempVar;
-        }
-        return load(value);
     }
 
     protected LabelRef getLIRBlock(FixedNode b) {
@@ -354,7 +359,6 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
                         if (nextInstr instanceof Access) {
                             Access access = (Access) nextInstr;
                             if (isNullNode.object() == access.object() && canBeNullCheck(access.location())) {
-                                // TTY.println("implicit null check");
                                 access.setNullCheck(true);
                                 continue;
                             }
@@ -527,7 +531,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         Value operand = Value.ILLEGAL;
         if (x.result() != null) {
             operand = resultOperandFor(x.result().kind());
-            emitMove(operand(x.result()), operand);
+            emitMove(operand, operand(x.result()));
         }
         emitReturn(operand);
     }
@@ -749,7 +753,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         for (ValueNode arg : arguments) {
             if (arg != null) {
                 Value operand = toStackKind(cc.getArgument(j));
-                emitMove(operand(arg), operand);
+                emitMove(operand, operand(arg));
                 result[j] = operand;
                 j++;
             } else {
@@ -772,7 +776,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         for (int i = 0; i < args.length; i++) {
             Value arg = args[i];
             Value loc = cc.getArgument(i);
-            emitMove(arg, loc);
+            emitMove(loc, arg);
             argLocations[i] = loc;
         }
         emitCall(callTarget, cc.getReturn(), argLocations, cc.getTemporaries(), Constant.forLong(0), info);

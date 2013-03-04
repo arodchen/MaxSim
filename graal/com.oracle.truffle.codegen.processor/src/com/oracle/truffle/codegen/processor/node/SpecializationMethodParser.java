@@ -47,10 +47,6 @@ public class SpecializationMethodParser extends MethodParser<SpecializationData>
         return specification;
     }
 
-    public MethodSpec getSpecification() {
-        return specification;
-    }
-
     @Override
     public SpecializationData create(TemplateMethod method) {
         return parseSpecialization(method);
@@ -157,17 +153,24 @@ public class SpecializationMethodParser extends MethodParser<SpecializationData>
     private static boolean isGuardCompatible(SpecializationData specialization, GuardData guard) {
         Iterator<ActualParameter> guardParameters = Arrays.asList(guard.getParameters()).iterator();
         for (ActualParameter param : specialization.getParameters()) {
+            if (param.getSpecification().isOptional()) {
+                continue;
+            }
             if (!guardParameters.hasNext()) {
                 return false;
             }
             ActualParameter guardParam = guardParameters.next();
-            if (!Utils.typeEquals(guardParam.getActualType(), param.getActualType())) {
+            if (!Utils.typeEquals(guardParam.getActualType(), param.getActualType()) && !guardParam.getSpecification().isOptional()) {
                 return false;
             }
         }
-        if (guardParameters.hasNext()) {
-            return false;
+        while (guardParameters.hasNext()) {
+            ActualParameter param = guardParameters.next();
+            if (!param.getSpecification().isOptional()) {
+                return false;
+            }
         }
+
         return true;
     }
 

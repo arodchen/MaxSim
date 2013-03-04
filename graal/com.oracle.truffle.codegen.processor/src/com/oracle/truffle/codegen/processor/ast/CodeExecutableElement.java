@@ -59,6 +59,7 @@ public class CodeExecutableElement extends CodeElement<Element> implements Writa
         }
     }
 
+    /* Support JDK8 langtools. */
     public boolean isDefault() {
         return false;
     }
@@ -113,7 +114,7 @@ public class CodeExecutableElement extends CodeElement<Element> implements Writa
     }
 
     public CodeTreeBuilder createBuilder() {
-        CodeTreeBuilder builder = new CodeTreeBuilder();
+        CodeTreeBuilder builder = new CodeTreeBuilder(null);
         this.bodyTree = builder.getTree();
         this.bodyTree.setEnclosingElement(this);
         this.body = null;

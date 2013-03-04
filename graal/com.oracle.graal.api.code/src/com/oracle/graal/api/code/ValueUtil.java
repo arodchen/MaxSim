@@ -58,6 +58,16 @@ public final class ValueUtil {
         return (Constant) value;
     }
 
+    public static boolean isAllocatableValue(Value value) {
+        assert value != null;
+        return value instanceof AllocatableValue;
+    }
+
+    public static AllocatableValue asAllocatableValue(Value value) {
+        assert value != null;
+        return (AllocatableValue) value;
+    }
+
     public static boolean isStackSlot(Value value) {
         assert value != null;
         return value instanceof StackSlot;
@@ -89,7 +99,7 @@ public final class ValueUtil {
     }
 
     public static Register asIntReg(Value value) {
-        assert value.getKind() == Kind.Int || value.getKind() == Kind.Jsr;
+        assert value.getKind() == Kind.Int;
         return asRegister(value);
     }
 
