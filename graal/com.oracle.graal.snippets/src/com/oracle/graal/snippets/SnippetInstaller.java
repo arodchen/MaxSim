@@ -57,8 +57,11 @@ public class SnippetInstaller {
     public final TargetDescription target;
     public final Assumptions assumptions;
     public final BoxingMethodPool pool;
-    private final Customizer customizer;
     private final Thread owner;
+    /**
+     * Non-null if a {@link Customizer} was registered in the constructor.
+     */
+    private final Customizer customizer;
 
     /**
      * Allows for customization of the snippet install process, In particular the exact set of {@link Phase phases} that
@@ -85,57 +88,6 @@ public class SnippetInstaller {
         void beforeFinal(SnippetInstaller si, StructuredGraph graph, final ResolvedJavaMethod method, final boolean isSubstitution);
     }
 
-    public static class DefaultCustomizer implements Customizer {
-        @Override
-        public GraphBuilderConfiguration getConfig() {
-            return GraphBuilderConfiguration.getSnippetDefault();
-        }
-
-        @Override
-        public void afterBuild(SnippetInstaller si, StructuredGraph graph) {
-            new WordTypeVerificationPhase(si.runtime, si.target.wordKind).apply(graph);
-
-            new SnippetIntrinsificationPhase(si.runtime, si.pool, true).apply(graph);
-
-            // need constant propagation for folded methods
-            new CanonicalizerPhase(si.runtime, si.assumptions).apply(graph);
-
-        }
-
-        @Override
-        public void afterInline(SnippetInstaller si, StructuredGraph graph) {
-            new WordTypeRewriterPhase(si.runtime, si.target.wordKind).apply(graph);
-            new CanonicalizerPhase(si.runtime, si.assumptions).apply(graph);
-         }
-
-        @Override
-        public void afterAllInlines(SnippetInstaller si, StructuredGraph graph) {
-            new SnippetIntrinsificationPhase(si.runtime, si.pool, true).apply(graph);
-
-            new WordTypeRewriterPhase(si.runtime, si.target.wordKind).apply(graph);
-
-            new DeadCodeEliminationPhase().apply(graph);
-
-            new CanonicalizerPhase(si.runtime, si.assumptions).apply(graph);
-
-       }
-
-        @Override
-        public void beforeFinal(SnippetInstaller si, StructuredGraph graph, final ResolvedJavaMethod method, final boolean isSubstitution) {
-            new SnippetIntrinsificationPhase(si.runtime, si.pool, SnippetTemplate.hasConstantParameter(method)).apply(graph);
-
-            if (isSubstitution && !si.substituteCallsOriginal) {
-                // TODO (ds) remove the constraint of only processing substitutions
-                // once issues with the arraycopy snippets have been resolved
-                new SnippetFrameStateCleanupPhase().apply(graph);
-                new DeadCodeEliminationPhase().apply(graph);
-            }
-
-            new InsertStateAfterPlaceholderPhase().apply(graph);
-        }
-
-    }
-
     /**
      * A graph cache used by this installer to avoid using the compiler storage for each method
      * processed during snippet installation. Without this, all processed methods are to be
@@ -144,7 +96,7 @@ public class SnippetInstaller {
     private final Map<ResolvedJavaMethod, StructuredGraph> graphCache;
 
     public SnippetInstaller(MetaAccessProvider runtime, Assumptions assumptions, TargetDescription target) {
-        this(runtime, assumptions, target, new DefaultCustomizer());
+        this(runtime, assumptions, target, null);
     }
 
     public SnippetInstaller(MetaAccessProvider runtime, Assumptions assumptions, TargetDescription target, Customizer customizer) {
@@ -282,7 +234,20 @@ public class SnippetInstaller {
             public StructuredGraph call() throws Exception {
                 StructuredGraph graph = parseGraph(method, policy);
 
-                customizer.beforeFinal(si, graph, method, isSubstitution);
+                if (customizer == null) {
+                    new SnippetIntrinsificationPhase(runtime, pool, SnippetTemplate.hasConstantParameter(method)).apply(graph);
+
+                    if (isSubstitution && !substituteCallsOriginal) {
+                        // TODO (ds) remove the constraint of only processing substitutions
+                        // once issues with the arraycopy snippets have been resolved
+                        new SnippetFrameStateCleanupPhase().apply(graph);
+                        new DeadCodeEliminationPhase().apply(graph);
+                    }
+
+                    new InsertStateAfterPlaceholderPhase().apply(graph);
+                } else {
+                    customizer.beforeFinal(si, graph, method, isSubstitution);
+                }
 
                 Debug.dump(graph, "%s: Final", method.getName());
 
@@ -304,13 +269,19 @@ public class SnippetInstaller {
     private StructuredGraph buildGraph(final ResolvedJavaMethod method, final SnippetInliningPolicy policy) {
         assert !Modifier.isAbstract(method.getModifiers()) && !Modifier.isNative(method.getModifiers()) : method;
         final StructuredGraph graph = new StructuredGraph(method);
-        GraphBuilderConfiguration config = customizer.getConfig();
+        GraphBuilderConfiguration config = customizer == null ? GraphBuilderConfiguration.getSnippetDefault() : customizer.getConfig();
         GraphBuilderPhase graphBuilder = new GraphBuilderPhase(runtime, config, OptimisticOptimizations.NONE);
         graphBuilder.apply(graph);
 
         Debug.dump(graph, "%s: %s", method, GraphBuilderPhase.class.getSimpleName());
 
-        customizer.afterBuild(this, graph);
+        if (customizer == null) {
+            new WordTypeVerificationPhase(runtime, target.wordKind).apply(graph);
+
+            new SnippetIntrinsificationPhase(runtime, pool, true).apply(graph);
+        } else {
+            customizer.afterBuild(this, graph);
+        }
 
         for (Invoke invoke : graph.getInvokes()) {
             MethodCallTargetNode callTarget = invoke.methodCallTarget();
@@ -325,19 +296,43 @@ public class SnippetInstaller {
                 // If this poses a problem, a phase should added to fix up these frame states.
 
                 Debug.dump(graph, "after inlining %s into %s", callee, method);
-                customizer.afterInline(this, graph);
+                if (customizer == null) {
+                    if (GraalOptions.OptCanonicalizer) {
+                        new CanonicalizerPhase(runtime, assumptions).apply(graph);
+                    }
+                } else {
+                    customizer.afterInline(this, graph);
+                }
                 substituteCallsOriginal = true;
             } else {
                 if ((callTarget.invokeKind() == InvokeKind.Static || callTarget.invokeKind() == InvokeKind.Special) && policy.shouldInline(callee, method)) {
                     StructuredGraph targetGraph = parseGraph(callee, policy);
                     InliningUtil.inline(invoke, targetGraph, true);
                     Debug.dump(graph, "after inlining %s", callee);
-                    customizer.afterInline(this, graph);
+                    if (customizer == null) {
+                        if (GraalOptions.OptCanonicalizer) {
+                            new WordTypeRewriterPhase(runtime, target.wordKind).apply(graph);
+                            new CanonicalizerPhase(runtime, assumptions).apply(graph);
+                        }
+                    } else {
+                        customizer.afterInline(this, graph);
+                    }
                 }
             }
         }
 
-        customizer.afterAllInlines(this, graph);
+        if (customizer == null) {
+            new SnippetIntrinsificationPhase(runtime, pool, true).apply(graph);
+
+            new WordTypeRewriterPhase(runtime, target.wordKind).apply(graph);
+
+            new DeadCodeEliminationPhase().apply(graph);
+            if (GraalOptions.OptCanonicalizer) {
+                new CanonicalizerPhase(runtime, assumptions).apply(graph);
+            }
+        } else {
+            customizer.afterAllInlines(this, graph);
+        }
 
         for (LoopEndNode end : graph.getNodes(LoopEndNode.class)) {
             end.disableSafepoint();
