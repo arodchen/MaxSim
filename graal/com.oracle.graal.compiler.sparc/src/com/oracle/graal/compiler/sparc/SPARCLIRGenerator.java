@@ -31,7 +31,6 @@ import com.oracle.graal.lir.sparc.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.calc.ConvertNode.Op;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 
 /**
@@ -58,12 +57,6 @@ public class SPARCLIRGenerator extends LIRGenerator {
 
     @Override
     protected void emitReturn(Value input) {
-        // SPARC: Auto-generated method stub
-
-    }
-
-    @Override
-    protected void emitNullCheckGuard(ValueNode object) {
         // SPARC: Auto-generated method stub
 
     }
@@ -119,7 +112,7 @@ public class SPARCLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    protected LabelRef createDeoptStub(DeoptimizationAction action, DeoptimizationReason reason, LIRFrameState info, Object deoptInfo) {
+    protected LabelRef createDeoptStub(DeoptimizationAction action, DeoptimizationReason reason, LIRFrameState info) {
         // SPARC: Auto-generated method stub
         return null;
     }
@@ -215,36 +208,31 @@ public class SPARCLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Address makeAddress(Kind kind, Value base, int displacement) {
-        return null;
+    public void emitMove(Value dst, Value src) {
+        // SPARC: Auto-generated method stub
+
     }
 
     @Override
-    public Address makeAddress(LocationNode location, ValueNode object) {
+    public Value emitLoad(Kind kind, Value base, int displacement, Value index, int scale, boolean canTrap) {
         // SPARC: Auto-generated method stub
         return null;
     }
 
     @Override
-    public void emitMove(Value src, Value dst) {
+    public void emitStore(Kind kind, Value base, int displacement, Value index, int scale, Value input, boolean canTrap) {
         // SPARC: Auto-generated method stub
 
     }
 
     @Override
-    public Value emitLoad(Value loadAddress, boolean canTrap) {
+    public Value emitLea(Value base, int displacement, Value index, int scale) {
         // SPARC: Auto-generated method stub
         return null;
     }
 
     @Override
-    public void emitStore(Value storeAddress, Value input, boolean canTrap) {
-        // SPARC: Auto-generated method stub
-
-    }
-
-    @Override
-    public Value emitLea(Value address) {
+    public Value emitLea(StackSlot address) {
         // SPARC: Auto-generated method stub
         return null;
     }
@@ -346,13 +334,13 @@ public class SPARCLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void emitDeoptimizeOnOverflow(DeoptimizationAction action, DeoptimizationReason reason, Object deoptInfo) {
+    public void emitDeoptimizeOnOverflow(DeoptimizationAction action, DeoptimizationReason reason) {
         // SPARC: Auto-generated method stub
 
     }
 
     @Override
-    public void emitDeoptimize(DeoptimizationAction action, DeoptimizationReason reason, Object deoptInfo) {
+    public void emitDeoptimize(DeoptimizationAction action, DeoptimizationReason reason) {
         // SPARC: Auto-generated method stub
 
     }
@@ -378,6 +366,12 @@ public class SPARCLIRGenerator extends LIRGenerator {
     @Override
     public void visitBreakpointNode(BreakpointNode i) {
         // SPARC: Auto-generated method stub
+
+    }
+
+    @Override
+    public void emitUnwind(Value operand) {
+        // TODO Auto-generated method stub
 
     }
 }

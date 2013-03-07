@@ -117,7 +117,7 @@ public class GraalCompiler {
             new InliningPhase(runtime, null, assumptions, cache, plan, optimisticOpts).apply(graph);
             new DeadCodeEliminationPhase().apply(graph);
 
-            if (GraalOptions.CheckCastElimination && GraalOptions.OptCanonicalizer) {
+            if (GraalOptions.ConditionalElimination && GraalOptions.OptCanonicalizer) {
                 new CanonicalizerPhase(runtime, assumptions).apply(graph);
                 new IterativeConditionalEliminationPhase(runtime, assumptions).apply(graph);
             }
@@ -181,7 +181,7 @@ public class GraalCompiler {
             new EliminatePartiallyRedundantGuardsPhase(false, true).apply(graph);
         }
 
-        if (GraalOptions.CheckCastElimination && GraalOptions.OptCanonicalizer) {
+        if (GraalOptions.ConditionalElimination && GraalOptions.OptCanonicalizer) {
             new IterativeConditionalEliminationPhase(runtime, assumptions).apply(graph);
         }
 
@@ -194,9 +194,7 @@ public class GraalCompiler {
         plan.runPhases(PhasePosition.LOW_LEVEL, graph);
 
         // Add safepoints to loops
-        if (GraalOptions.GenLoopSafepoints) {
-            new LoopSafepointInsertionPhase().apply(graph);
-        }
+        new SafepointInsertionPhase().apply(graph);
 
         final SchedulePhase schedule = new SchedulePhase();
         schedule.apply(graph);

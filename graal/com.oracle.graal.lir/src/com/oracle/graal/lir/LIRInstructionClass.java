@@ -58,6 +58,7 @@ public class LIRInstructionClass extends FieldIntrospection {
 
     private static final Class<?> INSTRUCTION_CLASS = LIRInstruction.class;
     private static final Class<?> VALUE_CLASS = Value.class;
+    private static final Class<?> CONSTANT_CLASS = Constant.class;
     private static final Class<?> VALUE_ARRAY_CLASS = Value[].class;
     private static final Class<?> STATE_CLASS = LIRFrameState.class;
 
@@ -219,9 +220,8 @@ public class LIRInstructionClass extends FieldIntrospection {
 
         @Override
         protected void scanField(Field field, Class<?> type, long offset) {
-            if (VALUE_CLASS.isAssignableFrom(type)) {
-                assert Modifier.isProtected(field.getModifiers()) && !Modifier.isFinal(field.getModifiers()) : "Value field must not be declared final or [package] private because it is modified by register allocator: " +
-                                field;
+            if (VALUE_CLASS.isAssignableFrom(type) && type != CONSTANT_CLASS) {
+                assert !Modifier.isFinal(field.getModifiers()) : "Value field must not be declared final because it is modified by register allocator: " + field;
                 OperandModeAnnotation annotation = getOperandModeAnnotation(field);
                 assert annotation != null : "Field must have operand mode annotation: " + field;
                 annotation.scalarOffsets.add(offset);

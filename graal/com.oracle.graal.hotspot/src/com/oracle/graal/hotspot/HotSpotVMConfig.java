@@ -44,7 +44,6 @@ public final class HotSpotVMConfig extends CompilerObject {
     public boolean useAESIntrinsics;
 
     // offsets, ...
-    public int vmPageSize;
     public int stackShadowPages;
 
     /**
@@ -305,8 +304,6 @@ public final class HotSpotVMConfig extends CompilerObject {
     public int typeProfileWidth;
 
     // runtime stubs
-    public long debugStub;
-    public long instanceofStub;
     public long newInstanceStub;
     public long newArrayStub;
     public long newMultiArrayStub;
@@ -321,7 +318,6 @@ public final class HotSpotVMConfig extends CompilerObject {
     public long unwindExceptionStub;
     public long osrMigrationEndStub;
     public long registerFinalizerStub;
-    public long setDeoptInfoStub;
     public long createNullPointerExceptionStub;
     public long createOutOfBoundsExceptionStub;
     public long javaTimeMillisStub;
@@ -362,7 +358,6 @@ public final class HotSpotVMConfig extends CompilerObject {
     public int deoptActionMakeNotCompilable;
 
     public void check() {
-        assert vmPageSize >= 16;
         assert codeEntryAlignment > 0;
         assert stackShadowPages > 0;
     }

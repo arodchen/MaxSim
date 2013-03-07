@@ -40,7 +40,6 @@ import static com.oracle.graal.hotspot.snippets.AESCryptSubstitutions.DecryptBlo
 import static com.oracle.graal.hotspot.snippets.AESCryptSubstitutions.EncryptBlockStubCall.*;
 import static com.oracle.graal.hotspot.snippets.CipherBlockChainingSubstitutions.DecryptAESCryptStubCall.*;
 import static com.oracle.graal.hotspot.snippets.CipherBlockChainingSubstitutions.EncryptAESCryptStubCall.*;
-import static com.oracle.graal.lir.amd64.AMD64Call.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
@@ -55,17 +54,12 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
         Kind word = graalRuntime.getTarget().wordKind;
 
         // @formatter:off
+        addRuntimeCall(AMD64HotSpotUnwindOp.UNWIND_EXCEPTION, config.unwindExceptionStub,
+                        /*           temps */ null,
+                        /*             ret */ ret(Kind.Void),
+                        /* arg0: exception */ javaCallingConvention(Kind.Object));
 
         addRuntimeCall(DEOPTIMIZE, config.deoptimizeStub,
-                /*           temps */ null,
-                /*             ret */ ret(Kind.Void));
-
-        addRuntimeCall(SET_DEOPT_INFO, config.setDeoptInfoStub,
-                /*           temps */ null,
-                /*             ret */ ret(Kind.Void),
-                /* arg0:      info */ scratch(Kind.Object));
-
-        addRuntimeCall(DEBUG, config.debugStub,
                 /*           temps */ null,
                 /*             ret */ ret(Kind.Void));
 

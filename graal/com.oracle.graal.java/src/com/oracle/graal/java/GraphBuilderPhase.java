@@ -239,11 +239,12 @@ public final class GraphBuilderPhase extends Phase {
         currentBlock = blockMap.startBlock;
         blockMap.startBlock.entryState = frameState;
         if (blockMap.startBlock.isLoopHeader) {
-            // TODO(lstadler,gduboscq) createTarget might not be safe at this position, since it
-            // expects currentBlock,
-            // etc. to be set up correctly. A better solution to this problem of start blocks that
-            // are loop headers
-            // would be to create a dummy block in BciBlockMapping.
+            /*
+             * TODO(lstadler,gduboscq) createTarget might not be safe at this position, since it
+             * expects currentBlock, etc. to be set up correctly. A better solution to this problem
+             * of start blocks that are loop headers would be to create a dummy block in
+             * BciBlockMapping.
+             */
             appendGoto(createTarget(blockMap.startBlock, frameState));
         } else {
             blockMap.startBlock.firstInstruction = lastInstr;
@@ -696,21 +697,21 @@ public final class GraphBuilderPhase extends Phase {
     private JavaType lookupType(int cpi, int bytecode) {
         eagerResolvingForSnippets(cpi, bytecode);
         JavaType result = constantPool.lookupType(cpi, bytecode);
-        assert !graphBuilderConfig.unresolvedForSnippetsIsError() || result instanceof ResolvedJavaType;
+        assert !graphBuilderConfig.unresolvedIsError() || result instanceof ResolvedJavaType;
         return result;
     }
 
     private JavaMethod lookupMethod(int cpi, int opcode) {
         eagerResolvingForSnippets(cpi, opcode);
         JavaMethod result = constantPool.lookupMethod(cpi, opcode);
-        assert !graphBuilderConfig.unresolvedForSnippetsIsError() || ((result instanceof ResolvedJavaMethod) && ((ResolvedJavaMethod) result).getDeclaringClass().isInitialized()) : result;
+        assert !graphBuilderConfig.unresolvedIsError() || ((result instanceof ResolvedJavaMethod) && ((ResolvedJavaMethod) result).getDeclaringClass().isInitialized()) : result;
         return result;
     }
 
     private JavaField lookupField(int cpi, int opcode) {
         eagerResolvingForSnippets(cpi, opcode);
         JavaField result = constantPool.lookupField(cpi, opcode);
-        assert !graphBuilderConfig.unresolvedForSnippetsIsError() || (result instanceof ResolvedJavaField && ((ResolvedJavaField) result).getDeclaringClass().isInitialized()) : result;
+        assert !graphBuilderConfig.unresolvedIsError() || (result instanceof ResolvedJavaField && ((ResolvedJavaField) result).getDeclaringClass().isInitialized()) : result;
         return result;
     }
 
@@ -721,14 +722,8 @@ public final class GraphBuilderPhase extends Phase {
         return result;
     }
 
-    // private void eagerResolving(int cpi, int bytecode) {
-    // if (graphBuilderConfig.eagerResolving()) {
-    // constantPool.loadReferencedType(cpi, bytecode);
-    // }
-    // }
-
     private void eagerResolvingForSnippets(int cpi, int bytecode) {
-        if (graphBuilderConfig.eagerResolvingForSnippets()) {
+        if (graphBuilderConfig.eagerResolving()) {
             constantPool.loadReferencedType(cpi, bytecode);
         }
     }
@@ -1135,20 +1130,19 @@ public final class GraphBuilderPhase extends Phase {
         Kind resultType = targetMethod.getSignature().getReturnKind();
         if (GraalOptions.DeoptALot) {
             DeoptimizeNode deoptimize = currentGraph.add(new DeoptimizeNode(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint));
-            deoptimize.setMessage(targetMethod.getName());
             append(deoptimize);
             frameState.pushReturn(resultType, ConstantNode.defaultForKind(resultType, currentGraph));
             return;
         }
 
         JavaType returnType = targetMethod.getSignature().getReturnType(method.getDeclaringClass());
-        if (graphBuilderConfig.eagerResolvingForSnippets()) {
+        if (graphBuilderConfig.eagerResolving()) {
             returnType = returnType.resolve(targetMethod.getDeclaringClass());
         }
         MethodCallTargetNode callTarget = currentGraph.add(new MethodCallTargetNode(invokeKind, targetMethod, args, returnType));
         // be conservative if information was not recorded (could result in endless recompiles
         // otherwise)
-        if (optimisticOpts.useExceptionProbability() && profilingInfo.getExceptionSeen(bci()) == ExceptionSeen.FALSE) {
+        if (graphBuilderConfig.omitAllExceptionEdges() || (optimisticOpts.useExceptionProbability() && profilingInfo.getExceptionSeen(bci()) == ExceptionSeen.FALSE)) {
             ValueNode result = appendWithBCI(currentGraph.add(new InvokeNode(callTarget, bci())));
             frameState.pushReturn(resultType, result);
 

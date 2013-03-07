@@ -25,8 +25,8 @@ package com.oracle.graal.compiler.amd64;
 
 import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.amd64.AMD64Arithmetic.*;
-import static com.oracle.graal.lir.amd64.AMD64Compare.*;
 import static com.oracle.graal.lir.amd64.AMD64BitManipulationOp.IntrinsicOpcode.*;
+import static com.oracle.graal.lir.amd64.AMD64Compare.*;
 import static com.oracle.graal.lir.amd64.AMD64MathIntrinsicOp.IntrinsicOpcode.*;
 
 import com.oracle.graal.amd64.*;
@@ -40,13 +40,15 @@ import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.JumpOp;
-import com.oracle.graal.lir.amd64.AMD64Arithmetic.DivOp;
-import com.oracle.graal.lir.amd64.AMD64Arithmetic.Op1Reg;
-import com.oracle.graal.lir.amd64.AMD64Arithmetic.Op1Stack;
-import com.oracle.graal.lir.amd64.AMD64Arithmetic.Op2Reg;
-import com.oracle.graal.lir.amd64.AMD64Arithmetic.Op2Stack;
-import com.oracle.graal.lir.amd64.AMD64Arithmetic.ShiftOp;
 import com.oracle.graal.lir.amd64.*;
+import com.oracle.graal.lir.amd64.AMD64Arithmetic.BinaryCommutative;
+import com.oracle.graal.lir.amd64.AMD64Arithmetic.BinaryRegConst;
+import com.oracle.graal.lir.amd64.AMD64Arithmetic.BinaryRegReg;
+import com.oracle.graal.lir.amd64.AMD64Arithmetic.BinaryRegStack;
+import com.oracle.graal.lir.amd64.AMD64Arithmetic.BinaryRegStackConst;
+import com.oracle.graal.lir.amd64.AMD64Arithmetic.DivRemOp;
+import com.oracle.graal.lir.amd64.AMD64Arithmetic.Unary1Op;
+import com.oracle.graal.lir.amd64.AMD64Arithmetic.Unary2Op;
 import com.oracle.graal.lir.amd64.AMD64Call.DirectCallOp;
 import com.oracle.graal.lir.amd64.AMD64Call.IndirectCallOp;
 import com.oracle.graal.lir.amd64.AMD64Compare.CompareOp;
@@ -66,10 +68,11 @@ import com.oracle.graal.lir.amd64.AMD64Move.MoveFromRegOp;
 import com.oracle.graal.lir.amd64.AMD64Move.MoveToRegOp;
 import com.oracle.graal.lir.amd64.AMD64Move.NullCheckOp;
 import com.oracle.graal.lir.amd64.AMD64Move.SpillMoveOp;
+import com.oracle.graal.lir.amd64.AMD64Move.StackLeaOp;
+import com.oracle.graal.lir.amd64.AMD64Move.StoreConstantOp;
 import com.oracle.graal.lir.amd64.AMD64Move.StoreOp;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.phases.util.*;
 
@@ -137,68 +140,14 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Address makeAddress(Kind kind, Value base, int displacement) {
-        return new AMD64Address(kind, base, displacement);
-    }
-
-    @Override
-    public Address makeAddress(LocationNode location, ValueNode object) {
-        Value base = operand(object);
-        Value index = Value.ILLEGAL;
-        int scale = 1;
-        int displacement = location.displacement();
-
-        if (isConstant(base)) {
-            if (asConstant(base).isNull()) {
-                base = Value.ILLEGAL;
-            } else if (asConstant(base).getKind() != Kind.Object) {
-                long newDisplacement = displacement + asConstant(base).asLong();
-                if (NumUtil.isInt(newDisplacement)) {
-                    assert !runtime.needsDataPatch(asConstant(base));
-                    displacement = (int) newDisplacement;
-                    base = Value.ILLEGAL;
-                } else {
-                    Value newBase = newVariable(Kind.Long);
-                    emitMove(base, newBase);
-                    base = newBase;
-                }
-            }
-        }
-
-        if (location instanceof IndexedLocationNode) {
-            IndexedLocationNode indexedLoc = (IndexedLocationNode) location;
-
-            index = operand(indexedLoc.index());
-            scale = indexedLoc.indexScaling();
-            if (isConstant(index)) {
-                long newDisplacement = displacement + asConstant(index).asLong() * scale;
-                // only use the constant index if the resulting displacement fits into a 32 bit
-                // offset
-                if (NumUtil.isInt(newDisplacement)) {
-                    displacement = (int) newDisplacement;
-                    index = Value.ILLEGAL;
-                } else {
-                    // create a temporary variable for the index, the pointer load cannot handle a
-                    // constant index
-                    Value newIndex = newVariable(Kind.Long);
-                    emitMove(index, newIndex);
-                    index = newIndex;
-                }
-            }
-        }
-
-        return new AMD64Address(location.getValueKind(), base, index, AMD64Address.Scale.fromInt(scale), displacement);
-    }
-
-    @Override
     public Variable emitMove(Value input) {
         Variable result = newVariable(input.getKind());
-        emitMove(input, result);
+        emitMove(result, input);
         return result;
     }
 
     @Override
-    public void emitMove(Value src, Value dst) {
+    public void emitMove(Value dst, Value src) {
         if (isRegister(src) || isStackSlot(dst)) {
             append(new MoveFromRegOp(dst, src));
         } else {
@@ -206,23 +155,90 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         }
     }
 
+    private AMD64Address prepareAddress(Kind kind, Value base, int displacement, Value index, int scale) {
+        Value baseRegister = base;
+        int finalDisp = displacement;
+        if (isConstant(base)) {
+            if (asConstant(base).isNull()) {
+                baseRegister = Value.ILLEGAL;
+            } else if (asConstant(base).getKind() != Kind.Object) {
+                long newDisplacement = displacement + asConstant(base).asLong();
+                if (NumUtil.isInt(newDisplacement)) {
+                    assert !runtime.needsDataPatch(asConstant(base));
+                    finalDisp = (int) newDisplacement;
+                    baseRegister = Value.ILLEGAL;
+                } else {
+                    Value newBase = newVariable(Kind.Long);
+                    emitMove(newBase, base);
+                    baseRegister = newBase;
+                }
+            }
+        }
+
+        Value indexRegister = index;
+        AMD64Address.Scale scaleEnum;
+        if (index != Value.ILLEGAL && scale > 0) {
+            scaleEnum = AMD64Address.Scale.fromInt(scale);
+            if (isConstant(index)) {
+                long newDisplacement = finalDisp + asConstant(index).asLong() * scale;
+                // only use the constant index if the resulting displacement fits into a 32 bit
+                // offset
+                if (NumUtil.isInt(newDisplacement)) {
+                    finalDisp = (int) newDisplacement;
+                    indexRegister = Value.ILLEGAL;
+                } else {
+                    // create a temporary variable for the index, the pointer load cannot handle a
+                    // constant index
+                    Value newIndex = newVariable(Kind.Long);
+                    emitMove(newIndex, index);
+                    indexRegister = newIndex;
+                }
+            }
+        } else {
+            indexRegister = Value.ILLEGAL;
+            scaleEnum = AMD64Address.Scale.Times1;
+        }
+
+        return new AMD64Address(kind, baseRegister, indexRegister, scaleEnum, finalDisp);
+    }
+
     @Override
-    public Variable emitLoad(Value loadAddress, boolean canTrap) {
+    public Variable emitLoad(Kind kind, Value base, int displacement, Value index, int scale, boolean canTrap) {
+        AMD64Address loadAddress = prepareAddress(kind, base, displacement, index, scale);
         Variable result = newVariable(loadAddress.getKind());
         append(new LoadOp(result, loadAddress, canTrap ? state() : null));
         return result;
     }
 
     @Override
-    public void emitStore(Value storeAddress, Value inputVal, boolean canTrap) {
-        Value input = loadForStore(inputVal, storeAddress.getKind());
-        append(new StoreOp(storeAddress, input, canTrap ? state() : null));
+    public void emitStore(Kind kind, Value base, int displacement, Value index, int scale, Value inputVal, boolean canTrap) {
+        AMD64Address storeAddress = prepareAddress(kind, base, displacement, index, scale);
+        LIRFrameState state = canTrap ? state() : null;
+
+        if (isConstant(inputVal)) {
+            Constant c = asConstant(inputVal);
+            if (canStoreConstant(c)) {
+                append(new StoreConstantOp(storeAddress, c, state));
+                return;
+            }
+        }
+
+        Variable input = load(inputVal);
+        append(new StoreOp(storeAddress, input, state));
     }
 
     @Override
-    public Variable emitLea(Value address) {
+    public Variable emitLea(Value base, int displacement, Value index, int scale) {
         Variable result = newVariable(target().wordKind);
+        AMD64Address address = prepareAddress(result.getKind(), base, displacement, index, scale);
         append(new LeaOp(result, address));
+        return result;
+    }
+
+    @Override
+    public Variable emitLea(StackSlot address) {
+        Variable result = newVariable(target().wordKind);
+        append(new StackLeaOp(result, address));
         return result;
     }
 
@@ -339,91 +355,126 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitNegate(Value input) {
+    public Variable emitNegate(Value inputVal) {
+        AllocatableValue input = asAllocatable(inputVal);
         Variable result = newVariable(input.getKind());
         switch (input.getKind()) {
             case Int:
-                append(new Op1Stack(INEG, result, input));
+                append(new Unary1Op(INEG, result, input));
                 break;
             case Long:
-                append(new Op1Stack(LNEG, result, input));
+                append(new Unary1Op(LNEG, result, input));
                 break;
             case Float:
-                append(new Op2Reg(FXOR, result, input, Constant.forFloat(Float.intBitsToFloat(0x80000000))));
+                append(new BinaryRegConst(FXOR, result, input, Constant.forFloat(Float.intBitsToFloat(0x80000000))));
                 break;
             case Double:
-                append(new Op2Reg(DXOR, result, input, Constant.forDouble(Double.longBitsToDouble(0x8000000000000000L))));
+                append(new BinaryRegConst(DXOR, result, input, Constant.forDouble(Double.longBitsToDouble(0x8000000000000000L))));
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere();
+        }
+        return result;
+    }
+
+    private Variable emitBinary(AMD64Arithmetic op, boolean commutative, Value a, Value b) {
+        if (isConstant(b)) {
+            return emitBinaryConst(op, commutative, asAllocatable(a), asConstant(b));
+        } else if (commutative && isConstant(a)) {
+            return emitBinaryConst(op, commutative, asAllocatable(b), asConstant(a));
+        } else {
+            return emitBinaryVar(op, commutative, asAllocatable(a), asAllocatable(b));
+        }
+    }
+
+    private Variable emitBinaryConst(AMD64Arithmetic op, boolean commutative, AllocatableValue a, Constant b) {
+        switch (op) {
+            case IADD:
+            case LADD:
+            case ISUB:
+            case LSUB:
+            case IAND:
+            case LAND:
+            case IOR:
+            case LOR:
+            case IXOR:
+            case LXOR:
+                if (NumUtil.isInt(b.asLong())) {
+                    Variable result = newVariable(a.getKind());
+                    append(new BinaryRegConst(op, result, a, b));
+                    return result;
+                }
+                break;
+
+            case IMUL:
+            case LMUL:
+                if (NumUtil.isInt(b.asLong())) {
+                    Variable result = newVariable(a.getKind());
+                    append(new BinaryRegStackConst(op, result, a, b));
+                    return result;
+                }
+                break;
+        }
+
+        return emitBinaryVar(op, commutative, a, asAllocatable(b));
+    }
+
+    private Variable emitBinaryVar(AMD64Arithmetic op, boolean commutative, AllocatableValue a, AllocatableValue b) {
+        Variable result = newVariable(a.getKind());
+        if (commutative) {
+            append(new BinaryCommutative(op, result, a, b));
+        } else {
+            append(new BinaryRegStack(op, result, a, b));
         }
         return result;
     }
 
     @Override
     public Variable emitAdd(Value a, Value b) {
-        Variable result = newVariable(a.getKind());
         switch (a.getKind()) {
             case Int:
-                append(new Op2Stack(IADD, result, a, loadNonConst(b)));
-                break;
+                return emitBinary(IADD, true, a, b);
             case Long:
-                append(new Op2Stack(LADD, result, a, loadNonConst(b)));
-                break;
+                return emitBinary(LADD, true, a, b);
             case Float:
-                append(new Op2Stack(FADD, result, a, loadNonConst(b)));
-                break;
+                return emitBinary(FADD, true, a, b);
             case Double:
-                append(new Op2Stack(DADD, result, a, loadNonConst(b)));
-                break;
+                return emitBinary(DADD, true, a, b);
             default:
                 throw GraalInternalError.shouldNotReachHere();
         }
-        return result;
     }
 
     @Override
     public Variable emitSub(Value a, Value b) {
-        Variable result = newVariable(a.getKind());
         switch (a.getKind()) {
             case Int:
-                append(new Op2Stack(ISUB, result, a, loadNonConst(b)));
-                break;
+                return emitBinary(ISUB, false, a, b);
             case Long:
-                append(new Op2Stack(LSUB, result, a, loadNonConst(b)));
-                break;
+                return emitBinary(LSUB, false, a, b);
             case Float:
-                append(new Op2Stack(FSUB, result, a, loadNonConst(b)));
-                break;
+                return emitBinary(FSUB, false, a, b);
             case Double:
-                append(new Op2Stack(DSUB, result, a, loadNonConst(b)));
-                break;
+                return emitBinary(DSUB, false, a, b);
             default:
                 throw GraalInternalError.shouldNotReachHere();
         }
-        return result;
     }
 
     @Override
     public Variable emitMul(Value a, Value b) {
-        Variable result = newVariable(a.getKind());
         switch (a.getKind()) {
             case Int:
-                append(new Op2Reg(IMUL, result, a, loadNonConst(b)));
-                break;
+                return emitBinary(IMUL, true, a, b);
             case Long:
-                append(new Op2Reg(LMUL, result, a, loadNonConst(b)));
-                break;
+                return emitBinary(LMUL, true, a, b);
             case Float:
-                append(new Op2Stack(FMUL, result, a, loadNonConst(b)));
-                break;
+                return emitBinary(FMUL, true, a, b);
             case Double:
-                append(new Op2Stack(DMUL, result, a, loadNonConst(b)));
-                break;
+                return emitBinary(DMUL, true, a, b);
             default:
                 throw GraalInternalError.shouldNotReachHere();
         }
-        return result;
     }
 
     @Override
@@ -453,15 +504,19 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         return false;
     }
 
+    private void emitDivRem(AMD64Arithmetic op, Value a, Value b) {
+        AllocatableValue rax = AMD64.rax.asValue(a.getKind());
+        emitMove(rax, a);
+        append(new DivRemOp(op, rax, asAllocatable(b), state()));
+    }
+
     public Value[] emitIntegerDivRem(Value a, Value b) {
         switch (a.getKind()) {
             case Int:
-                emitMove(a, RAX_I);
-                append(new DivRemOp(IDIVREM, RAX_I, load(b), state()));
+                emitDivRem(IDIVREM, a, b);
                 return new Value[]{emitMove(RAX_I), emitMove(RDX_I)};
             case Long:
-                emitMove(a, RAX_L);
-                append(new DivRemOp(LDIVREM, RAX_L, load(b), state()));
+                emitDivRem(LDIVREM, a, b);
                 return new Value[]{emitMove(RAX_L), emitMove(RDX_L)};
             default:
                 throw GraalInternalError.shouldNotReachHere();
@@ -472,21 +527,19 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     public Value emitDiv(Value a, Value b) {
         switch (a.getKind()) {
             case Int:
-                emitMove(a, RAX_I);
-                append(new DivOp(IDIV, RAX_I, RAX_I, load(b), state()));
+                emitDivRem(IDIV, a, b);
                 return emitMove(RAX_I);
             case Long:
-                emitMove(a, RAX_L);
-                append(new DivOp(LDIV, RAX_L, RAX_L, load(b), state()));
+                emitDivRem(LDIV, a, b);
                 return emitMove(RAX_L);
             case Float: {
                 Variable result = newVariable(a.getKind());
-                append(new Op2Stack(FDIV, result, a, loadNonConst(b)));
+                append(new BinaryRegStack(FDIV, result, asAllocatable(a), asAllocatable(b)));
                 return result;
             }
             case Double: {
                 Variable result = newVariable(a.getKind());
-                append(new Op2Stack(DDIV, result, a, loadNonConst(b)));
+                append(new BinaryRegStack(DDIV, result, asAllocatable(a), asAllocatable(b)));
                 return result;
             }
             default:
@@ -498,12 +551,10 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     public Value emitRem(Value a, Value b) {
         switch (a.getKind()) {
             case Int:
-                emitMove(a, RAX_I);
-                append(new DivOp(IREM, RDX_I, RAX_I, load(b), state()));
+                emitDivRem(IREM, a, b);
                 return emitMove(RDX_I);
             case Long:
-                emitMove(a, RAX_L);
-                append(new DivOp(LREM, RDX_L, RAX_L, load(b), state()));
+                emitDivRem(LREM, a, b);
                 return emitMove(RDX_L);
             case Float: {
                 RuntimeCallTarget stub = runtime.lookupRuntimeCall(ARITHMETIC_FREM);
@@ -522,12 +573,10 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     public Variable emitUDiv(Value a, Value b) {
         switch (a.getKind()) {
             case Int:
-                emitMove(a, RAX_I);
-                append(new DivOp(IUDIV, RAX_I, RAX_I, load(b), state()));
+                emitDivRem(IUDIV, a, b);
                 return emitMove(RAX_I);
             case Long:
-                emitMove(a, RAX_L);
-                append(new DivOp(LUDIV, RAX_L, RAX_L, load(b), state()));
+                emitDivRem(LUDIV, a, b);
                 return emitMove(RAX_L);
             default:
                 throw GraalInternalError.shouldNotReachHere();
@@ -538,12 +587,10 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     public Variable emitURem(Value a, Value b) {
         switch (a.getKind()) {
             case Int:
-                emitMove(a, RAX_I);
-                append(new DivOp(IUREM, RDX_I, RAX_I, load(b), state()));
+                emitDivRem(IUREM, a, b);
                 return emitMove(RDX_I);
             case Long:
-                emitMove(a, RAX_L);
-                append(new DivOp(LUREM, RDX_L, RAX_L, load(b), state()));
+                emitDivRem(LUREM, a, b);
                 return emitMove(RDX_L);
             default:
                 throw GraalInternalError.shouldNotReachHere();
@@ -552,107 +599,86 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitAnd(Value a, Value b) {
-        Variable result = newVariable(a.getKind());
         switch (a.getKind()) {
             case Int:
-                append(new Op2Stack(IAND, result, a, loadNonConst(b)));
-                break;
+                return emitBinary(IAND, true, a, b);
             case Long:
-                append(new Op2Stack(LAND, result, a, loadNonConst(b)));
-                break;
+                return emitBinary(LAND, true, a, b);
             default:
                 throw GraalInternalError.shouldNotReachHere();
         }
-        return result;
     }
 
     @Override
     public Variable emitOr(Value a, Value b) {
-        Variable result = newVariable(a.getKind());
         switch (a.getKind()) {
             case Int:
-                append(new Op2Stack(IOR, result, a, loadNonConst(b)));
-                break;
+                return emitBinary(IOR, true, a, b);
             case Long:
-                append(new Op2Stack(LOR, result, a, loadNonConst(b)));
-                break;
+                return emitBinary(LOR, true, a, b);
             default:
                 throw GraalInternalError.shouldNotReachHere();
         }
-        return result;
     }
 
     @Override
     public Variable emitXor(Value a, Value b) {
-        Variable result = newVariable(a.getKind());
         switch (a.getKind()) {
             case Int:
-                append(new Op2Stack(IXOR, result, a, loadNonConst(b)));
-                break;
+                return emitBinary(IXOR, true, a, b);
             case Long:
-                append(new Op2Stack(LXOR, result, a, loadNonConst(b)));
-                break;
+                return emitBinary(LXOR, true, a, b);
             default:
                 throw GraalInternalError.shouldNotReachHere();
+        }
+    }
+
+    private Variable emitShift(AMD64Arithmetic op, Value a, Value b) {
+        Variable result = newVariable(a.getKind());
+        AllocatableValue input = asAllocatable(a);
+        if (isConstant(b)) {
+            append(new BinaryRegConst(op, result, input, asConstant(b)));
+        } else {
+            emitMove(RCX_I, b);
+            append(new BinaryRegReg(op, result, input, RCX_I));
         }
         return result;
     }
 
     @Override
     public Variable emitShl(Value a, Value b) {
-        Variable result = newVariable(a.getKind());
         switch (a.getKind()) {
             case Int:
-                append(new ShiftOp(ISHL, result, a, loadShiftCount(b)));
-                break;
+                return emitShift(ISHL, a, b);
             case Long:
-                append(new ShiftOp(LSHL, result, a, loadShiftCount(b)));
-                break;
+                return emitShift(LSHL, a, b);
             default:
-                GraalInternalError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
         }
-        return result;
     }
 
     @Override
     public Variable emitShr(Value a, Value b) {
-        Variable result = newVariable(a.getKind());
         switch (a.getKind()) {
             case Int:
-                append(new ShiftOp(ISHR, result, a, loadShiftCount(b)));
-                break;
+                return emitShift(ISHR, a, b);
             case Long:
-                append(new ShiftOp(LSHR, result, a, loadShiftCount(b)));
-                break;
+                return emitShift(LSHR, a, b);
             default:
-                GraalInternalError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
         }
-        return result;
     }
 
     @Override
     public Variable emitUShr(Value a, Value b) {
-        Variable result = newVariable(a.getKind());
         switch (a.getKind()) {
             case Int:
-                append(new ShiftOp(IUSHR, result, a, loadShiftCount(b)));
-                break;
+                return emitShift(IUSHR, a, b);
             case Long:
-                append(new ShiftOp(LUSHR, result, a, loadShiftCount(b)));
-                break;
+                return emitShift(LUSHR, a, b);
             default:
-                GraalInternalError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere();
         }
-        return result;
-    }
-
-    private Value loadShiftCount(Value value) {
-        if (isConstant(value)) {
-            return value;
-        }
-        // Non-constant shift count must be in RCX
-        emitMove(value, RCX_I);
-        return RCX_I;
     }
 
     @Override
@@ -661,67 +687,67 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         Variable result = newVariable(opcode.to);
         switch (opcode) {
             case I2L:
-                append(new Op1Reg(I2L, result, input));
+                append(new Unary2Op(I2L, result, input));
                 break;
             case L2I:
-                append(new Op1Stack(L2I, result, input));
+                append(new Unary1Op(L2I, result, input));
                 break;
             case I2B:
-                append(new Op1Stack(I2B, result, input));
+                append(new Unary2Op(I2B, result, input));
                 break;
             case I2C:
-                append(new Op1Stack(I2C, result, input));
+                append(new Unary1Op(I2C, result, input));
                 break;
             case I2S:
-                append(new Op1Stack(I2S, result, input));
+                append(new Unary2Op(I2S, result, input));
                 break;
             case F2D:
-                append(new Op1Reg(F2D, result, input));
+                append(new Unary2Op(F2D, result, input));
                 break;
             case D2F:
-                append(new Op1Reg(D2F, result, input));
+                append(new Unary2Op(D2F, result, input));
                 break;
             case I2F:
-                append(new Op1Reg(I2F, result, input));
+                append(new Unary2Op(I2F, result, input));
                 break;
             case I2D:
-                append(new Op1Reg(I2D, result, input));
+                append(new Unary2Op(I2D, result, input));
                 break;
             case F2I:
-                append(new Op1Reg(F2I, result, input));
+                append(new Unary2Op(F2I, result, input));
                 break;
             case D2I:
-                append(new Op1Reg(D2I, result, input));
+                append(new Unary2Op(D2I, result, input));
                 break;
             case L2F:
-                append(new Op1Reg(L2F, result, input));
+                append(new Unary2Op(L2F, result, input));
                 break;
             case L2D:
-                append(new Op1Reg(L2D, result, input));
+                append(new Unary2Op(L2D, result, input));
                 break;
             case F2L:
-                append(new Op1Reg(F2L, result, input));
+                append(new Unary2Op(F2L, result, input));
                 break;
             case D2L:
-                append(new Op1Reg(D2L, result, input));
+                append(new Unary2Op(D2L, result, input));
                 break;
             case MOV_I2F:
-                append(new Op1Reg(MOV_I2F, result, input));
+                append(new Unary2Op(MOV_I2F, result, input));
                 break;
             case MOV_L2D:
-                append(new Op1Reg(MOV_L2D, result, input));
+                append(new Unary2Op(MOV_L2D, result, input));
                 break;
             case MOV_F2I:
-                append(new Op1Reg(MOV_F2I, result, input));
+                append(new Unary2Op(MOV_F2I, result, input));
                 break;
             case MOV_D2L:
-                append(new Op1Reg(MOV_D2L, result, input));
+                append(new Unary2Op(MOV_D2L, result, input));
                 break;
             case UNSIGNED_I2L:
                 // Instructions that move or generate 32-bit register values also set the upper 32
                 // bits of the register to zero.
                 // Consequently, there is no need for a special zero-extension move.
-                emitMove(input, result);
+                emitMove(result, input);
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere();
@@ -730,16 +756,16 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void emitDeoptimizeOnOverflow(DeoptimizationAction action, DeoptimizationReason reason, Object deoptInfo) {
+    public void emitDeoptimizeOnOverflow(DeoptimizationAction action, DeoptimizationReason reason) {
         LIRFrameState info = state();
-        LabelRef stubEntry = createDeoptStub(action, reason, info, deoptInfo);
+        LabelRef stubEntry = createDeoptStub(action, reason, info);
         append(new BranchOp(ConditionFlag.Overflow, stubEntry, info));
     }
 
     @Override
-    public void emitDeoptimize(DeoptimizationAction action, DeoptimizationReason reason, Object deoptInfo) {
+    public void emitDeoptimize(DeoptimizationAction action, DeoptimizationReason reason) {
         LIRFrameState info = state();
-        LabelRef stubEntry = createDeoptStub(action, reason, info, deoptInfo);
+        LabelRef stubEntry = createDeoptStub(action, reason, info);
         append(new JumpOp(stubEntry, info));
     }
 
@@ -761,7 +787,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         // The current register allocator cannot handle variables at call sites, need a fixed
         // register.
         Value targetAddress = AMD64.rax.asValue();
-        emitMove(operand(callTarget.computedAddress()), targetAddress);
+        emitMove(targetAddress, operand(callTarget.computedAddress()));
         append(new IndirectCallOp(callTarget.target(), result, parameters, temps, targetAddress, callState));
     }
 
@@ -777,29 +803,29 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     @Override
     public void emitBitCount(Variable result, Value value) {
         if (value.getKind().getStackKind() == Kind.Int) {
-            append(new AMD64BitManipulationOp(IPOPCNT, result, value));
+            append(new AMD64BitManipulationOp(IPOPCNT, result, asAllocatable(value)));
         } else {
-            append(new AMD64BitManipulationOp(LPOPCNT, result, value));
+            append(new AMD64BitManipulationOp(LPOPCNT, result, asAllocatable(value)));
         }
     }
 
     @Override
     public void emitBitScanForward(Variable result, Value value) {
-        append(new AMD64BitManipulationOp(BSF, result, value));
+        append(new AMD64BitManipulationOp(BSF, result, asAllocatable(value)));
     }
 
     @Override
     public void emitBitScanReverse(Variable result, Value value) {
         if (value.getKind().getStackKind() == Kind.Int) {
-            append(new AMD64BitManipulationOp(IBSR, result, value));
+            append(new AMD64BitManipulationOp(IBSR, result, asAllocatable(value)));
         } else {
-            append(new AMD64BitManipulationOp(LBSR, result, value));
+            append(new AMD64BitManipulationOp(LBSR, result, asAllocatable(value)));
         }
     }
 
     @Override
     public void emitMathAbs(Variable result, Variable input) {
-        append(new Op2Reg(DAND, result, input, Constant.forDouble(Double.longBitsToDouble(0x7FFFFFFFFFFFFFFFL))));
+        append(new BinaryRegConst(DAND, result, input, Constant.forDouble(Double.longBitsToDouble(0x7FFFFFFFFFFFFFFFL))));
     }
 
     @Override
@@ -863,15 +889,23 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    protected LabelRef createDeoptStub(DeoptimizationAction action, DeoptimizationReason reason, LIRFrameState info, Object deoptInfo) {
+    protected LabelRef createDeoptStub(DeoptimizationAction action, DeoptimizationReason reason, LIRFrameState info) {
         assert info.topFrame.getBCI() >= 0 : "invalid bci for deopt framestate";
-        AMD64DeoptimizationStub stub = new AMD64DeoptimizationStub(action, reason, info, deoptInfo);
+        AMD64DeoptimizationStub stub = new AMD64DeoptimizationStub(action, reason, info);
         lir.stubs.add(stub);
         return LabelRef.forLabel(stub.label);
     }
 
     @Override
-    protected void emitNullCheckGuard(ValueNode object) {
+    public void emitGuardCheck(LogicNode comp, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated) {
+        if (comp instanceof IsNullNode && negated) {
+            emitNullCheckGuard(((IsNullNode) comp).object());
+        } else {
+            super.emitGuardCheck(comp, deoptReason, action, negated);
+        }
+    }
+
+    private void emitNullCheckGuard(ValueNode object) {
         Variable value = load(operand(object));
         LIRFrameState info = state();
         append(new NullCheckOp(value, info));
@@ -885,7 +919,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         Value expected = loadNonConst(operand(node.expected()));
         Variable newValue = load(operand(node.newValue()));
 
-        Address address;
+        AMD64Address address;
         int displacement = node.displacement();
         Value index = operand(node.offset());
         if (isConstant(index) && NumUtil.isInt(asConstant(index).asLong() + displacement)) {
@@ -897,7 +931,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         }
 
         RegisterValue rax = AMD64.rax.asValue(kind);
-        emitMove(expected, rax);
+        emitMove(rax, expected);
         append(new CompareAndSwapOp(rax, address, rax, newValue));
 
         Variable result = newVariable(node.kind());

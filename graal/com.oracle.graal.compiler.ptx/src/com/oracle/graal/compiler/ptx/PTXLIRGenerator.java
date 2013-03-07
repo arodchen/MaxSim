@@ -50,7 +50,6 @@ import com.oracle.graal.lir.ptx.PTXMove.MoveToRegOp;
 import com.oracle.graal.lir.ptx.PTXMove.StoreOp;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.ptx.*;
 
@@ -100,55 +99,14 @@ public class PTXLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Address makeAddress(Kind kind, Value base, int displacement) {
-        return new PTXAddress(kind, base, displacement);
-    }
-
-    @Override
-    public Address makeAddress(LocationNode location, ValueNode object) {
-        Value base = operand(object);
-        long displacement = location.displacement();
-
-        if (isConstant(base)) {
-            if (asConstant(base).isNull()) {
-                base = Value.ILLEGAL;
-            } else if (asConstant(base).getKind() != Kind.Object) {
-                displacement += asConstant(base).asLong();
-                base = Value.ILLEGAL;
-            }
-        }
-
-        if (location instanceof IndexedLocationNode) {
-            IndexedLocationNode indexedLoc = (IndexedLocationNode) location;
-
-            Value index = operand(indexedLoc.index());
-            int scale = indexedLoc.indexScaling();
-            if (isConstant(index)) {
-                displacement += asConstant(index).asLong() * scale;
-            } else {
-                if (scale != 1) {
-                    index = emitMul(index, Constant.forInt(scale));
-                }
-                if (base == Value.ILLEGAL) {
-                    base = index;
-                } else {
-                    base = emitAdd(base, index);
-                }
-            }
-        }
-
-        return new PTXAddress(location.getValueKind(), base, displacement);
-    }
-
-    @Override
     public Variable emitMove(Value input) {
         Variable result = newVariable(input.getKind());
-        emitMove(input, result);
+        emitMove(result, input);
         return result;
     }
 
     @Override
-    public void emitMove(Value src, Value dst) {
+    public void emitMove(Value dst, Value src) {
         if (isRegister(src) || isStackSlot(dst)) {
             append(new MoveFromRegOp(dst, src));
         } else {
@@ -156,21 +114,59 @@ public class PTXLIRGenerator extends LIRGenerator {
         }
     }
 
+    private PTXAddress prepareAddress(Kind kind, Value base, int displacement, Value index, int scale) {
+        Value baseRegister = base;
+        long finalDisp = displacement;
+        if (isConstant(base)) {
+            if (asConstant(base).isNull()) {
+                baseRegister = Value.ILLEGAL;
+            } else if (asConstant(base).getKind() != Kind.Object) {
+                finalDisp += asConstant(base).asLong();
+                baseRegister = Value.ILLEGAL;
+            }
+        }
+
+        if (index != Value.ILLEGAL) {
+            if (isConstant(index)) {
+                finalDisp += asConstant(index).asLong() * scale;
+            } else {
+                Value indexRegister = index;
+                if (scale != 1) {
+                    indexRegister = emitMul(index, Constant.forInt(scale));
+                }
+                if (baseRegister == Value.ILLEGAL) {
+                    baseRegister = indexRegister;
+                } else {
+                    baseRegister = emitAdd(baseRegister, indexRegister);
+                }
+            }
+        }
+
+        return new PTXAddress(kind, baseRegister, finalDisp);
+    }
+
     @Override
-    public Variable emitLoad(Value loadAddress, boolean canTrap) {
+    public Variable emitLoad(Kind kind, Value base, int displacement, Value index, int scale, boolean canTrap) {
+        PTXAddress loadAddress = prepareAddress(kind, base, displacement, index, scale);
         Variable result = newVariable(loadAddress.getKind());
         append(new LoadOp(result, loadAddress, canTrap ? state() : null));
         return result;
     }
 
     @Override
-    public void emitStore(Value storeAddress, Value inputVal, boolean canTrap) {
-        Value input = loadForStore(inputVal, storeAddress.getKind());
+    public void emitStore(Kind kind, Value base, int displacement, Value index, int scale, Value inputVal, boolean canTrap) {
+        PTXAddress storeAddress = prepareAddress(kind, base, displacement, index, scale);
+        Variable input = load(inputVal);
         append(new StoreOp(storeAddress, input, canTrap ? state() : null));
     }
 
     @Override
-    public Variable emitLea(Value address) {
+    public Variable emitLea(Value base, int displacement, Value index, int scale) {
+        throw new InternalError("NYI");
+    }
+
+    @Override
+    public Variable emitLea(StackSlot address) {
         throw new InternalError("NYI");
     }
 
@@ -340,12 +336,12 @@ public class PTXLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void emitDeoptimizeOnOverflow(DeoptimizationAction action, DeoptimizationReason reason, Object deoptInfo) {
+    public void emitDeoptimizeOnOverflow(DeoptimizationAction action, DeoptimizationReason reason) {
         throw new InternalError("NYI");
     }
 
     @Override
-    public void emitDeoptimize(DeoptimizationAction action, DeoptimizationReason reason, Object deoptInfo) {
+    public void emitDeoptimize(DeoptimizationAction action, DeoptimizationReason reason) {
         throw new InternalError("NYI");
     }
 
@@ -444,16 +440,11 @@ public class PTXLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    protected LabelRef createDeoptStub(DeoptimizationAction action, DeoptimizationReason reason, LIRFrameState info, Object deoptInfo) {
+    protected LabelRef createDeoptStub(DeoptimizationAction action, DeoptimizationReason reason, LIRFrameState info) {
         assert info.topFrame.getBCI() >= 0 : "invalid bci for deopt framestate";
-        PTXDeoptimizationStub stub = new PTXDeoptimizationStub(action, reason, info, deoptInfo);
+        PTXDeoptimizationStub stub = new PTXDeoptimizationStub(action, reason, info);
         lir.stubs.add(stub);
         return LabelRef.forLabel(stub.label);
-    }
-
-    @Override
-    protected void emitNullCheckGuard(ValueNode object) {
-        throw new InternalError("NYI");
     }
 
     @Override
@@ -474,5 +465,11 @@ public class PTXLIRGenerator extends LIRGenerator {
     @Override
     public void visitSafepointNode(SafepointNode i) {
         throw new InternalError("NYI");
+    }
+
+    @Override
+    public void emitUnwind(Value operand) {
+        // TODO Auto-generated method stub
+
     }
 }
