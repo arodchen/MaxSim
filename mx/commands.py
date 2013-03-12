@@ -385,7 +385,11 @@ def _installGraalJarInJdks(graalDist):
         for e in os.listdir(jdks):
             jreLibDir = join(jdks, e, 'jre', 'lib')
             if exists(jreLibDir):
-                shutil.copyfile(graalJar, join(jreLibDir, 'graal.jar'))
+                # do a copy and then a move to get atomic updating (on Unix) of graal.jar in the JRE
+                fd, tmp = tempfile.mkstemp(suffix='', prefix='graal.jar', dir=jreLibDir)
+                shutil.copyfile(graalJar, tmp)
+                os.close(fd)
+                shutil.move(tmp, join(jreLibDir, 'graal.jar'))
 
 # run a command in the windows SDK Debug Shell
 def _runInDebugShell(cmd, workingDir, logFile=None, findInOutput=None, respondTo={}):
@@ -780,9 +784,20 @@ def gate(args):
             if mx.eclipseformat(['-e', eclipse_exe]) != 0:
                 t.abort('Formatter modified files - run "mx eclipseformat", check in changes and repush')
             tasks.append(t.stop())
+
+        t = Task('Canonicalization Check')
+        mx.log(time.strftime('%d %b %Y %H:%M:%S - Ensuring mx/projects files are canonicalized...'))
+        if mx.canonicalizeprojects([]) != 0:
+            t.abort('Rerun "mx canonicalizeprojects" and check-in the modified mx/projects files.')
+        tasks.append(t.stop())
         
         t = Task('BuildJava')
         build(['--no-native', '--jdt-warning-as-error'])
+        tasks.append(t.stop())
+        
+        t = Task('Checkstyle')
+        if mx.checkstyle([]) != 0:
+            t.abort('Checkstyle warnings were found')
         tasks.append(t.stop())
         
         if exists('jacoco.exec'):
@@ -792,10 +807,9 @@ def gate(args):
             _jacoco = 'append'
         else:
             _jacoco = 'off'
-        
 
         t = Task('BuildHotSpotGraal: fastdebug,product')
-        buildvms(['--vms', 'graal', '--builds', 'fastdebug,product'])
+        buildvms(['--vms', 'graal,server', '--builds', 'fastdebug,product'])
         tasks.append(t.stop())
 
         _vmbuild = 'fastdebug'
@@ -804,9 +818,16 @@ def gate(args):
         tasks.append(t.stop())
 
         _vmbuild = 'product'
-        t = Task('UnitTests:product')
+        t = Task('BootstrapWithRegisterPressure:product')
+        vm(['-G:RegisterPressure=rbx,r11,r14,xmm3,xmm11,xmm14', '-esa', '-version'])
+        tasks.append(t.stop())
+        
+        originalVm = _vm
+        _vm = 'server' # hosted mode
+        t = Task('UnitTests:hosted-product')
         unittest([])
         tasks.append(t.stop())
+        _vm = originalVm
 
         for vmbuild in ['fastdebug', 'product']:
             for test in sanitycheck.getDacapos(level=sanitycheck.SanityCheckLevel.Gate, gateBuildLevel=vmbuild):
@@ -819,17 +840,6 @@ def gate(args):
             jacocoreport([args.jacocout])
             
         _jacoco = 'off'
-
-        t = Task('Checkstyle')
-        if mx.checkstyle([]) != 0:
-            t.abort('Checkstyle warnings were found')
-        tasks.append(t.stop())
-
-        t = Task('Canonicalization Check')
-        mx.log(time.strftime('%d %b %Y %H:%M:%S - Ensuring mx/projects files are canonicalized...'))
-        if mx.canonicalizeprojects([]) != 0:
-            t.abort('Rerun "mx canonicalizeprojects" and check-in the modified mx/projects files.')
-        tasks.append(t.stop())
 
         t = Task('CleanAndBuildGraalVisualizer')
         mx.run(['ant', '-f', join(_graal_home, 'visualizer', 'build.xml'), '-q', 'clean', 'build'])
@@ -1012,6 +1022,15 @@ def specjvm2008(args):
         benchArgs.remove(args[itIdx+1])
     vm = _vm;
     sanitycheck.getSPECjvm2008(benchArgs, skipCheck, skipValid, wt, it).bench(vm, opts=vmArgs)
+    
+def specjbb2013(args):
+    """runs the composite SPECjbb2013 benchmark
+
+    All options begining with - will be passed to the vm"""
+    benchArgs = [a for a in args if a[0] != '-']
+    vmArgs = [a for a in args if a[0] == '-']
+    vm = _vm;
+    sanitycheck.getSPECjbb2013(benchArgs).bench(vm, opts=vmArgs)
 
 def hsdis(args, copyToDir=None):
     """download the hsdis library
@@ -1115,7 +1134,8 @@ def mx_init(suite):
         'jdkhome': [jdkhome, ''],
         'dacapo': [dacapo, '[[n] benchmark] [VM options|@DaCapo options]'],
         'scaladacapo': [scaladacapo, '[[n] benchmark] [VM options|@Scala DaCapo options]'],
-        'specjvm2008': [specjvm2008, '[VM options|@specjvm2008 options]'],
+        'specjvm2008': [specjvm2008, '[VM options|specjvm2008 options (-v, -ikv, -ict, -wt, -it)]'],
+        'specjbb2013': [specjbb2013, '[VM options]'],
         #'example': [example, '[-v] example names...'],
         'gate' : [gate, '[-options]'],
         'gv' : [gv, ''],

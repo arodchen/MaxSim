@@ -34,44 +34,16 @@ import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.ValueProcedure;
+import com.oracle.graal.lir.StandardOp.MoveOp;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.phases.*;
 
 public class AllocatorTest extends GraalCompilerTest {
 
-    @Test
-    public void test1() {
-        test("test1snippet", 2, 1, 0);
-    }
-
-    public static long test1snippet(long x) {
-        return x + 5;
-    }
-
-    @Ignore
-    @Test
-    public void test2() {
-        test("test2snippet", 2, 0, 0);
-    }
-
-    public static long test2snippet(long x) {
-        return x * 5;
-    }
-
-    @Ignore
-    @Test
-    public void test3() {
-        test("test3snippet", 4, 1, 0);
-    }
-
-    public static long test3snippet(long x) {
-        return x / 3 + x % 3;
-    }
-
-    private void test(String snippet, final int expectedRegisters, final int expectedRegRegMoves, final int expectedSpillMoves) {
+    protected void test(String snippet, final int expectedRegisters, final int expectedRegRegMoves, final int expectedSpillMoves) {
         final StructuredGraph graph = parse(snippet);
-        Debug.scope("AllocatorTest", new Object[]{graph, graph.method(), backend.target}, new Runnable() {
+        Debug.scope("AllocatorTest", new Object[]{graph, graph.method(), runtime}, new Runnable() {
 
             @Override
             public void run() {
@@ -90,7 +62,7 @@ public class AllocatorTest extends GraalCompilerTest {
         });
     }
 
-    class RegisterStats {
+    private class RegisterStats {
 
         public final LIR lir;
         public HashSet<Register> registers = new HashSet<>();
@@ -108,32 +80,30 @@ public class AllocatorTest extends GraalCompilerTest {
         }
 
         private void collectStats(final LIRInstruction instr) {
-            final boolean move = instr.name().equals("MOVE");
             instr.forEachOutput(new ValueProcedure() {
 
                 @Override
-                public Value doValue(Value defValue) {
-                    if (ValueUtil.isRegister(defValue)) {
-                        final Register reg = ValueUtil.asRegister(defValue);
+                public Value doValue(Value value) {
+                    if (ValueUtil.isRegister(value)) {
+                        final Register reg = ValueUtil.asRegister(value);
                         registers.add(reg);
-                        if (move) {
-                            instr.forEachInput(new ValueProcedure() {
-
-                                @Override
-                                public Value doValue(Value useValue) {
-                                    if (ValueUtil.isRegister(useValue) && ValueUtil.asRegister(useValue) != reg) {
-                                        regRegMoves++;
-                                    }
-                                    return useValue;
-                                }
-                            });
-                        }
-                    } else if (move && ValueUtil.isStackSlot(defValue)) {
-                        spillMoves++;
                     }
-                    return defValue;
+                    return value;
                 }
             });
+
+            if (instr instanceof MoveOp) {
+                MoveOp move = (MoveOp) instr;
+                Value def = move.getResult();
+                Value use = move.getInput();
+                if (ValueUtil.isRegister(def)) {
+                    if (ValueUtil.isRegister(use) && ValueUtil.asRegister(def) != ValueUtil.asRegister(use)) {
+                        regRegMoves++;
+                    }
+                } else if (ValueUtil.isStackSlot(def)) {
+                    spillMoves++;
+                }
+            }
         }
     }
 
@@ -145,7 +115,7 @@ public class AllocatorTest extends GraalCompilerTest {
 
             @Override
             public LIR call() {
-                return GraalCompiler.emitHIR(runtime, backend.target, graph, assumptions, null, phasePlan, OptimisticOptimizations.NONE);
+                return GraalCompiler.emitHIR(runtime, backend.target, graph, assumptions, null, phasePlan, OptimisticOptimizations.NONE, new SpeculationLog());
             }
         });
 

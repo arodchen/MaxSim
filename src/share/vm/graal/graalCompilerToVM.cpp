@@ -791,15 +791,16 @@ C2V_ENTRY(void, initializeConfiguration, (JNIEnv *env, jobject, jobject config))
 
 C2V_END
 
-C2V_VMENTRY(jint, installCode0, (JNIEnv *jniEnv, jobject, jobject compResult, jobject installed_code, jobject info))
+C2V_VMENTRY(jint, installCode0, (JNIEnv *jniEnv, jobject, jobject compResult, jobject installed_code, jobject info, jobject triggered_deoptimizations))
   ResourceMark rm;
   HandleMark hm;
   Handle compResultHandle = JNIHandles::resolve(compResult);
   nmethod* nm = NULL;
   methodHandle method = getMethodFromHotSpotMethod(HotSpotCompilationResult::method(compResult));
   Handle installed_code_handle = JNIHandles::resolve(installed_code);
+  Handle triggered_deoptimizations_handle = JNIHandles::resolve(triggered_deoptimizations);
   GraalEnv::CodeInstallResult result;
-  CodeInstaller installer(compResultHandle, method, result, nm, installed_code_handle);
+  CodeInstaller installer(compResultHandle, method, result, nm, installed_code_handle, triggered_deoptimizations_handle);
 
   if (result != GraalEnv::ok) {
     assert(nm == NULL, "should be");
@@ -877,7 +878,8 @@ C2V_VMENTRY(jobject, executeCompiledMethodVarargs, (JNIEnv *env, jobject, jlong 
     THROW_0(vmSymbols::MethodInvalidatedException());
   }
 
-  JavaCalls::call(&result, mh, nm, &jca, CHECK_NULL);
+  jca.set_alternative_target(nm);
+  JavaCalls::call(&result, mh, &jca, CHECK_NULL);
 
   if (jap.get_ret_type() == T_VOID) {
     return NULL;
@@ -906,7 +908,8 @@ C2V_VMENTRY(jobject, executeCompiledMethod, (JNIEnv *env, jobject, jlong metaspa
     THROW_0(vmSymbols::MethodInvalidatedException());
   }
 
-  JavaCalls::call(&result, method, nm, &args, CHECK_NULL);
+  args.set_alternative_target(nm);
+  JavaCalls::call(&result, method, &args, CHECK_NULL);
 
   return JNIHandles::make_local((oop) result.get_jobject());
 C2V_END
@@ -1094,7 +1097,7 @@ JNINativeMethod CompilerToVM_methods[] = {
   {CC"getMetaspaceConstructor",       CC"("REFLECT_CONSTRUCTOR"["HS_RESOLVED_TYPE")"METASPACE_METHOD,   FN_PTR(getMetaspaceConstructor)},
   {CC"getJavaField",                  CC"("REFLECT_FIELD")"HS_RESOLVED_FIELD,                           FN_PTR(getJavaField)},
   {CC"initializeConfiguration",       CC"("HS_CONFIG")V",                                               FN_PTR(initializeConfiguration)},
-  {CC"installCode0",                  CC"("HS_COMP_RESULT HS_INSTALLED_CODE HS_CODE_INFO")I",           FN_PTR(installCode0)},
+  {CC"installCode0",                  CC"("HS_COMP_RESULT HS_INSTALLED_CODE HS_CODE_INFO"[Z)I",         FN_PTR(installCode0)},
   {CC"disassembleNative",             CC"([BJ)"STRING,                                                  FN_PTR(disassembleNative)},
   {CC"disassembleNMethod",            CC"(J)"STRING,                                                    FN_PTR(disassembleNMethod)},
   {CC"executeCompiledMethod",         CC"("METASPACE_METHOD NMETHOD OBJECT OBJECT OBJECT")"OBJECT,      FN_PTR(executeCompiledMethod)},

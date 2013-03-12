@@ -1667,7 +1667,8 @@ def archive(args):
         if name.startswith('@'):
             dname = name[1:]
             d = distribution(dname)
-            zf = zipfile.ZipFile(d.path, 'w')
+            fd, tmp = tempfile.mkstemp(suffix='', prefix=basename(d.path) + '.', dir=dirname(d.path))
+            zf = zipfile.ZipFile(tmp, 'w')
             for p in sorted_deps(d.deps):
                 outputDir = p.output_dir()
                 for root, _, files in os.walk(outputDir):
@@ -1676,19 +1677,26 @@ def archive(args):
                         arcname = join(relpath, f).replace(os.sep, '/')
                         zf.write(join(root, f), arcname)
             zf.close()
+            os.close(fd)
+            # Atomic on Unix
+            shutil.move(tmp, d.path)
+            #print time.time(), 'move:', tmp, '->', d.path
             d.notify_updated()
 
         else:
             p = project(name)
             outputDir = p.output_dir()
-            jar = join(p.dir, p.name + '.jar')
-            zf = zipfile.ZipFile(jar, 'w')
+            fd, tmp = tempfile.mkstemp(suffix='', prefix=p.name, dir=p.dir)
+            zf = zipfile.ZipFile(tmp, 'w')
             for root, _, files in os.walk(outputDir):
                 for f in files:
                     relpath = root[len(outputDir) + 1:]
                     arcname = join(relpath, f).replace(os.sep, '/')
                     zf.write(join(root, f), arcname)
             zf.close()
+            os.close(fd)
+            # Atomic on Unix
+            shutil.move(tmp, join(p.dir, p.name + '.jar'))
 
 def canonicalizeprojects(args):
     """process all project files to canonicalize the dependencies
@@ -2273,13 +2281,18 @@ def _isAnnotationProcessorDependency(p):
     
     return False
 
-def _genEclipseBuilder(dotProjectDoc, p, name, mxCommand, refresh=True, async=False):
+def _genEclipseBuilder(dotProjectDoc, p, name, mxCommand, refresh=True, async=False, logToConsole=False):
     launchOut = XMLDoc();
+    consoleOn = 'true' if logToConsole else 'false'
     launchOut.open('launchConfiguration', {'type' : 'org.eclipse.ui.externaltools.ProgramBuilderLaunchConfigurationType'})
+    launchOut.open('mapAttribute', {'key' : 'org.eclipse.debug.core.environmentVariables'})
+    launchOut.element('mapEntry', {'key' : 'JAVA_HOME',	'value' : java().jdk})
+    launchOut.close('mapAttribute')
+    
     if refresh:
         launchOut.element('stringAttribute',  {'key' : 'org.eclipse.debug.core.ATTR_REFRESH_SCOPE',            'value': '${project}'})
-    launchOut.element('booleanAttribute', {'key' : 'org.eclipse.debug.core.capture_output',                'value': 'false'})
-    launchOut.element('booleanAttribute', {'key' : 'org.eclipse.debug.ui.ATTR_CONSOLE_OUTPUT_ON',          'value': 'false'})
+    launchOut.element('booleanAttribute', {'key' : 'org.eclipse.debug.ui.ATTR_CONSOLE_OUTPUT_ON',          'value': consoleOn})
+    launchOut.element('booleanAttribute', {'key' : 'org.eclipse.debug.core.capture_output',                'value': consoleOn})
     if async:
         launchOut.element('booleanAttribute', {'key' : 'org.eclipse.debug.ui.ATTR_LAUNCH_IN_BACKGROUND',       'value': 'true'})
     
@@ -2342,6 +2355,14 @@ def netbeansinit(args, suite=None):
         out.open('project', {'name' : p.name, 'default' : 'default', 'basedir' : '.'})
         out.element('description', data='Builds, tests, and runs the project ' + p.name + '.')
         out.element('import', {'file' : 'nbproject/build-impl.xml'})
+        out.open('target', {'name' : '-post-compile'})
+        out.open('exec', { 'executable' : sys.executable})
+        out.element('env', {'key' : 'JAVA_HOME', 'value' : java().jdk})
+        out.element('arg', {'value' : os.path.abspath(__file__)})
+        out.element('arg', {'value' : 'archive'})
+        out.element('arg', {'value' : '@GRAAL'})
+        out.close('exec')
+        out.close('target')
         out.close('project')
         updated = update_file(join(p.dir, 'build.xml'), out.xml(indent='\t', newl='\n')) or updated
 

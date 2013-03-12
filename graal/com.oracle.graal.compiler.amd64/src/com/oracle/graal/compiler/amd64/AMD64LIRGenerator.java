@@ -34,6 +34,7 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
+import com.oracle.graal.asm.amd64.AMD64Address.Scale;
 import com.oracle.graal.asm.amd64.AMD64Assembler.ConditionFlag;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
@@ -67,7 +68,6 @@ import com.oracle.graal.lir.amd64.AMD64Move.MembarOp;
 import com.oracle.graal.lir.amd64.AMD64Move.MoveFromRegOp;
 import com.oracle.graal.lir.amd64.AMD64Move.MoveToRegOp;
 import com.oracle.graal.lir.amd64.AMD64Move.NullCheckOp;
-import com.oracle.graal.lir.amd64.AMD64Move.SpillMoveOp;
 import com.oracle.graal.lir.amd64.AMD64Move.StackLeaOp;
 import com.oracle.graal.lir.amd64.AMD64Move.StoreConstantOp;
 import com.oracle.graal.lir.amd64.AMD64Move.StoreOp;
@@ -94,7 +94,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
         @Override
         public LIRInstruction createMove(Value result, Value input) {
-            return new SpillMoveOp(result, input);
+            return AMD64LIRGenerator.createMove(result, input);
         }
     }
 
@@ -146,65 +146,77 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         return result;
     }
 
-    @Override
-    public void emitMove(Value dst, Value src) {
+    private static AMD64LIRInstruction createMove(Value dst, Value src) {
         if (isRegister(src) || isStackSlot(dst)) {
-            append(new MoveFromRegOp(dst, src));
+            return new MoveFromRegOp(dst, src);
         } else {
-            append(new MoveToRegOp(dst, src));
+            return new MoveToRegOp(dst, src);
         }
     }
 
-    private AMD64Address prepareAddress(Kind kind, Value base, int displacement, Value index, int scale) {
-        Value baseRegister = base;
+    @Override
+    public void emitMove(Value dst, Value src) {
+        append(createMove(dst, src));
+    }
+
+    private AMD64AddressValue prepareAddress(Kind kind, Value base, int displacement, Value index, int scale) {
+        AllocatableValue baseRegister;
         int finalDisp = displacement;
         if (isConstant(base)) {
             if (asConstant(base).isNull()) {
-                baseRegister = Value.ILLEGAL;
+                baseRegister = AllocatableValue.UNUSED;
             } else if (asConstant(base).getKind() != Kind.Object) {
                 long newDisplacement = displacement + asConstant(base).asLong();
                 if (NumUtil.isInt(newDisplacement)) {
                     assert !runtime.needsDataPatch(asConstant(base));
                     finalDisp = (int) newDisplacement;
-                    baseRegister = Value.ILLEGAL;
+                    baseRegister = AllocatableValue.UNUSED;
                 } else {
-                    Value newBase = newVariable(Kind.Long);
+                    Variable newBase = newVariable(Kind.Long);
                     emitMove(newBase, base);
                     baseRegister = newBase;
                 }
+            } else {
+                baseRegister = load(base);
             }
+        } else if (base == Value.ILLEGAL) {
+            baseRegister = AllocatableValue.UNUSED;
+        } else {
+            baseRegister = asAllocatable(base);
         }
 
-        Value indexRegister = index;
-        AMD64Address.Scale scaleEnum;
-        if (index != Value.ILLEGAL && scale > 0) {
-            scaleEnum = AMD64Address.Scale.fromInt(scale);
+        AllocatableValue indexRegister;
+        Scale scaleEnum;
+        if (index != Value.ILLEGAL && scale != 0) {
+            scaleEnum = Scale.fromInt(scale);
             if (isConstant(index)) {
                 long newDisplacement = finalDisp + asConstant(index).asLong() * scale;
                 // only use the constant index if the resulting displacement fits into a 32 bit
                 // offset
                 if (NumUtil.isInt(newDisplacement)) {
                     finalDisp = (int) newDisplacement;
-                    indexRegister = Value.ILLEGAL;
+                    indexRegister = AllocatableValue.UNUSED;
                 } else {
                     // create a temporary variable for the index, the pointer load cannot handle a
                     // constant index
-                    Value newIndex = newVariable(Kind.Long);
+                    Variable newIndex = newVariable(Kind.Long);
                     emitMove(newIndex, index);
                     indexRegister = newIndex;
                 }
+            } else {
+                indexRegister = asAllocatable(index);
             }
         } else {
-            indexRegister = Value.ILLEGAL;
-            scaleEnum = AMD64Address.Scale.Times1;
+            indexRegister = AllocatableValue.UNUSED;
+            scaleEnum = Scale.Times1;
         }
 
-        return new AMD64Address(kind, baseRegister, indexRegister, scaleEnum, finalDisp);
+        return new AMD64AddressValue(kind, baseRegister, indexRegister, scaleEnum, finalDisp);
     }
 
     @Override
     public Variable emitLoad(Kind kind, Value base, int displacement, Value index, int scale, boolean canTrap) {
-        AMD64Address loadAddress = prepareAddress(kind, base, displacement, index, scale);
+        AMD64AddressValue loadAddress = prepareAddress(kind, base, displacement, index, scale);
         Variable result = newVariable(loadAddress.getKind());
         append(new LoadOp(result, loadAddress, canTrap ? state() : null));
         return result;
@@ -212,7 +224,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     public void emitStore(Kind kind, Value base, int displacement, Value index, int scale, Value inputVal, boolean canTrap) {
-        AMD64Address storeAddress = prepareAddress(kind, base, displacement, index, scale);
+        AMD64AddressValue storeAddress = prepareAddress(kind, base, displacement, index, scale);
         LIRFrameState state = canTrap ? state() : null;
 
         if (isConstant(inputVal)) {
@@ -230,7 +242,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     @Override
     public Variable emitLea(Value base, int displacement, Value index, int scale) {
         Variable result = newVariable(target().wordKind);
-        AMD64Address address = prepareAddress(result.getKind(), base, displacement, index, scale);
+        AMD64AddressValue address = prepareAddress(result.getKind(), base, displacement, index, scale);
         append(new LeaOp(result, address));
         return result;
     }
@@ -264,6 +276,11 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
             default:
                 throw GraalInternalError.shouldNotReachHere("" + left.getKind());
         }
+    }
+
+    @Override
+    public void emitOverflowCheckBranch(LabelRef destination, LIRFrameState info, boolean negated) {
+        append(new BranchOp(negated ? ConditionFlag.NoOverflow : ConditionFlag.Overflow, destination, info));
     }
 
     @Override
@@ -757,16 +774,9 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     public void emitDeoptimizeOnOverflow(DeoptimizationAction action, DeoptimizationReason reason) {
-        LIRFrameState info = state();
+        LIRFrameState info = state(reason);
         LabelRef stubEntry = createDeoptStub(action, reason, info);
         append(new BranchOp(ConditionFlag.Overflow, stubEntry, info));
-    }
-
-    @Override
-    public void emitDeoptimize(DeoptimizationAction action, DeoptimizationReason reason) {
-        LIRFrameState info = state();
-        LabelRef stubEntry = createDeoptStub(action, reason, info);
-        append(new JumpOp(stubEntry, info));
     }
 
     @Override
@@ -919,15 +929,15 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         Value expected = loadNonConst(operand(node.expected()));
         Variable newValue = load(operand(node.newValue()));
 
-        AMD64Address address;
+        AMD64AddressValue address;
         int displacement = node.displacement();
         Value index = operand(node.offset());
         if (isConstant(index) && NumUtil.isInt(asConstant(index).asLong() + displacement)) {
             assert !runtime.needsDataPatch(asConstant(index));
             displacement += (int) asConstant(index).asLong();
-            address = new AMD64Address(kind, load(operand(node.object())), displacement);
+            address = new AMD64AddressValue(kind, load(operand(node.object())), displacement);
         } else {
-            address = new AMD64Address(kind, load(operand(node.object())), load(index), AMD64Address.Scale.Times1, displacement);
+            address = new AMD64AddressValue(kind, load(operand(node.object())), load(index), Scale.Times1, displacement);
         }
 
         RegisterValue rax = AMD64.rax.asValue(kind);

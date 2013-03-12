@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -21,27 +21,22 @@
  * questions.
  */
 
-#ifndef SHARE_VM_UTILITIES_MACHINE_CODE_PRINTER_HPP
-#define SHARE_VM_UTILITIES_MACHINE_CODE_PRINTER_HPP
+package com.oracle.graal.jtt.bytecode;
 
-#include "memory/allocation.hpp"
-#include "utilities/ostream.hpp"
+import com.oracle.graal.jtt.*;
+import org.junit.*;
 
-class MachineCodePrinter : public AllStatic {
-private:
-  static fileStream* _st;
-  static volatile int _write_lock;
+/*
+ */
+public class BC_d2l03 extends JTTTest {
 
-public:
-  static void initialize();
-  static void print(nmethod* nm);
-  static void print(CodeBlob* cb);
-  static void print(StubQueue* stub_queue);
-  static void flush();
+    public static long test(double divider) {
+        return (long) (((long) divider) * divider);
+    }
 
-private:
-  static void lock();
-  static void unlock();
-};
+    @Test
+    public void run0() throws Throwable {
+        runTest("test", 34.5D);
+    }
 
-#endif // SHARE_VM_UTILITIES_MACHINE_CODE_PRINTER_HPP
+}

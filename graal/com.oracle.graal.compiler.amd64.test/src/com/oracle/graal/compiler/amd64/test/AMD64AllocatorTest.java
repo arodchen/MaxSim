@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,25 +20,40 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.api.code;
+package com.oracle.graal.compiler.amd64.test;
 
-import com.oracle.graal.api.meta.*;
+import org.junit.*;
 
-/**
- * Base class to represent an address in target machine memory. The concrete representation of the
- * address is platform dependent.
- */
-public abstract class Address extends Value {
+import com.oracle.graal.compiler.test.backend.*;
 
-    private static final long serialVersionUID = -1003772042519945089L;
+public class AMD64AllocatorTest extends AllocatorTest {
 
-    public Address(Kind kind) {
-        super(kind);
+    @Test
+    public void test1() {
+        test("test1snippet", 2, 1, 0);
     }
 
-    /**
-     * The values that this address is composed of. Used by the register allocator to manipulate
-     * addresses in a platform independent way.
-     */
-    public abstract Value[] components();
+    public static long test1snippet(long x) {
+        return x + 5;
+    }
+
+    @Test
+    public void test2() {
+        test("test2snippet", 2, 0, 0);
+    }
+
+    public static long test2snippet(long x) {
+        return x * 5;
+    }
+
+    @Ignore
+    @Test
+    public void test3() {
+        test("test3snippet", 4, 1, 0);
+    }
+
+    public static long test3snippet(long x) {
+        return x / 3 + x % 3;
+    }
+
 }
