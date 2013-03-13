@@ -24,11 +24,12 @@ package com.oracle.truffle.api.codegen;
 
 import java.lang.annotation.*;
 
+import com.oracle.truffle.api.nodes.*;
+
 @Retention(RetentionPolicy.CLASS)
-@Target({ElementType.METHOD})
-public @interface SpecializationThrows {
+@Target({ElementType.TYPE})
+public @interface NodeClass {
 
-    Class<? extends Throwable> javaClass();
+    Class<? extends Node> value();
 
-    String transitionTo();
 }

@@ -20,31 +20,31 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.api.codegen;
-
-import java.lang.annotation.*;
-
 /**
- * Specifies the use of a guard for a specialization.
+ * <p>This package contains basic tests of the Truffle-Source-Code-Generation (short Codegen) API and serves at the same
+ * time as an introduction to the Codegen API for language implementors. Every test gives an example on how to use the construct explained in the class description.</p>
+ *
+ * <p>
+ * This API relies heavily on the concepts described in {@link com.oracle.truffle.api.test}. We assume that the
+ * reader is already familiarized with those concepts.
+ * </p>
+ *
+ * <p>
+ * TODO general description
+ * </p>
+ *
+ * <p>
+ * This introduction to Codegen contains items in the following recommended order:
+ *
+ * Prerequisites:
+ * 
+ *
+ * <ul>
+ * <li>What do I need to get started? {@link com.oracle.truffle.api.codegen.test.TypeSystemTest}</li>
+ * <li>How would you generate function nodes for runtime objects? {@link com.oracle.truffle.api.codegen.test.RuntimeStringTest}</li>
+ * </ul>
+ * </p>
+ *
  */
-@Retention(RetentionPolicy.CLASS)
-@Target({ElementType.METHOD})
-public @interface SpecializationGuard {
+package com.oracle.truffle.api.codegen.test;
 
-    /**
-     * Specifies the name of the guard method annotated by {@link GuardCheck} specified as method in
-     * the {@link TypeSystem} class.
-     */
-    String methodName();
-
-    /**
-     * Determines if a guard check is invoked on specialization. Defaults to true.
-     */
-    boolean onSpecialization() default true;
-
-    /**
-     * Determines if a guard check is invoked on execution. Defaults to true.
-     */
-    boolean onExecution() default true;
-
-}

@@ -24,13 +24,10 @@ package com.oracle.truffle.api.codegen;
 
 import java.lang.annotation.*;
 
-/**
- * 
- * 
- * @see SpecializationGuard
- */
 @Retention(RetentionPolicy.CLASS)
-@Target({ElementType.METHOD})
-public @interface GuardCheck {
+@Target({ElementType.METHOD, ElementType.TYPE})
+public @interface NodeId {
+
+    String value();
 
 }

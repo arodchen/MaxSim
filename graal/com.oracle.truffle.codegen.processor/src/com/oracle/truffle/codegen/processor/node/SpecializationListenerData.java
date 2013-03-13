@@ -20,20 +20,14 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.api.codegen;
+package com.oracle.truffle.codegen.processor.node;
 
-import java.lang.annotation.*;
+import com.oracle.truffle.codegen.processor.template.*;
 
-@Retention(RetentionPolicy.CLASS)
-@Target({ElementType.METHOD})
-public @interface Specialization {
+public class SpecializationListenerData extends TemplateMethod {
 
-    int DEFAULT_ORDER = -1;
-
-    int order() default DEFAULT_ORDER;
-
-    Class<? extends Throwable>[] rewriteOn() default {};
-
-    String[] guards() default {};
+    public SpecializationListenerData(TemplateMethod method) {
+        super(method);
+    }
 
 }
