@@ -130,4 +130,10 @@ public abstract class LIRGeneratorTool {
     public abstract void visitBreakpointNode(BreakpointNode i);
 
     public abstract void emitUnwind(Value operand);
+
+    /**
+     * Called just before register allocation is performed on the LIR owned by this generator.
+     */
+    public void beforeRegisterAllocation() {
+    }
 }
