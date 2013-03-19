@@ -200,7 +200,12 @@ public class FloatingReadPhase extends Phase {
 
         @Override
         protected MemoryMap afterSplit(BeginNode node, MemoryMap oldState) {
-            return new MemoryMap(oldState);
+            MemoryMap result = new MemoryMap(oldState);
+            if (node.predecessor() instanceof InvokeWithExceptionNode) {
+                InvokeWithExceptionNode checkpoint = (InvokeWithExceptionNode) node.predecessor();
+                result.lastMemorySnapshot.put(checkpoint.getLocationIdentity(), node);
+            }
+            return result;
         }
 
         @Override
