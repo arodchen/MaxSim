@@ -31,10 +31,34 @@ public class ActualParameter {
     private final ParameterSpec specification;
     private final TypeMirror actualType;
     private TemplateMethod method;
+    private final String localName;
+    private final int index;
+    private final boolean implicit;
 
-    public ActualParameter(ParameterSpec specification, TypeMirror actualType) {
+    public ActualParameter(ParameterSpec specification, TypeMirror actualType, int index, boolean implicit) {
         this.specification = specification;
         this.actualType = actualType;
+
+        this.index = index;
+        this.implicit = implicit;
+        String valueName = specification.getName() + "Value";
+
+        if (specification.isIndexed()) {
+            valueName += index;
+        }
+        this.localName = valueName;
+    }
+
+    public boolean isImplicit() {
+        return implicit;
+    }
+
+    public int getIndex() {
+        return index;
+    }
+
+    public String getLocalName() {
+        return localName;
     }
 
     void setMethod(TemplateMethod method) {

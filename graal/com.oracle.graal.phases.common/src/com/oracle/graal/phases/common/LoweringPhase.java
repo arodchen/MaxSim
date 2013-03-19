@@ -83,8 +83,8 @@ public class LoweringPhase extends Phase {
         public ValueNode createGuard(LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated) {
             if (GraalOptions.OptEliminateGuards) {
                 for (Node usage : condition.usages()) {
-                    if (!activeGuards.isNew(usage) && activeGuards.isMarked(usage)) {
-                        return (ValueNode) usage;
+                    if (!activeGuards.isNew(usage) && activeGuards.isMarked(usage) && ((GuardNode) usage).negated() == negated) {
+                        return (GuardNode) usage;
                     }
                 }
             }

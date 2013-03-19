@@ -67,4 +67,3 @@ core.*
 *.jar
 eclipse-build.xml
 rebuild-launch.out
-

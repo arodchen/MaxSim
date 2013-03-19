@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,21 +20,14 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.lir.ptx;
+package com.oracle.truffle.api.codegen;
 
-import com.oracle.graal.asm.ptx.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.asm.*;
+import java.lang.annotation.*;
 
-/**
- * Convenience class to provide PTXAssembler for the {@link #emitCode} method.
- */
-public abstract class PTXCode implements LIR.Code {
+@Retention(RetentionPolicy.CLASS)
+@Target({ElementType.METHOD, ElementType.TYPE})
+public @interface NodeId {
 
-    @Override
-    public final void emitCode(TargetMethodAssembler tasm) {
-        emitCode(tasm, (PTXAssembler) tasm.asm);
-    }
+    String value();
 
-    public abstract void emitCode(TargetMethodAssembler tasm, PTXAssembler masm);
 }

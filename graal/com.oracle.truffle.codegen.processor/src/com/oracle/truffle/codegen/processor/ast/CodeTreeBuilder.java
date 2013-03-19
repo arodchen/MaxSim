@@ -495,7 +495,7 @@ public class CodeTreeBuilder {
     }
 
     public CodeTreeBuilder create() {
-        return new CodeTreeBuilder(null);
+        return new CodeTreeBuilder(this);
     }
 
     public CodeTreeBuilder type(TypeMirror type) {
@@ -533,7 +533,7 @@ public class CodeTreeBuilder {
         if (Utils.isVoid(type)) {
             tree(content);
             return this;
-        } else if (Utils.getQualifiedName(type).equals("java.lang.Object")) {
+        } else if (type.getKind() == TypeKind.DECLARED && Utils.getQualifiedName(type).equals("java.lang.Object")) {
             tree(content);
             return this;
         } else {

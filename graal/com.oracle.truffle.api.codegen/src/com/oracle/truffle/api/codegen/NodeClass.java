@@ -20,21 +20,16 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.lir.amd64;
+package com.oracle.truffle.api.codegen;
 
-import com.oracle.graal.asm.amd64.*;
-import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.asm.*;
+import java.lang.annotation.*;
 
-/**
- * Convenience class to provide AMD64MacroAssembler for the {@link #emitCode} method.
- */
-public abstract class AMD64Code implements LIR.Code {
+import com.oracle.truffle.api.nodes.*;
 
-    @Override
-    public final void emitCode(TargetMethodAssembler tasm) {
-        emitCode(tasm, (AMD64MacroAssembler) tasm.asm);
-    }
+@Retention(RetentionPolicy.CLASS)
+@Target({ElementType.TYPE})
+public @interface NodeClass {
 
-    public abstract void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm);
+    Class<? extends Node> value();
+
 }

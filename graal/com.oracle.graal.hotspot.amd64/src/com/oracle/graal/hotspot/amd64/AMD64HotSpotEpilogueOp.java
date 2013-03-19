@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,31 +20,26 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.api.codegen;
+package com.oracle.graal.hotspot.amd64;
 
-import java.lang.annotation.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.amd64.*;
 
 /**
- * Specifies the use of a guard for a specialization.
+ * Superclass for operations that use the value of RBP saved in a method's prologue.
  */
-@Retention(RetentionPolicy.CLASS)
-@Target({ElementType.METHOD})
-public @interface SpecializationGuard {
+abstract class AMD64HotSpotEpilogueOp extends AMD64LIRInstruction {
 
     /**
-     * Specifies the name of the guard method annotated by {@link GuardCheck} specified as method in
-     * the {@link TypeSystem} class.
+     * The type of location (i.e., stack or register) in which RBP is saved is not known until
+     * initial LIR generation is finished. Until then, we use a placeholder variable so that LIR
+     * verification is successful.
      */
-    String methodName();
+    private static final Variable PLACEHOLDER = new Variable(Kind.Long, Integer.MAX_VALUE, Register.RegisterFlag.CPU);
 
-    /**
-     * Determines if a guard check is invoked on specialization. Defaults to true.
-     */
-    boolean onSpecialization() default true;
-
-    /**
-     * Determines if a guard check is invoked on execution. Defaults to true.
-     */
-    boolean onExecution() default true;
-
+    @Use({REG, STACK}) protected AllocatableValue savedRbp = PLACEHOLDER;
 }

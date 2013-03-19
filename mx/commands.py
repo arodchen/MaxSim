@@ -52,31 +52,6 @@ _native_dbg = None
 
 _make_eclipse_launch = False
 
-_copyrightTemplate = """/*
- * Copyright (c) {0}, Oracle and/or its affiliates. All rights reserved.
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
- *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
- *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
- */
-
-"""
-
 _minVersion = mx.JavaVersion('1.7.0_04')
 
 def _chmodDir(chmodFlags, dirname, fnames):
@@ -316,7 +291,7 @@ def _vmCfgInJdk(jdk):
         return join(jdk, 'jre', 'lib', _arch(), 'jvm.cfg')
     return join(_vmLibDirInJdk(jdk), 'jvm.cfg')
 
-def _jdk(build='product', create=False):
+def _jdk(build='product', vmToCheck=None, create=False):
     """
     Get the JDK into which Graal is installed, creating it first if necessary.
     """
@@ -344,7 +319,6 @@ def _jdk(build='product', create=False):
             if not exists(jvmCfg):
                 mx.abort(jvmCfg + ' does not exist')
 
-            lines = []
             defaultVM = None
             with open(jvmCfg) as f:
                 for line in f:
@@ -353,17 +327,14 @@ def _jdk(build='product', create=False):
                         assert len(parts) == 2, parts
                         assert parts[1] == 'KNOWN', parts[1]
                         defaultVM = parts[0][1:]
-                        lines.append('-' + defaultVM + '0 KNOWN\n')
-                    lines.append(line)
 
             assert defaultVM is not None, 'Could not find default VM in ' + jvmCfg
             if mx.get_os() != 'windows':
                 chmodRecursive(jdk, 0755)
             shutil.copytree(join(_vmLibDirInJdk(jdk), defaultVM), join(_vmLibDirInJdk(jdk), defaultVM + '0'))
 
-            with open(jvmCfg, 'w') as f:
-                for line in lines:
-                    f.write(line)
+            with open(jvmCfg, 'w') as fp:
+                print >> fp, '-' + defaultVM + '0 KNOWN'
 
             # Install a copy of the disassembler library
             try:
@@ -372,10 +343,21 @@ def _jdk(build='product', create=False):
                 pass
     else:
         if not exists(jdk):
-            mx.abort('The ' + build + ' VM has not been created - run \'mx clean; mx build ' + build + '\'')
+            mx.abort('The ' + build + ' VM has not been created - run "mx build ' + build + '"')
             
     _installGraalJarInJdks(mx.distribution('GRAAL'))
     
+    if vmToCheck is not None:
+        jvmCfg = _vmCfgInJdk(jdk)
+        found = False
+        with open(jvmCfg) as f:
+            for line in f:
+                if line.strip() == '-' + vmToCheck + ' KNOWN':
+                    found = True
+                    break
+        if not found:
+            mx.abort('The ' + build + ' ' + vmToCheck + ' VM has not been created - run "mx --vm ' + vmToCheck + ' build ' + build + '"')
+        
     return jdk
 
 def _installGraalJarInJdks(graalDist):
@@ -455,6 +437,78 @@ def jdkhome(args, vm=None):
     build = _vmbuild if _vmSourcesAvailable else 'product'
     print join(_graal_home, 'jdk' + str(mx.java().version), build)
 
+def initantbuild(args):
+    """(re)generates an ant build file for producing graal.jar"""
+    parser=ArgumentParser(prog='mx initantbuild')
+    parser.add_argument('-f', '--buildfile', help='file to generate', default=join(_graal_home, 'make', 'build-graal.xml'))
+
+    args = parser.parse_args(args)
+    
+    out = mx.XMLDoc()
+    
+    out.comment("""
+ Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+
+ This code is free software; you can redistribute it and/or modify it
+ under the terms of the GNU General Public License version 2 only, as
+ published by the Free Software Foundation.  Oracle designates this
+ particular file as subject to the "Classpath" exception as provided
+ by Oracle in the LICENSE file that accompanied this code.
+
+ This code is distributed in the hope that it will be useful, but WITHOUT
+ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ version 2 for more details (a copy is included in the LICENSE file that
+ accompanied this code).
+
+ You should have received a copy of the GNU General Public License version
+ 2 along with this work; if not, write to the Free Software Foundation,
+ Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+
+ Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ or visit www.oracle.com if you need additional information or have any
+ questions.
+""")
+    
+    out.open('project', {'name' : 'graal', 'default' : 'main', 'basedir' : '.'})
+    out.element('property', {'name' : 'src.dir', 'value' : '${gamma.dir}/graal'})
+    out.element('property', {'name' : 'classes.dir', 'value' : '${shared.dir}/graal'})
+    out.element('property', {'name' : 'jar.dir', 'value' : '${shared.dir}'})
+    out.element('property', {'name' : 'jar.file', 'value' : '${jar.dir}/graal.jar'})
+    
+    out.element('target', {'name' : 'main', 'depends' : 'jar'})
+
+    out.open('target', {'name' : 'compile'})
+    out.element('mkdir', {'dir' : '${classes.dir}'})
+    out.open('javac', {'destdir' : '${classes.dir}', 'debug' : 'on', 'includeantruntime' : 'false', })
+    for p in mx.sorted_deps(mx.distribution('GRAAL').deps):
+        out.element('src', {'path' : '${src.dir}/' + p.name})
+    out.element('compilerarg', {'value' : '-XDignore.symbol.file'})
+    
+    out.open('classpath')
+    out.open('fileset', {'dir' : '${java.home}/../lib'})
+    out.element('include', {'name' : 'tools.jar'})
+    out.close('fileset')
+    out.close('classpath')
+    
+    out.close('javac')
+    out.close('target')
+
+    out.open('target', {'name' : 'jar', 'depends' : 'compile'})
+    out.element('mkdir', {'dir' : '${jar.dir}'})
+    out.element('jar', {'destfile' : '${jar.file}', 'basedir' : '${classes.dir}'})
+    out.close('target')
+    
+    out.open('target', {'name' : 'clean'})
+    out.element('delete', {'dir' : '${classes.dir}'})
+    out.element('delete', {'file' : '${jar.filr}'})
+    out.close('target')
+
+    out.close('project')
+    
+    mx.update_file(args.buildfile, out.xml(indent='  ', newl='\n'))
+
 def build(args, vm=None):
     """build the VM binary
 
@@ -483,6 +537,8 @@ def build(args, vm=None):
     else:
         assert vm == 'graal', vm
         buildSuffix = 'graal'
+        
+    initantbuild([])
 
     for build in builds:
         if build == 'ide-build-target':
@@ -588,23 +644,18 @@ def build(args, vm=None):
             mx.abort(jvmCfg + ' does not exist')
 
         prefix = '-' + vm
-        vmKnown = prefix + ' KNOWN\n'
-        lines = []
+        vmKnown = prefix + ' KNOWN'
         with open(jvmCfg) as f:
             for line in f:
-                if vmKnown in line:
+                if vmKnown == line.strip():
                     found = True
                     break
-                if not line.startswith(prefix):
-                    lines.append(line)
         if not found:
             mx.log('Appending "' + prefix + ' KNOWN" to ' + jvmCfg)
-            lines.append(vmKnown)
             if mx.get_os() != 'windows':
                 os.chmod(jvmCfg, 0755)
-            with open(jvmCfg, 'w') as f:
-                for line in lines:
-                    f.write(line)
+            with open(jvmCfg, 'a') as f:
+                print >> f, vmKnown
 
         if exists(timestampFile):
             os.utime(timestampFile, None)
@@ -626,7 +677,7 @@ def vm(args, vm=None, nonZeroIsFatal=True, out=None, err=None, cwd=None, timeout
         vm = _vm
 
     build = vmbuild if vmbuild is not None else _vmbuild if _vmSourcesAvailable else 'product'
-    jdk = _jdk(build)
+    jdk = _jdk(build, vmToCheck=vm)
     mx.expand_project_in_args(args)
     if _make_eclipse_launch:
         mx.make_eclipse_launch(args, 'graal-' + build, name=None, deps=mx.project('com.oracle.graal.hotspot').all_deps([], True))
@@ -1130,6 +1181,7 @@ def mx_init(suite):
         'clean': [clean, ''],
         'hsdis': [hsdis, '[att]'],
         'hcfdis': [hcfdis, ''],
+        'initantbuild' : [initantbuild, '[-options]'],
         'igv' : [igv, ''],
         'jdkhome': [jdkhome, ''],
         'dacapo': [dacapo, '[[n] benchmark] [VM options|@DaCapo options]'],
