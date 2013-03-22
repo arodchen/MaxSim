@@ -45,7 +45,7 @@ public final class InvokeNode extends AbstractStateSplit implements StateSplit, 
 
     /**
      * Constructs a new Invoke instruction.
-     * 
+     *
      * @param bci the bytecode index of the original invoke (used for debug infos)
      * @param callTarget the target method being called
      */
@@ -100,8 +100,8 @@ public final class InvokeNode extends AbstractStateSplit implements StateSplit, 
     @Override
     public Map<Object, Object> getDebugProperties(Map<Object, Object> map) {
         Map<Object, Object> debugProperties = super.getDebugProperties(map);
-        if (callTarget instanceof MethodCallTargetNode && methodCallTarget().targetMethod() != null) {
-            debugProperties.put("targetMethod", methodCallTarget().targetMethod());
+        if (callTarget instanceof MethodCallTargetNode && methodCallTarget().targetJavaMethod() != null) {
+            debugProperties.put("targetMethod", methodCallTarget().targetJavaMethod());
         } else if (callTarget instanceof AbstractCallTargetNode) {
             debugProperties.put("targetMethod", ((AbstractCallTargetNode) callTarget).target());
         }

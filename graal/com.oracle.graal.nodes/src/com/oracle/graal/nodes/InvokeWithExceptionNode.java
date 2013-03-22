@@ -176,8 +176,8 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     @Override
     public Map<Object, Object> getDebugProperties(Map<Object, Object> map) {
         Map<Object, Object> debugProperties = super.getDebugProperties(map);
-        if (callTarget instanceof MethodCallTargetNode && methodCallTarget().targetMethod() != null) {
-            debugProperties.put("targetMethod", methodCallTarget().targetMethod());
+        if (callTarget instanceof MethodCallTargetNode && methodCallTarget().targetJavaMethod() != null) {
+            debugProperties.put("targetMethod", methodCallTarget().targetJavaMethod());
         }
         return debugProperties;
     }
