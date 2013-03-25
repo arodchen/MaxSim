@@ -385,25 +385,20 @@ public class GraphBuilderPhase extends Phase {
         FrameStateBuilder dispatchState = frameState.copy();
         dispatchState.clearStack();
 
-        DispatchBeginNode dispatchBegin = currentGraph.add(new DispatchBeginNode());
-        dispatchBegin.setStateAfter(dispatchState.create(bci));
-
+        DispatchBeginNode dispatchBegin;
         if (exceptionObject == null) {
-            ExceptionObjectNode newExceptionObject = currentGraph.add(new ExceptionObjectNode(runtime));
-            dispatchState.apush(newExceptionObject);
+            dispatchBegin = currentGraph.add(new ExceptionObjectNode(runtime));
+            dispatchState.apush(dispatchBegin);
             dispatchState.setRethrowException(true);
-            newExceptionObject.setStateAfter(dispatchState.create(bci));
-
-            FixedNode target = createTarget(dispatchBlock, dispatchState);
-            dispatchBegin.setNext(newExceptionObject);
-            newExceptionObject.setNext(target);
+            dispatchBegin.setStateAfter(dispatchState.create(bci));
         } else {
+            dispatchBegin = currentGraph.add(new DispatchBeginNode());
+            dispatchBegin.setStateAfter(dispatchState.create(bci));
             dispatchState.apush(exceptionObject);
             dispatchState.setRethrowException(true);
-
-            FixedNode target = createTarget(dispatchBlock, dispatchState);
-            dispatchBegin.setNext(target);
         }
+        FixedNode target = createTarget(dispatchBlock, dispatchState);
+        dispatchBegin.setNext(target);
         return dispatchBegin;
     }
 
@@ -827,7 +822,7 @@ public class GraphBuilderPhase extends Phase {
     /**
      * Gets the kind of array elements for the array type code that appears in a
      * {@link Bytecodes#NEWARRAY} bytecode.
-     *
+     * 
      * @param code the array type code
      * @return the kind from the array type code
      */
@@ -962,7 +957,7 @@ public class GraphBuilderPhase extends Phase {
         }
     }
 
-    private void emitExplicitExceptions(ValueNode receiver, ValueNode outOfBoundsIndex) {
+    protected void emitExplicitExceptions(ValueNode receiver, ValueNode outOfBoundsIndex) {
         assert receiver != null;
         if (optimisticOpts.useExceptionProbabilityForOperations() && profilingInfo.getExceptionSeen(bci()) == ExceptionSeen.FALSE) {
             return;
@@ -1125,15 +1120,15 @@ public class GraphBuilderPhase extends Phase {
     }
 
     protected Invoke createInvokeNode(MethodCallTargetNode callTarget, Kind resultType) {
-         // be conservative if information was not recorded (could result in endless recompiles otherwise)
+        // be conservative if information was not recorded (could result in endless recompiles
+        // otherwise)
         if (graphBuilderConfig.omitAllExceptionEdges() || (optimisticOpts.useExceptionProbability() && profilingInfo.getExceptionSeen(bci()) == ExceptionSeen.FALSE)) {
             InvokeNode invoke = new InvokeNode(callTarget, bci());
             ValueNode result = appendWithBCI(currentGraph.add(invoke));
             frameState.pushReturn(resultType, result);
             return invoke;
-
         } else {
-            DispatchBeginNode exceptionEdge = handleException(null, bci());
+            ExceptionObjectNode exceptionEdge = (ExceptionObjectNode) handleException(null, bci());
             InvokeWithExceptionNode invoke = currentGraph.add(new InvokeWithExceptionNode(callTarget, exceptionEdge, bci()));
             ValueNode result = append(invoke);
             frameState.pushReturn(resultType, result);
@@ -1230,7 +1225,7 @@ public class GraphBuilderPhase extends Phase {
 
     /**
      * Helper function that sums up the probabilities of all keys that lead to a specific successor.
-     *
+     * 
      * @return an array of size successorCount with the accumulated probability for each successor.
      */
     private static double[] successorProbabilites(int successorCount, int[] keySuccessors, double[] keyProbabilities) {
@@ -1558,10 +1553,10 @@ public class GraphBuilderPhase extends Phase {
 
     private void createUnwind() {
         assert frameState.stackSize() == 1 : frameState;
-        synchronizedEpilogue(FrameState.AFTER_EXCEPTION_BCI);
         ValueNode exception = frameState.apop();
         FixedGuardNode guard = currentGraph.add(new FixedGuardNode(currentGraph.unique(new IsNullNode(exception)), NullCheckException, InvalidateReprofile, true));
         append(guard);
+        synchronizedEpilogue(FrameState.AFTER_EXCEPTION_BCI);
         UnwindNode unwindNode = currentGraph.add(new UnwindNode(exception));
         append(unwindNode);
     }
@@ -1574,9 +1569,8 @@ public class GraphBuilderPhase extends Phase {
         ValueNode x = returnKind == Kind.Void ? null : frameState.pop(returnKind);
         assert frameState.stackSize() == 0;
 
-        // TODO (gdub) remove this when FloatingRead can handle this case
         if (Modifier.isSynchronized(method.getModifiers())) {
-            append(currentGraph.add(new ValueAnchorNode(x)));
+            append(currentGraph.add(new ValueAnchorNode(true, x)));
             assert !frameState.rethrowException();
         }
 

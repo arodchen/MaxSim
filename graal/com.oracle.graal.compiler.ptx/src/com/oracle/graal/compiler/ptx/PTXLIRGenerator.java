@@ -369,7 +369,7 @@ public class PTXLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    protected void emitCall(RuntimeCallTarget callTarget, Value result, Value[] arguments, Value[] temps, Value targetAddress, LIRFrameState info) {
+    protected void emitCall(RuntimeCallTarget callTarget, Value result, Value[] arguments, Value[] temps, LIRFrameState info) {
         throw new InternalError("NYI");
     }
 
@@ -471,5 +471,10 @@ public class PTXLIRGenerator extends LIRGenerator {
     public void emitUnwind(Value operand) {
         // TODO Auto-generated method stub
 
+    }
+
+    @Override
+    public void emitNullCheck(ValueNode v) {
+        throw new InternalError("NYI");
     }
 }

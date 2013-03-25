@@ -31,6 +31,7 @@ import com.oracle.graal.api.code.Assumptions.Assumption;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.meta.JavaTypeProfile.ProfiledType;
 import com.oracle.graal.api.meta.ResolvedJavaType.Representation;
+import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
@@ -447,13 +448,12 @@ public class InliningUtil {
             PhiNode exceptionObjectPhi = null;
             if (invoke instanceof InvokeWithExceptionNode) {
                 InvokeWithExceptionNode invokeWithException = (InvokeWithExceptionNode) invoke;
-                DispatchBeginNode exceptionEdge = invokeWithException.exceptionEdge();
-                ExceptionObjectNode exceptionObject = (ExceptionObjectNode) exceptionEdge.next();
+                ExceptionObjectNode exceptionEdge = invokeWithException.exceptionEdge();
 
                 exceptionMerge = graph.add(new MergeNode());
                 exceptionMerge.setProbability(exceptionEdge.probability());
 
-                FixedNode exceptionSux = exceptionObject.next();
+                FixedNode exceptionSux = exceptionEdge.next();
                 graph.addBeforeFixed(exceptionSux, exceptionMerge);
                 exceptionObjectPhi = graph.unique(new PhiNode(Kind.Object, exceptionMerge));
                 exceptionMerge.setStateAfter(exceptionEdge.stateAfter().duplicateModified(invoke.stateAfter().bci, true, Kind.Void, exceptionObjectPhi));
@@ -484,10 +484,9 @@ public class InliningUtil {
             // replace the invoke exception edge
             if (invoke instanceof InvokeWithExceptionNode) {
                 InvokeWithExceptionNode invokeWithExceptionNode = (InvokeWithExceptionNode) invoke;
-                BeginNode exceptionEdge = invokeWithExceptionNode.exceptionEdge();
-                ExceptionObjectNode exceptionObject = (ExceptionObjectNode) exceptionEdge.next();
-                exceptionObject.replaceAtUsages(exceptionObjectPhi);
-                exceptionObject.setNext(null);
+                ExceptionObjectNode exceptionEdge = invokeWithExceptionNode.exceptionEdge();
+                exceptionEdge.replaceAtUsages(exceptionObjectPhi);
+                exceptionEdge.setNext(null);
                 GraphUtil.killCFG(invokeWithExceptionNode.exceptionEdge());
             }
 
@@ -657,20 +656,17 @@ public class InliningUtil {
                 assert exceptionMerge != null && exceptionObjectPhi != null;
 
                 InvokeWithExceptionNode invokeWithException = (InvokeWithExceptionNode) invoke;
-                DispatchBeginNode exceptionEdge = invokeWithException.exceptionEdge();
-                ExceptionObjectNode exceptionObject = (ExceptionObjectNode) exceptionEdge.next();
-                FrameState stateAfterException = exceptionObject.stateAfter();
+                ExceptionObjectNode exceptionEdge = invokeWithException.exceptionEdge();
+                FrameState stateAfterException = exceptionEdge.stateAfter();
 
-                DispatchBeginNode newExceptionEdge = (DispatchBeginNode) exceptionEdge.copyWithInputs();
-                ExceptionObjectNode newExceptionObject = (ExceptionObjectNode) exceptionObject.copyWithInputs();
+                ExceptionObjectNode newExceptionEdge = (ExceptionObjectNode) exceptionEdge.copyWithInputs();
                 // set new state (pop old exception object, push new one)
-                newExceptionObject.setStateAfter(stateAfterException.duplicateModified(stateAfterException.bci, stateAfterException.rethrowException(), Kind.Object, newExceptionObject));
-                newExceptionEdge.setNext(newExceptionObject);
+                newExceptionEdge.setStateAfter(stateAfterException.duplicateModified(stateAfterException.bci, stateAfterException.rethrowException(), Kind.Object, newExceptionEdge));
 
                 EndNode endNode = graph.add(new EndNode());
-                newExceptionObject.setNext(endNode);
+                newExceptionEdge.setNext(endNode);
                 exceptionMerge.addForwardEnd(endNode);
-                exceptionObjectPhi.addInput(newExceptionObject);
+                exceptionObjectPhi.addInput(newExceptionEdge);
 
                 ((InvokeWithExceptionNode) result).setExceptionEdge(newExceptionEdge);
             }
@@ -1069,7 +1065,7 @@ public class InliningUtil {
             if (unwindNode != null) {
                 assert unwindNode.predecessor() != null;
                 assert invokeWithException.exceptionEdge().successors().count() == 1;
-                ExceptionObjectNode obj = (ExceptionObjectNode) invokeWithException.exceptionEdge().next();
+                ExceptionObjectNode obj = invokeWithException.exceptionEdge();
                 stateAtExceptionEdge = obj.stateAfter();
                 UnwindNode unwindDuplicate = (UnwindNode) duplicates.get(unwindNode);
                 obj.replaceAtUsages(unwindDuplicate.exception());
@@ -1183,7 +1179,7 @@ public class InliningUtil {
     }
 
     public static StructuredGraph getIntrinsicGraph(ResolvedJavaMethod target) {
-        return (StructuredGraph) target.getCompilerStorage().get(Graph.class);
+        return (StructuredGraph) target.getCompilerStorage().get(MethodSubstitution.class);
     }
 
     public static Class<? extends FixedWithNextNode> getMacroNodeClass(ResolvedJavaMethod target) {

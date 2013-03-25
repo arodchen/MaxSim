@@ -133,7 +133,7 @@ Property values can use environment variables with Bash syntax (e.g. ${HOME}).
 """
 
 import sys, os, errno, time, subprocess, shlex, types, urllib2, contextlib, StringIO, zipfile, signal, xml.sax.saxutils, tempfile
-import shutil, fnmatch, re, xml.dom.minidom
+import shutil, re, xml.dom.minidom
 from collections import Callable
 from threading import Thread
 from argparse import ArgumentParser, REMAINDER
@@ -350,6 +350,7 @@ class Project(Dependency):
     def _init_packages_and_imports(self):
         if not hasattr(self, '_defined_java_packages'):
             packages = set()
+            extendedPackages = set()
             depPackages = set()
             for d in self.all_deps([], includeLibs=False, includeSelf=False):
                 depPackages.update(d.defined_java_packages())
@@ -363,7 +364,8 @@ class Project(Dependency):
                         if not pkg in depPackages:
                             packages.add(pkg)
                         else:
-                            # A project imports a package already defined by one of it dependencies
+                            # A project extends a package already defined by one of it dependencies
+                            extendedPackages.add(pkg)
                             imports.add(pkg)
                         
                         for n in javaSources:
@@ -371,6 +373,7 @@ class Project(Dependency):
                                 content = fp.read()
                                 imports.update(importRe.findall(content))
             self._defined_java_packages = frozenset(packages)
+            self._extended_java_packages = frozenset(extendedPackages)
             
             importedPackages = set()
             for imp in imports:
@@ -390,6 +393,11 @@ class Project(Dependency):
         self._init_packages_and_imports()
         return self._defined_java_packages
     
+    def extended_java_packages(self):
+        """Get the immutable set of Java packages extended by the Java sources of this project"""
+        self._init_packages_and_imports()
+        return self._extended_java_packages
+
     def imported_java_packages(self):
         """Get the immutable set of Java packages defined by other Java projects that are
            imported by the Java sources of this project."""
@@ -1077,11 +1085,11 @@ A Java version as defined in JSR-56
 class JavaVersion:
     def __init__(self, versionString):
         validChar = '[\x21-\x25\x27-\x29\x2c\x2f-\x5e\x60-\x7f]'
-        separator = '[.-_]'
+        separator = '[.\-_]'
         m = re.match(validChar + '+(' + separator + validChar + '+)*', versionString)
         assert m is not None, 'not a recognized version string: ' + versionString
         self.versionString = versionString;
-        self.parts = versionString.split(separator)
+        self.parts = [int(f) if f.isdigit() else f for f in re.split(separator, versionString)]
         
     def __str__(self):
         return self.versionString
@@ -1353,7 +1361,7 @@ def build(args, parser=None):
     parser.add_argument('--only', action='store', help='comma separated projects to build, without checking their dependencies (omit to build all projects)')
     parser.add_argument('--no-java', action='store_false', dest='java', help='do not build Java projects')
     parser.add_argument('--no-native', action='store_false', dest='native', help='do not build native projects')
-    parser.add_argument('--jdt', help='Eclipse installation or path to ecj.jar for using the Eclipse batch compiler (default: ' + defaultEcjPath + ')', default=defaultEcjPath, metavar='<path>')
+    parser.add_argument('--jdt', help='path to ecj.jar, the Eclipse batch compiler (default: ' + defaultEcjPath + ')', default=defaultEcjPath, metavar='<path>')
     parser.add_argument('--jdt-warning-as-error', action='store_true', help='convert all Eclipse batch compiler warnings to errors')
 
     if suppliedParser:
@@ -1368,11 +1376,6 @@ def build(args, parser=None):
             if not exists(jdtJar) and os.path.abspath(jdtJar) == os.path.abspath(defaultEcjPath):
                 # Silently ignore JDT if default location is used but not ecj.jar exists there
                 jdtJar = None
-        elif isdir(args.jdt):
-            plugins = join(args.jdt, 'plugins')
-            choices = [f for f in os.listdir(plugins) if fnmatch.fnmatch(f, 'org.eclipse.jdt.core_*.jar')]
-            if len(choices) != 0:
-                jdtJar = join(plugins, sorted(choices, reverse=True)[0])
 
     built = set()
 
@@ -1735,6 +1738,8 @@ def canonicalizeprojects(args):
                                 ignoredDeps.discard(name)
                             else:
                                 if pkg in dep.defined_java_packages():
+                                    ignoredDeps.discard(name)
+                                if pkg in dep.extended_java_packages():
                                     ignoredDeps.discard(name)
                     if len(ignoredDeps) != 0:
                         candidates = set();

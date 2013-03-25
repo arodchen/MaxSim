@@ -652,12 +652,13 @@ public class NodeClass extends FieldIntrospection {
         while (index < directSuccessorCount) {
             Node successor = getNode(node, successorOffsets[index]);
             if (successor == old) {
-                assert other == null || fieldTypes.get(successorOffsets[index]).isAssignableFrom(other.getClass()); // :
-                                                                                                                    // successorTypes[index]
-                                                                                                                    // +
-                                                                                                                    // " is not compatible with "
-                                                                                                                    // +
-                                                                                                                    // other.getClass();
+                Class<?> k = fieldTypes.get(successorOffsets[index]);
+                assert other == null || k.isAssignableFrom(other.getClass()); // :
+                                                                              // successorTypes[index]
+                                                                              // +
+                                                                              // " is not compatible with "
+                                                                              // +
+                                                                              // other.getClass();
                 putNode(node, successorOffsets[index], other);
                 return true;
             }

@@ -27,7 +27,7 @@
 # ----------------------------------------------------------------------------------------------------
 
 import os, sys, shutil, zipfile, tempfile, re, time, datetime, platform, subprocess, multiprocessing
-from os.path import join, exists, dirname, basename
+from os.path import join, exists, dirname, basename, getmtime
 from argparse import ArgumentParser, REMAINDER
 import mx
 import sanitycheck
@@ -719,7 +719,7 @@ def _find_classes_with_annotations(p, pkgRoot, annotations, includeInnerClasses=
     matches = lambda line : len([a for a in annotations if line == a or line.startswith(a + '(')]) != 0
     return p.find_classes_with_matching_source_line(pkgRoot, matches, includeInnerClasses)
 
-def _run_tests(args, harness):
+def _run_tests(args, harness, annotations, testfile):
     pos = [a for a in args if a[0] != '-' and a[0] != '@' ]
     neg = [a[1:] for a in args if a[0] == '-']
     vmArgs = [a[1:] for a in args if a[0] == '@']
@@ -730,29 +730,71 @@ def _run_tests(args, harness):
                 return True
         return False
 
+    classes = []
     for p in mx.projects():
-        classes = _find_classes_with_annotations(p, None, ['@Test'])
+        classes += _find_classes_with_annotations(p, None, annotations)
 
         if len(pos) != 0:
             classes = [c for c in classes if containsAny(c, pos)]
         if len(neg) != 0:
             classes = [c for c in classes if not containsAny(c, neg)]
 
-        if len(classes) != 0:
-            mx.log('running tests in ' + p.name)
-            harness(p, vmArgs, classes)
+    projectscp = mx.classpath([pcp.name for pcp in mx.projects()])
+
+    if len(classes) != 0:
+        f_testfile = open(testfile, 'w')
+        for c in classes:
+            f_testfile.write(c + '\n')
+        f_testfile.close()
+        harness(projectscp, vmArgs)
+
+def _unittest(args, annotations):
+    mxdir = dirname(__file__)
+    name = 'JUnitWrapper'
+    javaSource = join(mxdir, name + '.java')
+    javaClass = join(mxdir, name + '.class')
+    (_, testfile) = tempfile.mkstemp(".testclasses", "graal")
+
+    def harness(projectscp, vmArgs):
+        if not exists(javaClass) or getmtime(javaClass) < getmtime(javaSource):
+            subprocess.check_call([mx.java().javac, '-cp', projectscp, '-d', mxdir, javaSource])
+        if _vm == 'server0':
+            prefixArgs = ['-esa', '-ea']
+        else:
+            prefixArgs = ['-XX:-BootstrapGraal', '-esa', '-ea']
+        vm(prefixArgs + vmArgs + ['-cp', projectscp + ':' + mxdir, name] + [testfile])
+
+    try:
+        _run_tests(args, harness, annotations, testfile)
+    finally:
+        os.remove(testfile)
 
 def unittest(args):
-    """run the JUnit tests
+    """run the JUnit tests (all testcases)
 
     If filters are supplied, only tests whose fully qualified name
     include a filter as a substring are run. Negative filters are
     those with a '-' prefix. VM args should have a @ prefix."""
 
-    def harness(p, vmArgs, classes):
-        prefixArgs = ['-XX:-BootstrapGraal', '-esa', '-ea']
-        vm(prefixArgs + vmArgs + ['-cp', mx.classpath(p.name), 'org.junit.runner.JUnitCore'] + classes)
-    _run_tests(args, harness)
+    _unittest(args, ['@Test', '@LongTest'])
+
+def shortunittest(args):
+    """run the JUnit tests (short testcases only)
+
+    If filters are supplied, only tests whose fully qualified name
+    include a filter as a substring are run. Negative filters are
+    those with a '-' prefix. VM args should have a @ prefix."""
+
+    _unittest(args, ['@Test'])
+
+def longunittest(args):
+    """run the JUnit tests (long testcases only)
+
+    If filters are supplied, only tests whose fully qualified name
+    include a filter as a substring are run. Negative filters are
+    those with a '-' prefix. VM args should have a @ prefix."""
+
+    _unittest(args, ['@LongTest'])
 
 def buildvms(args):
     """build one or more VMs in various configurations"""
@@ -872,7 +914,7 @@ def gate(args):
         t = Task('BootstrapWithRegisterPressure:product')
         vm(['-G:RegisterPressure=rbx,r11,r14,xmm3,xmm11,xmm14', '-esa', '-version'])
         tasks.append(t.stop())
-        
+
         originalVm = _vm
         _vm = 'server' # hosted mode
         t = Task('UnitTests:hosted-product')
@@ -1193,6 +1235,8 @@ def mx_init(suite):
         'gv' : [gv, ''],
         'bench' : [bench, '[-resultfile file] [all(default)|dacapo|specjvm2008|bootstrap]'],
         'unittest' : [unittest, '[filters...]'],
+        'longunittest' : [longunittest, '[filters...]'],
+        'shortunittest' : [shortunittest, '[filters...]'],
         'jacocoreport' : [jacocoreport, '[output directory]'],
         'site' : [site, '[-options]'],
         'vm': [vm, '[-options] class [args...]'],

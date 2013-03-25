@@ -29,10 +29,10 @@ import java.util.concurrent.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.internal.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
@@ -138,11 +138,11 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
                     @Override
                     public CompilationResult call() throws Exception {
                         graalRuntime.evictDeoptedGraphs();
-                        StructuredGraph graph = (StructuredGraph) method.getCompilerStorage().get(Graph.class);
+                        StructuredGraph graph = (StructuredGraph) method.getCompilerStorage().get(MethodSubstitution.class);
                         if (graph == null || entryBCI != INVOCATION_ENTRY_BCI) {
                             graph = new StructuredGraph(method, entryBCI);
                         } else {
-                            // Compiling an intrinsic graph - must clone the graph
+                            // Compiling method substitution - must clone the graph
                             graph = graph.copy();
                         }
                         InlinedBytecodes.add(method.getCodeSize());
@@ -177,15 +177,14 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
         stats.finish(method);
     }
 
-    private void installMethod(final CompilationResult tm) {
+    private void installMethod(final CompilationResult compResult) {
         Debug.scope("CodeInstall", new Object[]{new DebugDumpScope(String.valueOf(id), true), graalRuntime.getRuntime(), method}, new Runnable() {
 
             @Override
             public void run() {
-                final CodeInfo[] info = Debug.isDumpEnabled() ? new CodeInfo[1] : null;
-                graalRuntime.getRuntime().installMethod(method, entryBCI, tm, info);
-                if (info != null) {
-                    Debug.dump(new Object[]{tm, info[0]}, "After code installation");
+                HotSpotInstalledCode installedCode = graalRuntime.getRuntime().installMethod(method, entryBCI, compResult);
+                if (Debug.isDumpEnabled()) {
+                    Debug.dump(new Object[]{compResult, installedCode}, "After code installation");
                 }
             }
 

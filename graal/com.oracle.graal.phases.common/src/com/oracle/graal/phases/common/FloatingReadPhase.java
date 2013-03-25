@@ -84,7 +84,9 @@ public class FloatingReadPhase extends Phase {
         @Override
         protected void processNode(FixedNode node, Set<Object> currentState) {
             if (node instanceof MemoryCheckpoint) {
-                currentState.add(((MemoryCheckpoint) node).getLocationIdentity());
+                for (Object identity : ((MemoryCheckpoint) node).getLocationIdentities()) {
+                    currentState.add(identity);
+                }
             }
         }
 
@@ -124,37 +126,39 @@ public class FloatingReadPhase extends Phase {
 
         @Override
         protected void processNode(FixedNode node, MemoryMap state) {
-            if (node instanceof ReadNode) {
-                processRead((ReadNode) node, state);
+            if (node instanceof FloatableAccessNode) {
+                processFloatable((FloatableAccessNode) node, state);
             } else if (node instanceof MemoryCheckpoint) {
                 processCheckpoint((MemoryCheckpoint) node, state);
             }
         }
 
         private void processCheckpoint(MemoryCheckpoint checkpoint, MemoryMap state) {
-            if (checkpoint.getLocationIdentity() == LocationNode.ANY_LOCATION) {
-                state.lastMemorySnapshot.clear();
+            for (Object identity : checkpoint.getLocationIdentities()) {
+                if (identity == LocationNode.ANY_LOCATION) {
+                    state.lastMemorySnapshot.clear();
+                }
+                state.lastMemorySnapshot.put(identity, (ValueNode) checkpoint);
             }
-            state.lastMemorySnapshot.put(checkpoint.getLocationIdentity(), (ValueNode) checkpoint);
         }
 
-        private void processRead(ReadNode readNode, MemoryMap state) {
-            StructuredGraph graph = (StructuredGraph) readNode.graph();
-            assert readNode.getNullCheck() == false;
-            Object locationIdentity = readNode.location().locationIdentity();
+        private void processFloatable(FloatableAccessNode accessNode, MemoryMap state) {
+            StructuredGraph graph = (StructuredGraph) accessNode.graph();
+            assert accessNode.getNullCheck() == false;
+            Object locationIdentity = accessNode.location().locationIdentity();
             if (locationIdentity != LocationNode.UNKNOWN_LOCATION) {
                 ValueNode lastLocationAccess = state.getLastLocationAccess(locationIdentity);
-                FloatingReadNode floatingRead = graph.unique(new FloatingReadNode(readNode.object(), readNode.location(), lastLocationAccess, readNode.stamp(), readNode.dependencies()));
-                floatingRead.setNullCheck(readNode.getNullCheck());
+                FloatingAccessNode floatingNode = accessNode.asFloatingNode(lastLocationAccess);
+                floatingNode.setNullCheck(accessNode.getNullCheck());
                 ValueAnchorNode anchor = null;
-                for (GuardNode guard : readNode.dependencies().filter(GuardNode.class)) {
+                for (GuardNode guard : accessNode.dependencies().filter(GuardNode.class)) {
                     if (anchor == null) {
                         anchor = graph.add(new ValueAnchorNode());
-                        graph.addAfterFixed(readNode, anchor);
+                        graph.addAfterFixed(accessNode, anchor);
                     }
                     anchor.addAnchoredNode(guard);
                 }
-                graph.replaceFixedWithFloating(readNode, floatingRead);
+                graph.replaceFixedWithFloating(accessNode, floatingNode);
             }
         }
 
@@ -202,8 +206,17 @@ public class FloatingReadPhase extends Phase {
         protected MemoryMap afterSplit(BeginNode node, MemoryMap oldState) {
             MemoryMap result = new MemoryMap(oldState);
             if (node.predecessor() instanceof InvokeWithExceptionNode) {
+                /*
+                 * InvokeWithException cannot be the lastLocationAccess for a FloatingReadNode.
+                 * Since it is both the invoke and a control flow split, the scheduler cannot
+                 * schedule anything immediately the invoke. It can only schedule in the normal or
+                 * exceptional successor - and we have to tell the scheduler here which side it
+                 * needs to choose by putting in the location identity on both successors.
+                 */
                 InvokeWithExceptionNode checkpoint = (InvokeWithExceptionNode) node.predecessor();
-                result.lastMemorySnapshot.put(checkpoint.getLocationIdentity(), node);
+                for (Object identity : checkpoint.getLocationIdentities()) {
+                    result.lastMemorySnapshot.put(identity, node);
+                }
             }
             return result;
         }
