@@ -22,22 +22,35 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
+import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.word.*;
 
-public final class FieldWriteBarrier extends WriteBarrier implements Lowerable {
+/**
+ * Node implementing a call to HotSpot's {@code graal_monitorenter} stub.
+ */
+public class WriteBarrierPostStubCall extends FixedWithNextNode implements LIRGenLowerable {
 
     @Input private ValueNode object;
+    @Input private ValueNode card;
+    public static final Descriptor WBPOSTCALL = new Descriptor("wbpostcall", true, void.class, Object.class, Word.class);
 
-    public ValueNode object() {
-        return object;
-    }
-
-    public FieldWriteBarrier(ValueNode object) {
+    public WriteBarrierPostStubCall(ValueNode object, ValueNode card) {
+        super(StampFactory.forVoid());
         this.object = object;
+        this.card = card;
     }
 
-    public void lower(LoweringTool generator) {
-        generator.getRuntime().lower(this, generator);
+    @Override
+    public void generate(LIRGenerator gen) {
+        RuntimeCallTarget stub = gen.getRuntime().lookupRuntimeCall(WriteBarrierPostStubCall.WBPOSTCALL);
+        gen.emitCall(stub, stub.getCallingConvention(), false, gen.operand(object), gen.operand(card));
     }
+
+    @NodeIntrinsic
+    public static native void call(Object hub, Word card);
 }

@@ -22,22 +22,32 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
+import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
-public final class FieldWriteBarrier extends WriteBarrier implements Lowerable {
+/**
+ * Node implementing a call to HotSpot's {@code graal_monitorenter} stub.
+ */
+public class WriteBarrierPreStubCall extends FixedWithNextNode implements LIRGenLowerable {
 
     @Input private ValueNode object;
+    public static final Descriptor WBPRECALL = new Descriptor("wbprecall", true, void.class, Object.class);
 
-    public ValueNode object() {
-        return object;
-    }
-
-    public FieldWriteBarrier(ValueNode object) {
+    public WriteBarrierPreStubCall(ValueNode object) {
+        super(StampFactory.forVoid());
         this.object = object;
     }
 
-    public void lower(LoweringTool generator) {
-        generator.getRuntime().lower(this, generator);
+    @Override
+    public void generate(LIRGenerator gen) {
+        RuntimeCallTarget stub = gen.getRuntime().lookupRuntimeCall(WriteBarrierPreStubCall.WBPRECALL);
+        gen.emitCall(stub, stub.getCallingConvention(), false, gen.operand(object));
     }
+
+    @NodeIntrinsic
+    public static native void call(Object hub);
 }

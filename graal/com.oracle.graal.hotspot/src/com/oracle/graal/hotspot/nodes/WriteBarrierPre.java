@@ -23,21 +23,43 @@
 package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
-public final class FieldWriteBarrier extends WriteBarrier implements Lowerable {
+public final class WriteBarrierPre extends FixedWithNextNode implements Lowerable {
 
     @Input private ValueNode object;
+    @Input private LocationNode location;
+    @Input private ValueNode expectedObject;
+    private final boolean doLoad;
 
-    public ValueNode object() {
+    public ValueNode getObject() {
         return object;
     }
 
-    public FieldWriteBarrier(ValueNode object) {
+    public ValueNode getExpectedObject() {
+        return expectedObject;
+    }
+
+    public boolean doLoad() {
+        return doLoad;
+    }
+
+    public LocationNode getLocation() {
+        return location;
+    }
+
+    public WriteBarrierPre(ValueNode object, ValueNode expectedObject, LocationNode location, boolean doLoad) {
+        super(StampFactory.forVoid());
         this.object = object;
+        this.doLoad = doLoad;
+        this.location = location;
+        this.expectedObject = expectedObject;
     }
 
     public void lower(LoweringTool generator) {
         generator.getRuntime().lower(this, generator);
     }
+
 }
