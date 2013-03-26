@@ -26,20 +26,31 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
-public final class FieldWriteBarrier extends FixedWithNextNode implements Lowerable {
+public final class FixedValueAnchorNode extends FixedWithNextNode implements LIRLowerable {
 
     @Input private ValueNode object;
 
-    public ValueNode getObject() {
+    public ValueNode object() {
         return object;
     }
 
-    public FieldWriteBarrier(ValueNode object) {
-        super(StampFactory.forVoid());
+    public FixedValueAnchorNode(ValueNode object) {
+        super(StampFactory.forNodeIntrinsic());
         this.object = object;
+
     }
 
-    public void lower(LoweringTool generator) {
-        generator.getRuntime().lower(this, generator);
+    @Override
+    public boolean inferStamp() {
+        return updateStamp(object.stamp());
     }
+
+    @NodeIntrinsic
+    public static native <T> T getObject(Object object);
+
+    @Override
+    public void generate(LIRGeneratorTool generator) {
+        generator.setResult(this, generator.operand(object));
+    }
+
 }
