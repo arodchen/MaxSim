@@ -745,7 +745,8 @@ public class GraphBuilderPhase extends Phase {
     private JavaMethod lookupMethod(int cpi, int opcode) {
         eagerResolvingForSnippets(cpi, opcode);
         JavaMethod result = constantPool.lookupMethod(cpi, opcode);
-        assert !graphBuilderConfig.unresolvedIsError() || ((result instanceof ResolvedJavaMethod) && ((ResolvedJavaMethod) result).getDeclaringClass().isInitialized()) : result;
+        // assert !graphBuilderConfig.unresolvedIsError() || ((result instanceof ResolvedJavaMethod)
+// && ((ResolvedJavaMethod) result).getDeclaringClass().isInitialized()) : result;
         return result;
     }
 
@@ -1143,11 +1144,6 @@ public class GraphBuilderPhase extends Phase {
         }
     }
 
-    private void callRegisterFinalizer() {
-        // append a call to the finalizer registration
-        append(currentGraph.add(new RegisterFinalizerNode(frameState.loadLocal(0))));
-    }
-
     private void genReturn(ValueNode x) {
         frameState.clearStack();
         if (x != null) {
@@ -1157,18 +1153,18 @@ public class GraphBuilderPhase extends Phase {
     }
 
     private MonitorEnterNode genMonitorEnter(ValueNode x) {
+        MonitorEnterNode monitorEnter = currentGraph.add(new MonitorEnterNode(x, frameState.lockDepth()));
         frameState.pushLock(x);
-        MonitorEnterNode monitorEnter = currentGraph.add(new MonitorEnterNode(x));
         appendWithBCI(monitorEnter);
         return monitorEnter;
     }
 
     private MonitorExitNode genMonitorExit(ValueNode x) {
         ValueNode lockedObject = frameState.popLock();
+        MonitorExitNode monitorExit = currentGraph.add(new MonitorExitNode(x, frameState.lockDepth()));
         if (GraphUtil.originalValue(lockedObject) != GraphUtil.originalValue(x)) {
             throw new BailoutException("unbalanced monitors: mismatch at monitorexit, %s != %s", GraphUtil.originalValue(x), GraphUtil.originalValue(lockedObject));
         }
-        MonitorExitNode monitorExit = currentGraph.add(new MonitorExitNode(x));
         appendWithBCI(monitorExit);
         return monitorExit;
     }
@@ -1562,9 +1558,6 @@ public class GraphBuilderPhase extends Phase {
     }
 
     private void createReturn() {
-        if (method.isConstructor() && MetaUtil.isJavaLangObject(method.getDeclaringClass())) {
-            callRegisterFinalizer();
-        }
         Kind returnKind = method.getSignature().getReturnKind().getStackKind();
         ValueNode x = returnKind == Kind.Void ? null : frameState.pop(returnKind);
         assert frameState.stackSize() == 0;
@@ -1575,7 +1568,7 @@ public class GraphBuilderPhase extends Phase {
         }
 
         synchronizedEpilogue(FrameState.AFTER_BCI);
-        if (!frameState.locksEmpty()) {
+        if (frameState.lockDepth() != 0) {
             throw new BailoutException("unbalanced monitors");
         }
         ReturnNode returnNode = currentGraph.add(new ReturnNode(x));
@@ -1695,6 +1688,9 @@ public class GraphBuilderPhase extends Phase {
             traceState();
             traceInstruction(bci, opcode, bci == block.startBci);
             if (bci == entryBCI) {
+                if (block.jsrScope != JsrScope.EMPTY_SCOPE) {
+                    throw new BailoutException("OSR into a JSR scope is not supported");
+                }
                 EntryMarkerNode x = currentGraph.add(new EntryMarkerNode());
                 append(x);
                 frameState.insertProxies(x);

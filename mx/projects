@@ -23,7 +23,7 @@ library@DACAPO_SCALA@path=lib/dacapo-scala-0.1.0-20120216.jar
 library@DACAPO_SCALA@urls=http://repo.scalabench.org/snapshots/org/scalabench/benchmarks/scala-benchmark-suite/0.1.0-SNAPSHOT/scala-benchmark-suite-0.1.0-20120216.103539-3.jar
 
 distribution@GRAAL@path=graal.jar
-distribution@GRAAL@dependencies=com.oracle.graal.hotspot.amd64,com.oracle.graal.hotspot.sparc
+distribution@GRAAL@dependencies=com.oracle.graal.hotspot.amd64,com.oracle.graal.hotspot.sparc,com.oracle.graal.hotspot
 
 # graal.api.runtime
 project@com.oracle.graal.api.runtime@subDir=graal
@@ -65,6 +65,13 @@ project@com.oracle.graal.api.replacements@dependencies=com.oracle.graal.api.meta
 project@com.oracle.graal.api.replacements@checkstyle=com.oracle.graal.graph
 project@com.oracle.graal.api.replacements@javaCompliance=1.7
 
+# graal.service.processor
+project@com.oracle.graal.service.processor@subDir=graal
+project@com.oracle.graal.service.processor@sourceDirs=src
+project@com.oracle.graal.service.processor@dependencies=com.oracle.graal.api.runtime
+project@com.oracle.graal.service.processor@checkstyle=com.oracle.graal.graph
+project@com.oracle.graal.service.processor@javaCompliance=1.7
+
 # graal.amd64
 project@com.oracle.graal.amd64@subDir=graal
 project@com.oracle.graal.amd64@sourceDirs=src
@@ -89,9 +96,9 @@ project@com.oracle.graal.sparc@javaCompliance=1.7
 # graal.hotspot
 project@com.oracle.graal.hotspot@subDir=graal
 project@com.oracle.graal.hotspot@sourceDirs=src
-project@com.oracle.graal.hotspot@dependencies=com.oracle.graal.replacements,com.oracle.graal.api.runtime,com.oracle.graal.printer
+project@com.oracle.graal.hotspot@dependencies=com.oracle.graal.replacements,com.oracle.graal.printer
 project@com.oracle.graal.hotspot@checkstyle=com.oracle.graal.graph
-project@com.oracle.graal.hotspot@annotationProcessors=com.oracle.graal.replacements.verifier
+project@com.oracle.graal.hotspot@annotationProcessors=com.oracle.graal.replacements.verifier, com.oracle.graal.service.processor
 project@com.oracle.graal.hotspot@javaCompliance=1.7
 
 # graal.hotspot.amd64
@@ -193,10 +200,10 @@ project@com.oracle.graal.word@javaCompliance=1.7
 # graal.replacements
 project@com.oracle.graal.replacements@subDir=graal
 project@com.oracle.graal.replacements@sourceDirs=src
-project@com.oracle.graal.replacements@dependencies=com.oracle.graal.compiler,com.oracle.graal.java,com.oracle.graal.word
+project@com.oracle.graal.replacements@dependencies=com.oracle.graal.compiler,com.oracle.graal.java,com.oracle.graal.word,com.oracle.graal.api.runtime
 project@com.oracle.graal.replacements@checkstyle=com.oracle.graal.graph
 project@com.oracle.graal.replacements@javaCompliance=1.7
-project@com.oracle.graal.replacements@annotationProcessors=com.oracle.graal.replacements.verifier
+project@com.oracle.graal.replacements@annotationProcessors=com.oracle.graal.replacements.verifier,com.oracle.graal.service.processor
 
 # graal.replacements.amd64
 project@com.oracle.graal.replacements.amd64@subDir=graal
@@ -429,4 +436,6 @@ project@com.oracle.truffle.sl.test@sourceDirs=src
 project@com.oracle.truffle.sl.test@dependencies=com.oracle.truffle.sl,JUNIT
 project@com.oracle.truffle.sl.test@checkstyle=com.oracle.graal.graph
 project@com.oracle.truffle.sl.test@javaCompliance=1.7
+
+
 

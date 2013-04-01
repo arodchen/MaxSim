@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,27 +20,13 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.hotspot.nodes;
+package com.oracle.graal.api.runtime;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.word.*;
+import java.lang.annotation.*;
 
-public class HotSpotCurrentRawThreadNode extends FloatingNode implements LIRLowerable {
+@Retention(RetentionPolicy.SOURCE)
+@Target(ElementType.TYPE)
+public @interface ServiceProvider {
 
-    public HotSpotCurrentRawThreadNode() {
-        super(StampFactory.forWord());
-    }
-
-    @Override
-    public void generate(LIRGeneratorTool gen) {
-        Register rawThread = HotSpotGraalRuntime.getInstance().getRuntime().threadRegister();
-        gen.setResult(this, rawThread.asValue(this.kind()));
-    }
-
-    @NodeIntrinsic
-    public static native Word get();
+    Class<?> value();
 }

@@ -256,6 +256,7 @@ public class ArrayCopySnippets implements Snippets {
             for (long i = 0; i < end; i += scale) {
                 Object a = UnsafeLoadNode.load(src, header, i + (long) srcPos * scale, Kind.Object);
                 DirectObjectStoreNode.storeObject(dest, header, i + (long) destPos * scale, a);
+
             }
         }
         if (length > 0) {

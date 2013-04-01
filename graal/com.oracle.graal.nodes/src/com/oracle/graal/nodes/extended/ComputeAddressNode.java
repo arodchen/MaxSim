@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,28 +22,34 @@
  */
 package com.oracle.graal.nodes.extended;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
-/**
- * An analog to {@link ReadNode} with the additional semantics of null-checking the receiver object
- * before reading from it.
- */
-public class SafeReadNode extends SafeAccessNode implements Lowerable {
+public class ComputeAddressNode extends FloatingNode implements LIRLowerable {
 
-    public SafeReadNode(ValueNode object, LocationNode location, Stamp stamp) {
-        super(object, location, stamp);
-        assert object != null && location != null;
+    @Input private ValueNode object;
+    @Input private ValueNode location;
+
+    public ValueNode getObject() {
+        return object;
+    }
+
+    public LocationNode getLocation() {
+        return (LocationNode) location;
+    }
+
+    public ComputeAddressNode(ValueNode object, ValueNode location, Stamp stamp) {
+        super(stamp);
+        this.object = object;
+        this.location = location;
     }
 
     @Override
-    public void lower(LoweringTool tool) {
-        StructuredGraph graph = (StructuredGraph) graph();
-        ValueNode guard = tool.createNullCheckGuard(object());
-        ReadNode read = graph.add(new ReadNode(object(), location(), stamp()));
-        read.dependencies().add(guard);
-
-        graph.replaceFixedWithFixed(this, read);
+    public void generate(LIRGeneratorTool gen) {
+        Value addr = getLocation().generateLea(gen, getObject());
+        gen.setResult(this, addr);
     }
 }

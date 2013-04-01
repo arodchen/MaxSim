@@ -36,21 +36,21 @@ public class ThreadSubstitutions {
 
     @MethodSubstitution
     public static Thread currentThread() {
-        return CurrentThread.get();
+        return (Thread) CurrentJavaThreadNode.get().readObject(threadObjectOffset(), FINAL_LOCATION);
     }
 
     @MethodSubstitution(isStatic = false)
-    private static boolean isInterrupted(final Thread thisObject, boolean clearInterrupted) {
-        Word rawThread = HotSpotCurrentRawThreadNode.get();
-        Thread thread = (Thread) rawThread.readObject(threadObjectOffset(), FINAL_LOCATION);
+    public static boolean isInterrupted(final Thread thisObject, boolean clearInterrupted) {
+        Word javaThread = CurrentJavaThreadNode.get();
+        Object thread = javaThread.readObject(threadObjectOffset(), FINAL_LOCATION);
         if (thisObject == thread) {
-            Word osThread = rawThread.readWord(osThreadOffset(), FINAL_LOCATION);
+            Word osThread = javaThread.readWord(osThreadOffset(), FINAL_LOCATION);
             boolean interrupted = osThread.readInt(osThreadInterruptedOffset(), UNKNOWN_LOCATION) != 0;
             if (!interrupted || !clearInterrupted) {
                 return interrupted;
             }
         }
 
-        return ThreadIsInterruptedStubCall.call(thisObject, clearInterrupted) != 0;
+        return ThreadIsInterruptedStubCall.call(thisObject, clearInterrupted);
     }
 }

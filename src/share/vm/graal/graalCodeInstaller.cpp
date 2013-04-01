@@ -263,19 +263,19 @@ static ScopeValue* get_hotspot_value(oop value, int total_frame_size, GrowableAr
 }
 
 static MonitorValue* get_monitor_value(oop value, int total_frame_size, GrowableArray<ScopeValue*>* objects, OopRecorder* oop_recorder) {
-  guarantee(value->is_a(code_MonitorValue::klass()), "Monitors must be of type MonitorValue");
+  guarantee(value->is_a(HotSpotMonitorValue::klass()), "Monitors must be of type MonitorValue");
 
   ScopeValue* second = NULL;
-  ScopeValue* owner_value = get_hotspot_value(code_MonitorValue::owner(value), total_frame_size, objects, second, oop_recorder);
+  ScopeValue* owner_value = get_hotspot_value(HotSpotMonitorValue::owner(value), total_frame_size, objects, second, oop_recorder);
   assert(second == NULL, "monitor cannot occupy two stack slots");
 
-  ScopeValue* lock_data_value = get_hotspot_value(code_MonitorValue::lockData(value), total_frame_size, objects, second, oop_recorder);
+  ScopeValue* lock_data_value = get_hotspot_value(HotSpotMonitorValue::slot(value), total_frame_size, objects, second, oop_recorder);
   assert(second == lock_data_value, "monitor is LONG value that occupies two stack slots");
   assert(lock_data_value->is_location(), "invalid monitor location");
   Location lock_data_loc = ((LocationValue*)lock_data_value)->location();
 
   bool eliminated = false;
-  if (code_MonitorValue::eliminated(value)) {
+  if (HotSpotMonitorValue::eliminated(value)) {
     eliminated = true;
   }
 
@@ -345,8 +345,6 @@ CodeInstaller::CodeInstaller(Handle& comp_result, methodHandle method, GraalEnv:
 
   result = GraalEnv::register_method(method, nm, entry_bci, &_offsets, _custom_stack_area_offset, &buffer, stack_slots, _debug_recorder->_oopmaps, &_exception_handler_table,
     GraalCompiler::instance(), _debug_recorder, _dependencies, NULL, -1, true, false, leaf_graph_ids, installed_code, triggered_deoptimizations);
-
-  method->clear_queued_for_compilation();
 }
 
 // constructor used to create a stub
