@@ -159,10 +159,10 @@ public class MethodCallTargetNode extends CallTargetNode implements Node.Iterabl
 
     @Override
     public String targetName() {
-        if (targetMethod() == null) {
+        if (targetJavaMethod() == null) {
             return "??Invalid!";
         }
-        return targetMethod().getName();
+        return targetJavaMethod().getName();
     }
 
     public static MethodCallTargetNode find(StructuredGraph graph, ResolvedJavaMethod method) {
