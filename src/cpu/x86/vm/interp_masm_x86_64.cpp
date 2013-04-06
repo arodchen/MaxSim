@@ -1142,6 +1142,11 @@ void InterpreterMacroAssembler::record_klass_in_profile_helper(
     if (is_virtual_call) {
       increment_mdp_data_at(mdp, in_bytes(CounterData::count_offset()));
     }
+#ifdef GRAAL
+    else {
+      increment_mdp_data_at(mdp, in_bytes(ReceiverTypeData::nonprofiled_receiver_count_offset()));
+    }
+#endif
     return;
   }
 
@@ -1176,11 +1181,17 @@ void InterpreterMacroAssembler::record_klass_in_profile_helper(
       testptr(reg2, reg2);
       if (start_row == last_row) {
         // The only thing left to do is handle the null case.
-        if (is_virtual_call) {
+        if (is_virtual_call GRAAL_ONLY(|| true)) {
           jccb(Assembler::zero, found_null);
           // Receiver did not match any saved receiver and there is no empty row for it.
           // Increment total counter to indicate polymorphic case.
-          increment_mdp_data_at(mdp, in_bytes(CounterData::count_offset()));
+          int offset = in_bytes(CounterData::count_offset());
+#ifdef GRAAL
+          if (!is_virtual_call) {
+            offset = in_bytes(ReceiverTypeData::nonprofiled_receiver_count_offset());
+          }
+#endif
+          increment_mdp_data_at(mdp, offset);
           jmp(done);
           bind(found_null);
         } else {

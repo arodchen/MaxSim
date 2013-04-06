@@ -148,6 +148,10 @@ class Klass : public Metadata {
   Klass*      _primary_supers[_primary_super_limit];
   // java/lang/Class instance mirroring this class
   oop       _java_mirror;
+#ifdef GRAAL
+  // com/oracle/graal/hotspot/HotSpotResolvedObjectType mirroring this class
+  oop       _graal_mirror;
+#endif
   // Superclass
   Klass*      _super;
   // First subclass (NULL if none); _subklass->next_sibling() is next one
@@ -248,6 +252,12 @@ class Klass : public Metadata {
   oop java_mirror() const              { return _java_mirror; }
   void set_java_mirror(oop m) { klass_oop_store(&_java_mirror, m); }
 
+#ifdef GRAAL
+  // Graal mirror
+  oop graal_mirror() const               { return _graal_mirror; }
+  void set_graal_mirror(oop m)           { oop_store((oop*) &_graal_mirror, m); }
+#endif
+
   // modifier flags
   jint modifier_flags() const          { return _modifier_flags; }
   void set_modifier_flags(jint flags)  { _modifier_flags = flags; }
@@ -306,6 +316,11 @@ class Klass : public Metadata {
   static ByteSize modifier_flags_offset()        { return in_ByteSize(offset_of(Klass, _modifier_flags)); }
   static ByteSize layout_helper_offset()         { return in_ByteSize(offset_of(Klass, _layout_helper)); }
   static ByteSize access_flags_offset()          { return in_ByteSize(offset_of(Klass, _access_flags)); }
+#ifdef GRAAL
+  static ByteSize graal_mirror_offset()          { return in_ByteSize(offset_of(Klass, _graal_mirror)); }
+  static ByteSize next_sibling_offset()          { return in_ByteSize(offset_of(Klass, _next_sibling)); }
+  static ByteSize subklass_offset()              { return in_ByteSize(offset_of(Klass, _subklass)); }
+#endif
 
   // Unpacking layout_helper:
   enum {
@@ -462,9 +477,6 @@ class Klass : public Metadata {
  protected:
   // computes the subtype relationship
   virtual bool compute_is_subtype_of(Klass* k);
- public:
-  // subclass accessor (here for convenience; undefined for non-klass objects)
-  virtual bool is_leaf_class() const { fatal("not a class"); return false; }
  public:
   // ALL FUNCTIONS BELOW THIS POINT ARE DISPATCHED FROM AN OOP
   // These functions describe behavior for the oop not the KLASS.

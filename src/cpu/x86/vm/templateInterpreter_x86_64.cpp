@@ -36,6 +36,7 @@
 #include "prims/jvmtiExport.hpp"
 #include "prims/jvmtiThreadState.hpp"
 #include "runtime/arguments.hpp"
+#include "runtime/compilationPolicy.hpp"
 #include "runtime/deoptimization.hpp"
 #include "runtime/frame.inline.hpp"
 #include "runtime/sharedRuntime.hpp"
@@ -203,13 +204,26 @@ address TemplateInterpreterGenerator::generate_return_entry_for(TosState state, 
 }
 
 
-address TemplateInterpreterGenerator::generate_deopt_entry_for(TosState state,
+address InterpreterGenerator::generate_deopt_entry_for(TosState state,
                                                                int step) {
   address entry = __ pc();
   // NULL last_sp until next java call
   __ movptr(Address(rbp, frame::interpreter_frame_last_sp_offset * wordSize), (int32_t)NULL_WORD);
   __ restore_bcp();
   __ restore_locals();
+  // Check if we need to take lock at entry of synchronized method.
+  {
+    Label L;
+    __ cmpb(Address(r15_thread, Thread::pending_monitorenter_offset()), 0);
+    __ jcc(Assembler::zero, L);
+    // Clear flag.
+    __ movb(Address(r15_thread, Thread::pending_monitorenter_offset()), 0);
+    // Satisfy calling convention for lock_method().
+    __ get_method(rbx);
+    // Take lock.
+    lock_method();
+    __ bind(L);
+  }
   // handle exceptions
   {
     Label L;
@@ -287,6 +301,15 @@ address TemplateInterpreterGenerator::generate_safept_entry_for(
 // Helpers for commoning out cases in the various type of method entries.
 //
 
+#ifdef GRAAL
+
+void graal_initialize_time(JavaThread* thread) {
+  frame fr = thread->last_frame();
+  assert(fr.is_interpreted_frame(), "must come from interpreter");
+  fr.interpreter_frame_method()->set_graal_invocation_time(os::javaTimeNanos());
+}
+
+#endif // GRAAL
 
 // increment invocation count & check for overflow
 //
@@ -331,6 +354,27 @@ void InterpreterGenerator::generate_counter_incr(
       __ incrementl(Address(rbx,
                             Method::interpreter_invocation_counter_offset()));
     }
+
+#ifdef GRAAL
+    if (CompilationPolicyChoice == 4) {
+      Label not_zero;
+      __ testl(rcx, InvocationCounter::count_mask_value);
+      __ jcc(Assembler::notZero, not_zero);
+
+      __ push(rcx);
+      __ call_VM(noreg, CAST_FROM_FN_PTR(address, graal_initialize_time), rdx, false);
+      __ set_method_data_pointer_for_bcp();
+      __ get_method(rbx);
+      __ pop(rcx);
+
+      __ testl(rcx, InvocationCounter::count_mask_value);
+      __ jcc(Assembler::zero, not_zero);
+      __ stop("unexpected counter value in rcx");
+
+      __ bind(not_zero);
+    }
+#endif // GRAAL
+
     // Update standard invocation counters
     __ movl(rax, backedge_counter);   // load backedge counter
 

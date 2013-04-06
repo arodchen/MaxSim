@@ -192,6 +192,9 @@ class SharedRuntime: AllStatic {
   static address continuation_for_implicit_exception(JavaThread* thread,
                                                      address faulting_pc,
                                                      ImplicitExceptionKind exception_kind);
+#ifdef GRAAL
+  static address deoptimize_for_implicit_exception(JavaThread* thread, address pc, nmethod* nm, int deopt_reason);
+#endif
 
   // Shared stub locations
   static address get_poll_stub(address pc);

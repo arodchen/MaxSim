@@ -389,7 +389,7 @@ address AbstractInterpreter::deopt_continue_after_entry(Method* method, address 
 address AbstractInterpreter::deopt_reexecute_entry(Method* method, address bcp) {
   assert(method->contains(bcp), "just checkin'");
   Bytecodes::Code code   = Bytecodes::java_code_at(method, bcp);
-#ifdef COMPILER1
+#if defined(COMPILER1) || defined(GRAAL)
   if(code == Bytecodes::_athrow ) {
     return Interpreter::rethrow_exception_entry();
   }
