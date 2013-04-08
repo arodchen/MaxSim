@@ -170,8 +170,8 @@ public class InstanceOfSnippets implements Snippets {
         private final ResolvedJavaMethod instanceofSecondary;
         private final ResolvedJavaMethod instanceofDynamic;
 
-        public Templates(CodeCacheProvider runtime, Assumptions assumptions, TargetDescription target) {
-            super(runtime, assumptions, target, InstanceOfSnippets.class);
+        public Templates(CodeCacheProvider runtime, Replacements replacements, TargetDescription target) {
+            super(runtime, replacements, target, InstanceOfSnippets.class);
             instanceofExact = snippet("instanceofExact", Object.class, Word.class, Object.class, Object.class, boolean.class);
             instanceofPrimary = snippet("instanceofPrimary", Word.class, Object.class, Object.class, Object.class, boolean.class, int.class);
             instanceofSecondary = snippet("instanceofSecondary", Word.class, Object.class, Object.class, Object.class, Word[].class, boolean.class);

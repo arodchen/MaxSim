@@ -20,12 +20,25 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.replacements;
 
-/**
- * Interface for service providers that install replacements into the compiler.
+import java.io.File;
+
+/*
+ * @test
+ * @key regression
+ * @bug 8010389
+ * @run main/othervm -Djava.library.path=. VMThreadDlopen
  */
-public interface ReplacementsProvider {
 
-    void installReplacements(ReplacementsInstaller installer);
+public class VMThreadDlopen {
+    public static void main(String[] args) throws Exception {
+        File file = new File("libbroken.so");
+        file.createNewFile();
+        try {
+            System.loadLibrary("broken");
+        } catch (UnsatisfiedLinkError e) {
+            e.printStackTrace();
+            // expected
+        }
+    }
 }

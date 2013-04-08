@@ -69,7 +69,7 @@ public class AESCryptSubstitutions {
     }
 
     private static void crypt(Object rcvr, byte[] in, int inOffset, byte[] out, int outOffset, boolean encrypt) {
-        Word kAddr = Word.fromObject(rcvr).readWord(Word.unsigned(kOffset), UNKNOWN_LOCATION).add(arrayBaseOffset(Kind.Byte));
+        Word kAddr = Word.fromObject(rcvr).readWord(Word.unsigned(kOffset), ANY_LOCATION).add(arrayBaseOffset(Kind.Byte));
         Word inAddr = Word.unsigned(GetObjectAddressNode.get(in) + arrayBaseOffset(Kind.Byte) + inOffset);
         Word outAddr = Word.unsigned(GetObjectAddressNode.get(out) + arrayBaseOffset(Kind.Byte) + outOffset);
         if (encrypt) {
@@ -98,7 +98,7 @@ public class AESCryptSubstitutions {
         @Override
         public void generate(LIRGenerator gen) {
             RuntimeCallTarget stub = gen.getRuntime().lookupRuntimeCall(descriptor);
-            gen.emitCall(stub, stub.getCallingConvention(), false, gen.operand(in), gen.operand(out), gen.operand(key));
+            gen.emitCall(stub, stub.getCallingConvention(), null, gen.operand(in), gen.operand(out), gen.operand(key));
         }
     }
 

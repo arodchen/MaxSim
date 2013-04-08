@@ -68,7 +68,6 @@ public final class GraalOptions {
     public static int     EscapeAnalysisIterations           = 2;
     public static String  EscapeAnalyzeOnly                  = null;
     public static int     MaximumEscapeAnalysisArrayLength   = 32;
-    public static boolean PEAReadCache                       = ____;
     public static boolean PEAInliningHints                   = ____;
 
     public static double  TailDuplicationProbability         = 0.5;
@@ -116,7 +115,7 @@ public final class GraalOptions {
 
     // Debug settings:
     public static boolean Debug                              = true;
-    public static boolean DebugReplacements                      = false;
+    public static boolean DebugReplacements                  = ____;
     public static boolean PerThreadDebugValues               = ____;
     public static boolean SummarizeDebugValues               = ____;
     public static boolean SummarizePerPhase                  = ____;
@@ -191,6 +190,7 @@ public final class GraalOptions {
     public static boolean OptAssumptions                     = true;
     public static boolean OptConvertDeoptsToGuards           = true;
     public static boolean OptReadElimination                 = true;
+    public static boolean OptEarlyReadElimination            = true;
     public static boolean OptCanonicalizer                   = true;
     public static boolean OptScheduleOutOfLoops              = true;
     public static boolean OptEliminateGuards                 = true;
@@ -203,6 +203,8 @@ public final class GraalOptions {
     public static boolean OptEliminatePartiallyRedundantGuards = true;
     public static boolean OptFilterProfiledTypes             = true;
     public static boolean OptDevirtualizeInvokesOptimistically = true;
+    public static boolean OptPushThroughPi                   = true;
+
 
     // Intrinsification settings
     public static boolean IntrinsifyObjectClone              = ____;

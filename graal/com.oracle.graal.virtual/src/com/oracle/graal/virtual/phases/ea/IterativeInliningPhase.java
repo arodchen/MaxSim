@@ -37,16 +37,20 @@ public class IterativeInliningPhase extends Phase {
     private final PhasePlan plan;
 
     private final GraalCodeCacheProvider runtime;
+    private final Replacements replacements;
     private final Assumptions assumptions;
     private final GraphCache cache;
     private final OptimisticOptimizations optimisticOpts;
+    private final boolean readElimination;
 
-    public IterativeInliningPhase(GraalCodeCacheProvider runtime, Assumptions assumptions, GraphCache cache, PhasePlan plan, OptimisticOptimizations optimisticOpts) {
+    public IterativeInliningPhase(GraalCodeCacheProvider runtime, Replacements replacements, Assumptions assumptions, GraphCache cache, PhasePlan plan, OptimisticOptimizations optimisticOpts, boolean readElimination) {
         this.runtime = runtime;
+        this.replacements = replacements;
         this.assumptions = assumptions;
         this.cache = cache;
         this.plan = plan;
         this.optimisticOpts = optimisticOpts;
+        this.readElimination = readElimination;
     }
 
     public static final void trace(String format, Object... obj) {
@@ -69,13 +73,13 @@ public class IterativeInliningPhase extends Phase {
                 @Override
                 public Boolean call() {
                     boolean progress = false;
-                    PartialEscapeAnalysisPhase ea = new PartialEscapeAnalysisPhase(runtime, assumptions, false);
+                    PartialEscapeAnalysisPhase ea = new PartialEscapeAnalysisPhase(runtime, assumptions, false, readElimination);
                     ea.apply(graph);
                     progress |= ea.hasChanged();
 
                     Map<Invoke, Double> hints = GraalOptions.PEAInliningHints ? PartialEscapeAnalysisPhase.getHints(graph) : null;
 
-                    InliningPhase inlining = new InliningPhase(runtime, hints, assumptions, cache, plan, optimisticOpts);
+                    InliningPhase inlining = new InliningPhase(runtime, hints, replacements, assumptions, cache, plan, optimisticOpts);
                     inlining.setMaxMethodsPerInlining(simple ? 1 : Integer.MAX_VALUE);
                     inlining.apply(graph);
                     progress |= inlining.getInliningCount() > 0;

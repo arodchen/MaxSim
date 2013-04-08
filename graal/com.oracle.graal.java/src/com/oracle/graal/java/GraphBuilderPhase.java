@@ -23,6 +23,7 @@
 package com.oracle.graal.java;
 
 import static com.oracle.graal.api.code.DeoptimizationAction.*;
+import static com.oracle.graal.api.code.TypeCheckHints.*;
 import static com.oracle.graal.api.meta.DeoptimizationReason.*;
 import static com.oracle.graal.bytecode.Bytecodes.*;
 import static java.lang.reflect.Modifier.*;
@@ -34,7 +35,7 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.meta.JavaTypeProfile.ProfiledType;
-import com.oracle.graal.api.meta.ProfilingInfo.ExceptionSeen;
+import com.oracle.graal.api.meta.ProfilingInfo.TriState;
 import com.oracle.graal.api.meta.ResolvedJavaType.Representation;
 import com.oracle.graal.bytecode.*;
 import com.oracle.graal.debug.*;
@@ -771,12 +772,12 @@ public class GraphBuilderPhase extends Phase {
     }
 
     private JavaTypeProfile getProfileForTypeCheck(ResolvedJavaType type) {
-        if (!optimisticOpts.useTypeCheckHints() || TypeCheckHints.canHaveSubtype(type)) {
+        if (!optimisticOpts.useTypeCheckHints() || !canHaveSubtype(type)) {
             return null;
         } else {
             ResolvedJavaType uniqueSubtype = type.findUniqueConcreteSubtype();
             if (uniqueSubtype != null) {
-                return new JavaTypeProfile(0.0D, new ProfiledType(uniqueSubtype, 1.0D));
+                return new JavaTypeProfile(profilingInfo.getNullSeen(bci()), 0.0D, new ProfiledType(uniqueSubtype, 1.0D));
             } else {
                 return profilingInfo.getTypeProfile(bci());
             }
@@ -960,7 +961,7 @@ public class GraphBuilderPhase extends Phase {
 
     protected void emitExplicitExceptions(ValueNode receiver, ValueNode outOfBoundsIndex) {
         assert receiver != null;
-        if (optimisticOpts.useExceptionProbabilityForOperations() && profilingInfo.getExceptionSeen(bci()) == ExceptionSeen.FALSE) {
+        if (graphBuilderConfig.omitAllExceptionEdges() || (optimisticOpts.useExceptionProbabilityForOperations() && profilingInfo.getExceptionSeen(bci()) == TriState.FALSE)) {
             return;
         }
 
@@ -1123,7 +1124,7 @@ public class GraphBuilderPhase extends Phase {
     protected Invoke createInvokeNode(MethodCallTargetNode callTarget, Kind resultType) {
         // be conservative if information was not recorded (could result in endless recompiles
         // otherwise)
-        if (graphBuilderConfig.omitAllExceptionEdges() || (optimisticOpts.useExceptionProbability() && profilingInfo.getExceptionSeen(bci()) == ExceptionSeen.FALSE)) {
+        if (graphBuilderConfig.omitAllExceptionEdges() || (optimisticOpts.useExceptionProbability() && profilingInfo.getExceptionSeen(bci()) == TriState.FALSE)) {
             InvokeNode invoke = new InvokeNode(callTarget, bci());
             ValueNode result = appendWithBCI(currentGraph.add(invoke));
             frameState.pushReturn(resultType, result);

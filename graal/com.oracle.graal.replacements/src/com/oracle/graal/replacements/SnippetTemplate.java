@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.replacements;
 
+import static com.oracle.graal.api.meta.MetaUtil.*;
+
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.Map.Entry;
@@ -40,7 +42,10 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.replacements.Snippet.*;
+import com.oracle.graal.replacements.Snippet.ConstantParameter;
+import com.oracle.graal.replacements.Snippet.Parameter;
+import com.oracle.graal.replacements.Snippet.Varargs;
+import com.oracle.graal.replacements.Snippet.VarargsParameter;
 import com.oracle.graal.replacements.nodes.*;
 import com.oracle.graal.word.*;
 import com.oracle.graal.word.phases.*;
@@ -157,23 +162,25 @@ public class SnippetTemplate {
         private final ConcurrentHashMap<SnippetTemplate.Key, SnippetTemplate> templates = new ConcurrentHashMap<>();
         private final MetaAccessProvider runtime;
         private final TargetDescription target;
+        private final Replacements replacements;
 
-        public Cache(MetaAccessProvider runtime, TargetDescription target) {
+        public Cache(MetaAccessProvider runtime, Replacements replacements, TargetDescription target) {
             this.runtime = runtime;
+            this.replacements = replacements;
             this.target = target;
         }
 
         /**
          * Gets a template for a given key, creating it first if necessary.
          */
-        public SnippetTemplate get(final SnippetTemplate.Key key, final Assumptions assumptions) {
+        public SnippetTemplate get(final SnippetTemplate.Key key) {
             SnippetTemplate template = templates.get(key);
             if (template == null) {
                 template = Debug.scope("SnippetSpecialization", key.method, new Callable<SnippetTemplate>() {
 
                     @Override
                     public SnippetTemplate call() throws Exception {
-                        return new SnippetTemplate(runtime, assumptions, target, key);
+                        return new SnippetTemplate(runtime, replacements, target, key);
                     }
                 });
                 // System.out.println(key + " -> " + template);
@@ -187,19 +194,20 @@ public class SnippetTemplate {
 
         protected final Cache cache;
         protected final MetaAccessProvider runtime;
-        protected final Assumptions assumptions;
+        protected final Replacements replacements;
         protected Class<?> snippetsClass;
 
-        public AbstractTemplates(MetaAccessProvider runtime, Assumptions assumptions, TargetDescription target, Class<T> snippetsClass) {
+        public AbstractTemplates(MetaAccessProvider runtime, Replacements replacements, TargetDescription target, Class<T> snippetsClass) {
             this.runtime = runtime;
-            this.assumptions = assumptions;
+            this.replacements = replacements;
             if (snippetsClass == null) {
                 assert this instanceof Snippets;
                 this.snippetsClass = getClass();
             } else {
                 this.snippetsClass = snippetsClass;
             }
-            this.cache = new Cache(runtime, target);
+            this.cache = new Cache(runtime, replacements, target);
+            replacements.registerSnippets(this.snippetsClass);
         }
 
         protected ResolvedJavaMethod snippet(String name, Class<?>... parameterTypes) {
@@ -230,16 +238,19 @@ public class SnippetTemplate {
     /**
      * Creates a snippet template.
      */
-    public SnippetTemplate(MetaAccessProvider runtime, Assumptions assumptions, TargetDescription target, SnippetTemplate.Key key) {
+    public SnippetTemplate(MetaAccessProvider runtime, Replacements replacements, TargetDescription target, SnippetTemplate.Key key) {
         ResolvedJavaMethod method = key.method;
         assert Modifier.isStatic(method.getModifiers()) : "snippet method must be static: " + method;
         Signature signature = method.getSignature();
 
         // Copy snippet graph, replacing constant parameters with given arguments
-        StructuredGraph snippetGraph = (StructuredGraph) method.getCompilerStorage().get(Snippet.class);
+        StructuredGraph snippetGraph = replacements.getSnippet(method);
+        if (snippetGraph == null) {
+            throw new GraalInternalError("Snippet has not been registered: %s", format("%H.%n(%p)", method));
+        }
         StructuredGraph snippetCopy = new StructuredGraph(snippetGraph.name, snippetGraph.method());
-        IdentityHashMap<Node, Node> replacements = new IdentityHashMap<>();
-        replacements.put(snippetGraph.start(), snippetCopy.start());
+        IdentityHashMap<Node, Node> nodeReplacements = new IdentityHashMap<>();
+        nodeReplacements.put(snippetGraph.start(), snippetCopy.start());
 
         int parameterCount = signature.getParameterCount(false);
         assert checkTemplate(runtime, key, parameterCount, method, signature);
@@ -259,7 +270,7 @@ public class SnippetTemplate {
                 } else {
                     constantArg = Constant.forBoxed(kind, arg);
                 }
-                replacements.put(snippetGraph.getLocal(i), ConstantNode.forConstant(constantArg, runtime, snippetCopy));
+                nodeReplacements.put(snippetGraph.getLocal(i), ConstantNode.forConstant(constantArg, runtime, snippetCopy));
             } else {
                 VarargsParameter vp = MetaUtil.getParameterAnnotation(VarargsParameter.class, i, method);
                 if (vp != null) {
@@ -267,7 +278,7 @@ public class SnippetTemplate {
                     Varargs varargs = (Varargs) key.get(name);
                     Object array = varargs.getArray();
                     ConstantNode placeholder = ConstantNode.forObject(array, runtime, snippetCopy);
-                    replacements.put(snippetGraph.getLocal(i), placeholder);
+                    nodeReplacements.put(snippetGraph.getLocal(i), placeholder);
                     placeholders[i] = placeholder;
                     varargsParameterAnnotations[i] = vp;
                 } else {
@@ -275,15 +286,15 @@ public class SnippetTemplate {
                 }
             }
         }
-        snippetCopy.addDuplicates(snippetGraph.getNodes(), replacements);
+        snippetCopy.addDuplicates(snippetGraph.getNodes(), nodeReplacements);
 
         Debug.dump(snippetCopy, "Before specialization");
-        if (!replacements.isEmpty()) {
+        if (!nodeReplacements.isEmpty()) {
             // Do deferred intrinsification of node intrinsics
             new NodeIntrinsificationPhase(runtime, new BoxingMethodPool(runtime)).apply(snippetCopy);
             new WordTypeRewriterPhase(runtime, target.wordKind).apply(snippetCopy);
 
-            new CanonicalizerPhase(runtime, assumptions, 0, null).apply(snippetCopy);
+            new CanonicalizerPhase(runtime, replacements.getAssumptions(), 0, null).apply(snippetCopy);
         }
         assert NodeIntrinsificationVerificationPhase.verify(snippetCopy);
 
@@ -343,7 +354,7 @@ public class SnippetTemplate {
                     LoopEx loop = new LoopsData(snippetCopy).loop(loopBegin);
                     int mark = snippetCopy.getMark();
                     LoopTransformations.fullUnroll(loop, runtime, null);
-                    new CanonicalizerPhase(runtime, assumptions, mark, null).apply(snippetCopy);
+                    new CanonicalizerPhase(runtime, replacements.getAssumptions(), mark, null).apply(snippetCopy);
                 }
                 FixedNode explodeLoopNext = explodeLoop.next();
                 explodeLoop.clearSuccessors();
