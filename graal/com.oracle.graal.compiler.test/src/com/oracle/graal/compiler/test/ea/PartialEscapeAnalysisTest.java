@@ -158,7 +158,7 @@ public class PartialEscapeAnalysisTest extends GraalCompilerTest {
                 StructuredGraph graph = parse(snippet);
                 new ComputeProbabilityPhase().apply(graph);
                 for (Invoke n : graph.getInvokes()) {
-                    n.node().setProbability(100000);
+                    n.asNode().setProbability(100000);
                 }
                 Assumptions assumptions = new Assumptions(false);
                 HighTierContext context = new HighTierContext(runtime(), assumptions);
