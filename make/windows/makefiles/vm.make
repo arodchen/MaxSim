@@ -56,6 +56,10 @@ CXX_FLAGS=$(CXX_FLAGS) /D "COMPILER2"
 CXX_FLAGS=$(CXX_FLAGS) /D "COMPILER1" /D "COMPILER2"
 !endif
 
+!if "$(Variant)" == "graal"
+CPP_FLAGS=$(CPP_FLAGS) /D "GRAAL"
+!endif
+
 !if "$(BUILDARCH)" == "i486"
 HOTSPOT_LIB_ARCH=i386
 !else
@@ -149,6 +153,7 @@ VM_PATH=../generated
 VM_PATH=$(VM_PATH);../generated/adfiles
 VM_PATH=$(VM_PATH);../generated/jvmtifiles
 VM_PATH=$(VM_PATH);$(WorkSpace)/src/share/vm/c1
+VM_PATH=$(VM_PATH);$(WorkSpace)/src/share/vm/graal
 VM_PATH=$(VM_PATH);$(WorkSpace)/src/share/vm/compiler
 VM_PATH=$(VM_PATH);$(WorkSpace)/src/share/vm/code
 VM_PATH=$(VM_PATH);$(WorkSpace)/src/share/vm/interpreter

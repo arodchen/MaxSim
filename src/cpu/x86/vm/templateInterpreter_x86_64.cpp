@@ -36,6 +36,7 @@
 #include "prims/jvmtiExport.hpp"
 #include "prims/jvmtiThreadState.hpp"
 #include "runtime/arguments.hpp"
+#include "runtime/compilationPolicy.hpp"
 #include "runtime/deoptimization.hpp"
 #include "runtime/frame.inline.hpp"
 #include "runtime/sharedRuntime.hpp"
@@ -203,13 +204,26 @@ address TemplateInterpreterGenerator::generate_return_entry_for(TosState state, 
 }
 
 
-address TemplateInterpreterGenerator::generate_deopt_entry_for(TosState state,
+address InterpreterGenerator::generate_deopt_entry_for(TosState state,
                                                                int step) {
   address entry = __ pc();
   // NULL last_sp until next java call
   __ movptr(Address(rbp, frame::interpreter_frame_last_sp_offset * wordSize), (int32_t)NULL_WORD);
   __ restore_bcp();
   __ restore_locals();
+  // Check if we need to take lock at entry of synchronized method.
+  {
+    Label L;
+    __ cmpb(Address(r15_thread, Thread::pending_monitorenter_offset()), 0);
+    __ jcc(Assembler::zero, L);
+    // Clear flag.
+    __ movb(Address(r15_thread, Thread::pending_monitorenter_offset()), 0);
+    // Satisfy calling convention for lock_method().
+    __ get_method(rbx);
+    // Take lock.
+    lock_method();
+    __ bind(L);
+  }
   // handle exceptions
   {
     Label L;
@@ -287,6 +301,15 @@ address TemplateInterpreterGenerator::generate_safept_entry_for(
 // Helpers for commoning out cases in the various type of method entries.
 //
 
+#ifdef GRAAL
+
+void graal_initialize_time(JavaThread* thread) {
+  frame fr = thread->last_frame();
+  assert(fr.is_interpreted_frame(), "must come from interpreter");
+  fr.interpreter_frame_method()->set_graal_invocation_time(os::javaTimeNanos());
+}
+
+#endif // GRAAL
 
 // increment invocation count & check for overflow
 //
@@ -331,6 +354,27 @@ void InterpreterGenerator::generate_counter_incr(
       __ incrementl(Address(rbx,
                             Method::interpreter_invocation_counter_offset()));
     }
+
+#ifdef GRAAL
+    if (CompilationPolicyChoice == 4) {
+      Label not_zero;
+      __ testl(rcx, InvocationCounter::count_mask_value);
+      __ jcc(Assembler::notZero, not_zero);
+
+      __ push(rcx);
+      __ call_VM(noreg, CAST_FROM_FN_PTR(address, graal_initialize_time), rdx, false);
+      __ set_method_data_pointer_for_bcp();
+      __ get_method(rbx);
+      __ pop(rcx);
+
+      __ testl(rcx, InvocationCounter::count_mask_value);
+      __ jcc(Assembler::zero, not_zero);
+      __ stop("unexpected counter value in rcx");
+
+      __ bind(not_zero);
+    }
+#endif // GRAAL
+
     // Update standard invocation counters
     __ movl(rax, backedge_counter);   // load backedge counter
 
@@ -829,6 +873,31 @@ address InterpreterGenerator::generate_Reference_get_entry(void) {
   return generate_accessor_entry();
 }
 
+// Interpreter stub for calling a compiled method with 3 object arguments
+address InterpreterGenerator::generate_execute_compiled_method_entry() {
+  address entry_point = __ pc();
+
+  // Pick up the return address
+  __ movptr(rax, Address(rsp, 0));
+
+  // Must preserve original SP for loading incoming arguments because
+  // we need to align the outgoing SP for compiled code.
+  __ movptr(r11, rsp);
+
+  // Ensure compiled code always sees stack at proper alignment
+  __ andptr(rsp, -16);
+
+  // push the return address and misalign the stack that youngest frame always sees
+  // as far as the placement of the call instruction
+  __ push(rax);
+
+  __ movq(j_rarg0, Address(r11, Interpreter::stackElementSize*5));
+  __ movq(j_rarg1, Address(r11, Interpreter::stackElementSize*4));
+  __ movq(j_rarg2, Address(r11, Interpreter::stackElementSize*3));
+  __ movq(j_rarg3, Address(r11, Interpreter::stackElementSize));
+  __ jmp(Address(j_rarg3, nmethod::verified_entry_point_offset()));
+  return entry_point;
+}
 
 // Interpreter stub for calling a native method. (asm interpreter)
 // This sets up a somewhat different looking stack for calling the
@@ -1517,6 +1586,7 @@ address AbstractInterpreterGenerator::generate_method_entry(
   switch (kind) {
   case Interpreter::zerolocals             :                                                                             break;
   case Interpreter::zerolocals_synchronized: synchronized = true;                                                        break;
+  case Interpreter::execute_compiled_method: entry_point = ((InterpreterGenerator*)this)->generate_execute_compiled_method_entry(); break;
   case Interpreter::native                 : entry_point = ((InterpreterGenerator*)this)->generate_native_entry(false); break;
   case Interpreter::native_synchronized    : entry_point = ((InterpreterGenerator*)this)->generate_native_entry(true);  break;
   case Interpreter::empty                  : entry_point = ((InterpreterGenerator*)this)->generate_empty_entry();       break;

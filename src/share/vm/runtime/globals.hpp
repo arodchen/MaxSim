@@ -120,6 +120,20 @@
 # include "c1_globals_bsd.hpp"
 #endif
 #endif
+#ifdef GRAAL
+#ifdef TARGET_ARCH_x86
+# include "graalGlobals_x86.hpp"
+#endif
+#ifdef TARGET_ARCH_sparc
+# include "graalGlobals_sparc.hpp"
+#endif
+#ifdef TARGET_ARCH_arm
+# include "graalGlobals_arm.hpp"
+#endif
+#ifdef TARGET_ARCH_ppc
+# include "graalGlobals_ppc.hpp"
+#endif
+#endif // GRAAL
 #ifdef COMPILER2
 #ifdef TARGET_ARCH_x86
 # include "c2_globals_x86.hpp"
@@ -149,7 +163,7 @@
 #endif
 #endif
 
-#if !defined(COMPILER1) && !defined(COMPILER2) && !defined(SHARK)
+#if !defined(COMPILER1) && !defined(COMPILER2) && !defined(SHARK) && !defined(GRAAL)
 define_pd_global(bool, BackgroundCompilation,        false);
 define_pd_global(bool, UseTLAB,                      false);
 define_pd_global(bool, CICompileOSR,                 false);
@@ -647,7 +661,7 @@ class CommandLineFlags {
   develop(bool, TraceCallFixup, false,                                      \
           "traces all call fixups")                                         \
                                                                             \
-  develop(bool, DeoptimizeALot, false,                                      \
+  product(bool, DeoptimizeALot, false,                                      \
           "deoptimize at every exit from the runtime system")               \
                                                                             \
   notproduct(ccstrlist, DeoptimizeOnlyAt, "",                               \
@@ -908,6 +922,9 @@ class CommandLineFlags {
                                                                             \
   diagnostic(ccstr, PrintAssemblyOptions, NULL,                             \
           "Options string passed to disassembler.so")                       \
+                                                                            \
+  product(bool, PrintNMethodStatistics, false,                              \
+          "Print a summary statistic for the generated nmethods")           \
                                                                             \
   diagnostic(bool, PrintNMethods, false,                                    \
           "Print assembly code for nmethods when generated")                \
@@ -2377,7 +2394,7 @@ class CommandLineFlags {
   product(intx, CICompilerCount, CI_COMPILER_COUNT,                         \
           "Number of compiler threads to run")                              \
                                                                             \
-  product(intx, CompilationPolicyChoice, 0,                                 \
+  product(intx, CompilationPolicyChoice, NOT_GRAALVM(0) GRAALVM_ONLY(4),    \
           "which compilation policy (0/1)")                                 \
                                                                             \
   develop(bool, UseStackBanging, true,                                      \
@@ -2774,8 +2791,11 @@ class CommandLineFlags {
           "Prefetch instruction to prefetch ahead of allocation pointer")   \
                                                                             \
   /* deoptimization */                                                      \
-  develop(bool, TraceDeoptimization, false,                                 \
+  product(bool, TraceDeoptimization, false,                                 \
           "Trace deoptimization")                                           \
+                                                                            \
+  product(bool, PrintDeoptimizationDetails, false,                          \
+          "Print more information about deoptimization")                    \
                                                                             \
   develop(bool, DebugDeoptimization, false,                                 \
           "Tracing various information while debugging deoptimization")     \
@@ -2926,7 +2946,7 @@ class CommandLineFlags {
           "if non-zero, max # of Words that malloc/realloc can allocate "   \
           "(for testing only)")                                             \
                                                                             \
-  product(intx, TypeProfileWidth,     2,                                    \
+  product_pd(intx, TypeProfileWidth,                                        \
           "number of receiver types to record in call/cast profile")        \
                                                                             \
   develop(intx, BciProfileWidth,      2,                                    \

@@ -110,6 +110,11 @@ Method::Method(ConstMethod* xconst, AccessFlags access_flags, int size) {
   backedge_counter()->init();
   clear_number_of_breakpoints();
 
+#ifdef GRAAL
+  set_graal_invocation_time(0L);
+  set_graal_priority(0);
+#endif
+
 #ifdef TIERED
   set_rate(0);
   set_prev_event_count(0);
@@ -717,7 +722,7 @@ bool Method::is_not_compilable(int comp_level) const {
   if (number_of_breakpoints() > 0)
     return true;
   if (is_method_handle_intrinsic())
-    return !is_synthetic();  // the generated adapters must be compiled
+    return !is_synthetic() && intrinsic_id() != vmIntrinsics::_CompilerToVMImpl_executeCompiledMethod;  // the generated adapters must be compiled
   if (comp_level == CompLevel_any)
     return is_not_c1_compilable() || is_not_c2_compilable();
   if (is_c1_compile(comp_level))
@@ -845,7 +850,10 @@ void Method::link_method(methodHandle h_method, TRAPS) {
   (void) make_adapters(h_method, CHECK);
 
   // ONLY USE the h_method now as make_adapter may have blocked
-
+  if (h_method->intrinsic_id() == vmIntrinsics::_CompilerToVMImpl_executeCompiledMethod) {
+    CompileBroker::compile_method(h_method, InvocationEntryBci, CompLevel_highest_tier,
+                                  methodHandle(), CompileThreshold, "executeCompiledMethod", CHECK);
+  }
 }
 
 address Method::make_adapters(methodHandle mh, TRAPS) {
@@ -1009,8 +1017,8 @@ bool Method::is_compiled_lambda_form() const {
 // Test if this method is an internal MH primitive method.
 bool Method::is_method_handle_intrinsic() const {
   vmIntrinsics::ID iid = intrinsic_id();
-  return (MethodHandles::is_signature_polymorphic(iid) &&
-          MethodHandles::is_signature_polymorphic_intrinsic(iid));
+  return ((MethodHandles::is_signature_polymorphic(iid) &&
+          MethodHandles::is_signature_polymorphic_intrinsic(iid))) || iid == vmIntrinsics::_CompilerToVMImpl_executeCompiledMethod;
 }
 
 bool Method::has_member_arg() const {
@@ -1968,3 +1976,15 @@ void Method::verify_on(outputStream* st) {
   guarantee(md == NULL ||
       md->is_methodData(), "should be method data");
 }
+
+#ifdef GRAAL
+void Method::reset_counters() {
+  invocation_counter()->reset();
+  backedge_counter()->reset();
+  _interpreter_invocation_count = 0;
+  _interpreter_throwout_count = 0;
+#ifndef PRODUCT
+  _compiled_invocation_count = 0;
+#endif
+}
+#endif

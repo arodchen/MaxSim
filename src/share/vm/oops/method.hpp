@@ -129,6 +129,10 @@ class Method : public Metadata {
   InvocationCounter _invocation_counter;         // Incremented before each activation of the method - used to trigger frequency-based optimizations
   InvocationCounter _backedge_counter;           // Incremented before each backedge taken - used to trigger frequencey-based optimizations
 
+#ifdef GRAAL
+  jlong             _graal_invocation_time;
+  int               _graal_priority;
+#endif
 #ifdef TIERED
   float             _rate;                        // Events (invocation and backedge counter increments) per millisecond
   jlong             _prev_time;                   // Previous time the rate was acquired
@@ -361,6 +365,16 @@ class Method : public Metadata {
   int invocation_count();
   int backedge_count();
 
+#ifdef GRAAL
+  void set_graal_invocation_time(jlong time) { _graal_invocation_time = time; }
+  jlong graal_invocation_time()          { return _graal_invocation_time; }
+
+  void set_graal_priority(int prio)      { _graal_priority = prio; }
+  int graal_priority()                   { return _graal_priority; }
+
+  void reset_counters();
+#endif // GRAAL
+
   bool was_executed_more_than(int n);
   bool was_never_executed()                      { return !was_executed_more_than(0); }
 
@@ -375,7 +389,7 @@ class Method : public Metadata {
     if (TieredCompilation) ShouldNotReachHere();
     return ++_interpreter_invocation_count;
   }
-
+  
 #ifndef PRODUCT
   int  compiled_invocation_count() const         { return _compiled_invocation_count;  }
   void set_compiled_invocation_count(int count)  { _compiled_invocation_count = count; }
@@ -588,6 +602,10 @@ class Method : public Metadata {
     return byte_offset_of(Method, _method_data);
   }
   static ByteSize interpreter_invocation_counter_offset() { return byte_offset_of(Method, _interpreter_invocation_count); }
+#ifdef GRAAL
+  static ByteSize graal_invocation_time_offset() { return byte_offset_of(Method, _graal_invocation_time); }
+  static ByteSize graal_priority_offset()        { return byte_offset_of(Method, _graal_priority); }
+#endif
 #ifndef PRODUCT
   static ByteSize compiled_invocation_counter_offset() { return byte_offset_of(Method, _compiled_invocation_count); }
 #endif // not PRODUCT

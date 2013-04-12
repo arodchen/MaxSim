@@ -33,6 +33,7 @@ import org.openide.util.actions.CallableSystemAction;
  */
 public final class ExpandPredecessorsAction extends CallableSystemAction {
 
+    @Override
     public void performAction() {
         EditorTopComponent editor = EditorTopComponent.getActive();
         if (editor != null) {
@@ -40,8 +41,9 @@ public final class ExpandPredecessorsAction extends CallableSystemAction {
         }
     }
 
+    @Override
     public String getName() {
-        return "Expand Predecessors";
+        return "Expand Above";
     }
 
     @Override
@@ -49,6 +51,7 @@ public final class ExpandPredecessorsAction extends CallableSystemAction {
         super.initialize();
     }
 
+    @Override
     public HelpCtx getHelpCtx() {
         return HelpCtx.DEFAULT_HELP;
     }

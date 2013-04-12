@@ -24,23 +24,22 @@
 package com.sun.hotspot.igv.view.widgets;
 
 import com.sun.hotspot.igv.graph.Connection;
+import com.sun.hotspot.igv.graph.Figure;
 import com.sun.hotspot.igv.graph.InputSlot;
 import com.sun.hotspot.igv.graph.OutputSlot;
 import com.sun.hotspot.igv.view.DiagramScene;
-import java.awt.BasicStroke;
-import java.awt.Color;
-import java.awt.Graphics2D;
-import java.awt.Point;
-import java.awt.Rectangle;
-import java.awt.Stroke;
+import java.awt.*;
 import java.awt.geom.Line2D;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import javax.swing.JPopupMenu;
 import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
 import org.netbeans.api.visual.action.ActionFactory;
 import org.netbeans.api.visual.action.PopupMenuProvider;
+import org.netbeans.api.visual.action.SelectProvider;
 import org.netbeans.api.visual.animator.SceneAnimator;
 import org.netbeans.api.visual.model.ObjectState;
 import org.netbeans.api.visual.widget.Widget;
@@ -51,7 +50,7 @@ import org.netbeans.api.visual.widget.Widget;
  */
 public class LineWidget extends Widget implements PopupMenuProvider {
 
-    public final int BORDER = 8;
+    public final int BORDER = 5;
     public final int ARROW_SIZE = 6;
     public final int BOLD_ARROW_SIZE = 7;
     public final int HOVER_ARROW_SIZE = 8;
@@ -80,7 +79,7 @@ public class LineWidget extends Widget implements PopupMenuProvider {
         this.from = from;
         this.to = to;
         this.predecessor = predecessor;
-        this.successors = new ArrayList<LineWidget>();
+        this.successors = new ArrayList<>();
         if (predecessor != null) {
             predecessor.addSuccessor(this);
         }
@@ -111,6 +110,8 @@ public class LineWidget extends Widget implements PopupMenuProvider {
             color = connections.get(0).getColor();
         }
 
+        this.setToolTipText("<HTML>" + generateToolTipText(this.connections) + "</HTML>");
+
         this.setCheckClipping(true);
 
         this.getActions().addAction(ActionFactory.createPopupMenuAction(this));
@@ -120,6 +121,38 @@ public class LineWidget extends Widget implements PopupMenuProvider {
             this.setBackground(Color.WHITE);
             animator.animateBackgroundColor(this, color);
         }
+
+        this.getActions().addAction(ActionFactory.createSelectAction(new SelectProvider() {
+
+            @Override
+            public boolean isAimingAllowed(Widget arg0, Point arg1, boolean arg2) {
+                return true;
+            }
+
+            @Override
+            public boolean isSelectionAllowed(Widget arg0, Point arg1, boolean arg2) {
+                return true;
+            }
+
+            @Override
+            public void select(Widget arg0, Point arg1, boolean arg2) {
+                Set<Figure> set = new HashSet<>();
+                for (Connection c : LineWidget.this.connections) {
+                    set.add(c.getInputSlot().getFigure());
+                    set.add(c.getOutputSlot().getFigure());
+                }
+                LineWidget.this.scene.setSelectedObjects(set);
+            }
+        }));
+    }
+
+    private String generateToolTipText(List<Connection> conn) {
+        StringBuilder sb = new StringBuilder();
+        for (Connection c : conn) {
+            sb.append(c.getToolTipText());
+            sb.append("<br>");
+        }
+        return sb.toString();
     }
 
     public Point getFrom() {
@@ -141,13 +174,12 @@ public class LineWidget extends Widget implements PopupMenuProvider {
 
     @Override
     protected void paintWidget() {
-        if (scene.getRealZoomFactor() < ZOOM_FACTOR) {
+        if (scene.getZoomFactor() < ZOOM_FACTOR) {
             return;
         }
 
         Graphics2D g = getScene().getGraphics();
         g.setPaint(this.getBackground());
-        ObjectState state = this.getState();
         float width = 1.0f;
 
         if (isBold) {
@@ -207,6 +239,20 @@ public class LineWidget extends Widget implements PopupMenuProvider {
 
     private void setHighlighted(boolean b) {
         this.highlighted = b;
+	Set<Object> highlightedObjects = new HashSet<>(scene.getHighlightedObjects());
+	Set<Object> highlightedObjectsChange = new HashSet<>();
+        for (Connection c : connections) {
+		highlightedObjectsChange.add(c.getInputSlot().getFigure());
+		highlightedObjectsChange.add(c.getInputSlot());
+		highlightedObjectsChange.add(c.getOutputSlot().getFigure());
+		highlightedObjectsChange.add(c.getOutputSlot());
+        }
+	if(b) {
+		highlightedObjects.addAll(highlightedObjectsChange);
+	} else {
+		highlightedObjects.removeAll(highlightedObjectsChange);
+	}
+	scene.setHighlightedObjects(highlightedObjects);
         this.revalidate(true);
     }
 
@@ -263,6 +309,7 @@ public class LineWidget extends Widget implements PopupMenuProvider {
         }
     }
 
+    @Override
     public JPopupMenu getPopupMenu(Widget widget, Point localLocation) {
         JPopupMenu menu = new JPopupMenu();
         menu.add(scene.createGotoAction(outputSlot.getFigure()));
@@ -276,14 +323,17 @@ public class LineWidget extends Widget implements PopupMenuProvider {
         final LineWidget w = this;
         menu.addPopupMenuListener(new PopupMenuListener() {
 
+            @Override
             public void popupMenuWillBecomeVisible(PopupMenuEvent e) {
                 w.setRecursivePopupVisible(true);
             }
 
+            @Override
             public void popupMenuWillBecomeInvisible(PopupMenuEvent e) {
                 w.setRecursivePopupVisible(false);
             }
 
+            @Override
             public void popupMenuCanceled(PopupMenuEvent e) {
             }
         });

@@ -188,6 +188,9 @@ AbstractInterpreter::MethodKind AbstractInterpreter::method_kind(methodHandle m)
   // Method handle primitive?
   if (m->is_method_handle_intrinsic()) {
     vmIntrinsics::ID id = m->intrinsic_id();
+    if (id == vmIntrinsics::_CompilerToVMImpl_executeCompiledMethod) {
+      return AbstractInterpreter::execute_compiled_method;
+    }
     assert(MethodHandles::is_signature_polymorphic(id), "must match an intrinsic");
     MethodKind kind = (MethodKind)( method_handle_invoke_FIRST +
                                     ((int)id - vmIntrinsics::FIRST_MH_SIG_POLY) );
@@ -287,6 +290,7 @@ void AbstractInterpreter::print_method_kind(MethodKind kind) {
     case zerolocals_synchronized: tty->print("zerolocals_synchronized"); break;
     case native                 : tty->print("native"                 ); break;
     case native_synchronized    : tty->print("native_synchronized"    ); break;
+    case execute_compiled_method: tty->print("execute_compiled_method"); break;
     case empty                  : tty->print("empty"                  ); break;
     case accessor               : tty->print("accessor"               ); break;
     case abstract               : tty->print("abstract"               ); break;
@@ -389,7 +393,7 @@ address AbstractInterpreter::deopt_continue_after_entry(Method* method, address 
 address AbstractInterpreter::deopt_reexecute_entry(Method* method, address bcp) {
   assert(method->contains(bcp), "just checkin'");
   Bytecodes::Code code   = Bytecodes::java_code_at(method, bcp);
-#ifdef COMPILER1
+#if defined(COMPILER1) || defined(GRAAL)
   if(code == Bytecodes::_athrow ) {
     return Interpreter::rethrow_exception_entry();
   }

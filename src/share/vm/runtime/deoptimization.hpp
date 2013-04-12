@@ -41,7 +41,13 @@ class Deoptimization : AllStatic {
   enum DeoptReason {
     Reason_many = -1,             // indicates presence of several reasons
     Reason_none = 0,              // indicates absence of a relevant deopt.
-    // Next 7 reasons are recorded per bytecode in DataLayout::trap_bits
+    // Next 7 reasons are recorded per bytecode in DataLayout::trap_bits.
+    // This is more complicated for Graal as Graal may deoptimize to *some* bytecode before the
+    // bytecode that actually caused the deopt (with inlining, Graal may even deoptimize to a
+    // bytecode in another method):
+    //  - bytecode y in method b() causes deopt
+    //  - Graal deoptimizes to bytecode x in method a()
+    // -> the deopt reason will be recorded for method a() at bytecode x
     Reason_null_check,            // saw unexpected null or zero divisor (@bci)
     Reason_null_assert,           // saw unexpected non-null or non-zero (@bci)
     Reason_range_check,           // saw unexpected array index (@bci)
@@ -50,7 +56,14 @@ class Deoptimization : AllStatic {
     Reason_intrinsic,             // saw unexpected operand to intrinsic (@bci)
     Reason_bimorphic,             // saw unexpected object class in bimorphic inlining (@bci)
 
-    Reason_unloaded,              // unloaded class or constant pool entry
+#ifdef GRAAL
+    Reason_unreached0             = Reason_null_assert,
+    Reason_type_checked_inlining  = Reason_intrinsic,
+    Reason_optimized_type_check   = Reason_bimorphic,
+#endif
+
+    // recorded per method
+    Reason_unloaded,              // unloaded or class constant pool entry
     Reason_uninitialized,         // bad class state (uninitialized)
     Reason_unreached,             // code is not reached, compiler
     Reason_unhandled,             // arbitrary compiler limitation
@@ -60,8 +73,15 @@ class Deoptimization : AllStatic {
     Reason_predicate,             // compiler generated predicate failed
     Reason_loop_limit_check,      // compiler generated loop limits check failed
     Reason_LIMIT,
-    // Note:  Keep this enum in sync. with _trap_reason_name.
+
+#ifdef GRAAL
+    Reason_not_compiled_exception_handler = Reason_unhandled,
+    Reason_unresolved                     = Reason_uninitialized,
+    Reason_jsr_mismatch                   = Reason_age,
+#endif
+
     Reason_RECORDED_LIMIT = Reason_bimorphic  // some are not recorded per bc
+    // Note:  Keep this enum in sync. with _trap_reason_name.
     // Note:  Reason_RECORDED_LIMIT should be < 8 to fit into 3 bits of
     // DataLayout::trap_bits.  This dependency is enforced indirectly
     // via asserts, to avoid excessive direct header-to-header dependencies.
@@ -99,11 +119,11 @@ class Deoptimization : AllStatic {
   static int deoptimize_dependents();
 
   // Deoptimizes a frame lazily. nmethod gets patched deopt happens on return to the frame
-  static void deoptimize(JavaThread* thread, frame fr, RegisterMap *reg_map);
+  static void deoptimize(JavaThread* thread, frame fr, RegisterMap *reg_map, DeoptReason reason);
 
   private:
   // Does the actual work for deoptimizing a single frame
-  static void deoptimize_single_frame(JavaThread* thread, frame fr);
+  static void deoptimize_single_frame(JavaThread* thread, frame fr, DeoptReason reason);
 
   // Helper function to revoke biases of all monitors in frame if UseBiasedLocking
   // is enabled
@@ -112,7 +132,7 @@ class Deoptimization : AllStatic {
   // executing in a particular CodeBlob if UseBiasedLocking is enabled
   static void revoke_biases_of_monitors(CodeBlob* cb);
 
-#ifdef COMPILER2
+#if defined(COMPILER2) || defined(GRAAL)
   // Support for restoring non-escaping objects
   static bool realloc_objects(JavaThread* thread, frame* fr, GrowableArray<ScopeValue*>* objects, TRAPS);
   static void reassign_type_array_elements(frame* fr, RegisterMap* reg_map, ObjectValue* sv, typeArrayOop obj, BasicType type);
@@ -120,7 +140,7 @@ class Deoptimization : AllStatic {
   static void reassign_fields(frame* fr, RegisterMap* reg_map, GrowableArray<ScopeValue*>* objects);
   static void relock_objects(GrowableArray<MonitorInfo*>* monitors, JavaThread* thread);
   NOT_PRODUCT(static void print_objects(GrowableArray<ScopeValue*>* objects);)
-#endif // COMPILER2
+#endif // COMPILER2 || GRAAL
 
   public:
   static vframeArray* create_vframeArray(JavaThread* thread, frame fr, RegisterMap *reg_map, GrowableArray<compiledVFrame*>* chunk);
@@ -233,11 +253,11 @@ class Deoptimization : AllStatic {
   // Only called from VMDeoptimizeFrame
   // @argument thread.     Thread where stub_frame resides.
   // @argument id.         id of frame that should be deoptimized.
-  static void deoptimize_frame_internal(JavaThread* thread, intptr_t* id);
+  static void deoptimize_frame_internal(JavaThread* thread, intptr_t* id, DeoptReason reason);
 
-  // If thread is not the current thread then execute
+  // if thread is not the current thread then execute
   // VM_DeoptimizeFrame otherwise deoptimize directly.
-  static void deoptimize_frame(JavaThread* thread, intptr_t* id);
+  static void deoptimize_frame(JavaThread* thread, intptr_t* id, DeoptReason reason);
 
   // Statistics
   static void gather_statistics(DeoptReason reason, DeoptAction action,
@@ -251,29 +271,36 @@ class Deoptimization : AllStatic {
 
   // trap_request codes
   static DeoptReason trap_request_reason(int trap_request) {
-    if (trap_request < 0)
+    if (trap_request < 0) {
       return (DeoptReason)
         ((~(trap_request) >> _reason_shift) & right_n_bits(_reason_bits));
-    else
+    } else {
       // standard reason for unloaded CP entry
       return Reason_unloaded;
+    }
   }
   static DeoptAction trap_request_action(int trap_request) {
-    if (trap_request < 0)
+    if (trap_request < 0) {
       return (DeoptAction)
         ((~(trap_request) >> _action_shift) & right_n_bits(_action_bits));
-    else
+    } else {
       // standard action for unloaded CP entry
       return _unloaded_action;
+    }
   }
   static int trap_request_index(int trap_request) {
-    if (trap_request < 0)
+    if (trap_request < 0) {
       return -1;
-    else
+    } else {
       return trap_request;
+    }
   }
   static int make_trap_request(DeoptReason reason, DeoptAction action,
                                int index = -1) {
+#ifdef GRAALVM
+    assert(index == -1, "Graal does not use index");
+#endif
+
     assert((1 << _reason_bits) >= Reason_LIMIT, "enough bits");
     assert((1 << _action_bits) >= Action_LIMIT, "enough bits");
     int trap_request;
@@ -337,6 +364,7 @@ class Deoptimization : AllStatic {
   static ProfileData* query_update_method_data(MethodData* trap_mdo,
                                                int trap_bci,
                                                DeoptReason reason,
+                                               bool update_total_trap_count,
                                                //outputs:
                                                uint& ret_this_trap_count,
                                                bool& ret_maybe_prior_trap,
