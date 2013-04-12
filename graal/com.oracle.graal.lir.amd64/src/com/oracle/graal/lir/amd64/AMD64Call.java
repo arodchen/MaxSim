@@ -58,9 +58,9 @@ public class AMD64Call {
 
     public abstract static class MethodCallOp extends CallOp {
 
-        protected final ResolvedJavaMethod callTarget;
+        protected final JavaMethod callTarget;
 
-        public MethodCallOp(ResolvedJavaMethod callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState state) {
+        public MethodCallOp(JavaMethod callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState state) {
             super(result, parameters, temps, state);
             this.callTarget = callTarget;
         }
@@ -85,7 +85,7 @@ public class AMD64Call {
 
         @Use({REG}) protected Value targetAddress;
 
-        public IndirectCallOp(ResolvedJavaMethod callTarget, Value result, Value[] parameters, Value[] temps, Value targetAddress, LIRFrameState state) {
+        public IndirectCallOp(JavaMethod callTarget, Value result, Value[] parameters, Value[] temps, Value targetAddress, LIRFrameState state) {
             super(callTarget, result, parameters, temps, state);
             this.targetAddress = targetAddress;
         }
