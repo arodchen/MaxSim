@@ -2228,8 +2228,6 @@ void InstanceKlass::clean_implementors_list(BoolObjectClosure* is_alive) {
 }
 
 void InstanceKlass::clean_method_data(BoolObjectClosure* is_alive) {
-#ifdef COMPILER2
-  // Currently only used by C2.
   for (int m = 0; m < methods()->length(); m++) {
     MethodData* mdo = methods()->at(m)->method_data();
     if (mdo != NULL) {
@@ -2240,15 +2238,6 @@ void InstanceKlass::clean_method_data(BoolObjectClosure* is_alive) {
       }
     }
   }
-#else
-#ifdef ASSERT
-  // Verify that we haven't started to use MDOs for C1.
-  for (int m = 0; m < methods()->length(); m++) {
-    MethodData* mdo = methods()->at(m)->method_data();
-    assert(mdo == NULL, "Didn't expect C1 to use MDOs");
-  }
-#endif // ASSERT
-#endif // !COMPILER2
 }
 
 
@@ -3168,7 +3157,7 @@ void InstanceKlass::verify_on(outputStream* st) {
     Array<int>* method_ordering = this->method_ordering();
     int length = method_ordering->length();
     if (JvmtiExport::can_maintain_original_method_order() ||
-        (UseSharedSpaces && length != 0)) {
+        ((UseSharedSpaces || DumpSharedSpaces) && length != 0)) {
       guarantee(length == methods()->length(), "invalid method ordering length");
       jlong sum = 0;
       for (int j = 0; j < length; j++) {

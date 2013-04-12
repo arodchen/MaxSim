@@ -953,15 +953,6 @@ void Universe::update_heap_info_at_gc() {
 void universe2_init() {
   EXCEPTION_MARK;
   Universe::genesis(CATCH);
-  // Although we'd like to verify here that the state of the heap
-  // is good, we can't because the main thread has not yet added
-  // itself to the threads list (so, using current interfaces
-  // we can't "fill" its TLAB), unless TLABs are disabled.
-  if (VerifyBeforeGC && !UseTLAB &&
-      Universe::heap()->total_collections() >= VerifyGCStartAt) {
-     Universe::heap()->prepare_for_verify();
-     Universe::verify();   // make sure we're starting with a clean slate
-  }
 }
 
 
@@ -1335,6 +1326,8 @@ static uintptr_t _verify_oop_data[2]   = {0, (uintptr_t)-1};
 static uintptr_t _verify_klass_data[2] = {0, (uintptr_t)-1};
 
 
+#ifndef PRODUCT
+
 static void calculate_verify_data(uintptr_t verify_data[2],
                                   HeapWord* low_boundary,
                                   HeapWord* high_boundary) {
@@ -1369,9 +1362,7 @@ static void calculate_verify_data(uintptr_t verify_data[2],
   verify_data[1] = bits;
 }
 
-
 // Oop verification (see MacroAssembler::verify_oop)
-#ifndef PRODUCT
 
 uintptr_t Universe::verify_oop_mask() {
   MemRegion m = heap()->reserved_region();

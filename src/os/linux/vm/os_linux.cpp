@@ -176,7 +176,6 @@ class MemNotifyThread: public Thread {
 // utility functions
 
 static int SR_initialize();
-static int SR_finalize();
 
 julong os::available_memory() {
   return Linux::available_memory();
@@ -192,20 +191,6 @@ julong os::Linux::available_memory() {
 
 julong os::physical_memory() {
   return Linux::physical_memory();
-}
-
-julong os::allocatable_physical_memory(julong size) {
-#ifdef _LP64
-  return size;
-#else
-  julong result = MIN2(size, (julong)3800*M);
-   if (!is_allocatable(result)) {
-     // See comments under solaris for alignment considerations
-     julong reasonable_size = (julong)2*G - 2 * os::vm_page_size();
-     result =  MIN2(size, reasonable_size);
-   }
-   return result;
-#endif // _LP64
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1647,6 +1632,9 @@ bool os::dll_build_name(char* buffer, size_t buflen,
   } else if (strchr(pname, *os::path_separator()) != NULL) {
     int n;
     char** pelements = split_path(pname, &n);
+    if (pelements == NULL) {
+      return false;
+    }
     for (int i = 0 ; i < n ; i++) {
       // Really shouldn't be NULL, but check can't hurt
       if (pelements[i] == NULL || strlen(pelements[i]) == 0) {
@@ -1811,13 +1799,15 @@ bool os::Linux::_stack_is_executable = false;
 class VM_LinuxDllLoad: public VM_Operation {
  private:
   const char *_filename;
+  char *_ebuf;
+  int _ebuflen;
   void *_lib;
  public:
-  VM_LinuxDllLoad(const char *fn) :
-    _filename(fn), _lib(NULL) {}
+  VM_LinuxDllLoad(const char *fn, char *ebuf, int ebuflen) :
+    _filename(fn), _ebuf(ebuf), _ebuflen(ebuflen), _lib(NULL) {}
   VMOp_Type type() const { return VMOp_LinuxDllLoad; }
   void doit() {
-    _lib = os::Linux::dll_load_inner(_filename);
+    _lib = os::Linux::dll_load_in_vmthread(_filename, _ebuf, _ebuflen);
     os::Linux::_stack_is_executable = true;
   }
   void* loaded_library() { return _lib; }
@@ -1865,13 +1855,13 @@ void * os::dll_load(const char *filename, char *ebuf, int ebuflen)
             // This is for the case where the DLL has an static
             // constructor function that executes JNI code. We cannot
             // load such DLLs in the VMThread.
-            result = ::dlopen(filename, RTLD_LAZY);
+            result = os::Linux::dlopen_helper(filename, ebuf, ebuflen);
           }
 
           ThreadInVMfromNative tiv(jt);
           debug_only(VMNativeEntryWrapper vew;)
 
-          VM_LinuxDllLoad op(filename);
+          VM_LinuxDllLoad op(filename, ebuf, ebuflen);
           VMThread::execute(&op);
           if (LoadExecStackDllInVMThread) {
             result = op.loaded_library();
@@ -1883,7 +1873,7 @@ void * os::dll_load(const char *filename, char *ebuf, int ebuflen)
   }
 
   if (!load_attempted) {
-    result = ::dlopen(filename, RTLD_LAZY);
+    result = os::Linux::dlopen_helper(filename, ebuf, ebuflen);
   }
 
   if (result != NULL) {
@@ -1892,11 +1882,6 @@ void * os::dll_load(const char *filename, char *ebuf, int ebuflen)
   }
 
   Elf32_Ehdr elf_head;
-
-  // Read system error message into ebuf
-  // It may or may not be overwritten below
-  ::strncpy(ebuf, ::dlerror(), ebuflen-1);
-  ebuf[ebuflen-1]='\0';
   int diag_msg_max_length=ebuflen-strlen(ebuf);
   char* diag_msg_buf=ebuf+strlen(ebuf);
 
@@ -2039,10 +2024,19 @@ void * os::dll_load(const char *filename, char *ebuf, int ebuflen)
   return NULL;
 }
 
-void * os::Linux::dll_load_inner(const char *filename) {
+void * os::Linux::dlopen_helper(const char *filename, char *ebuf, int ebuflen) {
+  void * result = ::dlopen(filename, RTLD_LAZY);
+  if (result == NULL) {
+    ::strncpy(ebuf, ::dlerror(), ebuflen - 1);
+    ebuf[ebuflen-1] = '\0';
+  }
+  return result;
+}
+
+void * os::Linux::dll_load_in_vmthread(const char *filename, char *ebuf, int ebuflen) {
   void * result = NULL;
   if (LoadExecStackDllInVMThread) {
-    result = ::dlopen(filename, RTLD_LAZY);
+    result = dlopen_helper(filename, ebuf, ebuflen);
   }
 
   // Since 7019808, libjvm.so is linked with -noexecstack. If the VM loads a
@@ -3663,10 +3657,6 @@ static int SR_initialize() {
   return 0;
 }
 
-static int SR_finalize() {
-  return 0;
-}
-
 
 // returns true on success and false on error - really an error is fatal
 // but this seems the normal response to library errors
@@ -4508,16 +4498,6 @@ int os::Linux::safe_cond_timedwait(pthread_cond_t *_cond, pthread_mutex_t *_mute
 ////////////////////////////////////////////////////////////////////////////////
 // debug support
 
-static address same_page(address x, address y) {
-  int page_bits = -os::vm_page_size();
-  if ((intptr_t(x) & page_bits) == (intptr_t(y) & page_bits))
-    return x;
-  else if (x > y)
-    return (address)(intptr_t(y) | ~page_bits) + 1;
-  else
-    return (address)(intptr_t(y) & page_bits);
-}
-
 bool os::find(address addr, outputStream* st) {
   Dl_info dlinfo;
   memset(&dlinfo, 0, sizeof(dlinfo));
@@ -4541,8 +4521,8 @@ bool os::find(address addr, outputStream* st) {
 
     if (Verbose) {
       // decode some bytes around the PC
-      address begin = same_page(addr-40, addr);
-      address end   = same_page(addr+40, addr);
+      address begin = clamp_address_in_page(addr-40, addr, os::vm_page_size());
+      address end   = clamp_address_in_page(addr+40, addr, os::vm_page_size());
       address       lowest = (address) dlinfo.dli_sname;
       if (!lowest)  lowest = (address) dlinfo.dli_fbase;
       if (begin < lowest)  begin = lowest;

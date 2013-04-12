@@ -248,10 +248,6 @@ void report_should_not_reach_here(const char* file, int line) {
   report_vm_error(file, line, "ShouldNotReachHere()");
 }
 
-void report_should_not_reach_here2(const char* file, int line, const char* message) {
-  report_vm_error(file, line, "ShouldNotReachHere()", message);
-}
-
 void report_unimplemented(const char* file, int line) {
   report_vm_error(file, line, "Unimplemented()");
 }
@@ -611,18 +607,6 @@ extern "C" nmethod* findnm(intptr_t addr) {
   Command c("findnm");
   return  CodeCache::find_nmethod((address)addr);
 }
-
-static address same_page(address x, address y) {
-  intptr_t page_bits = -os::vm_page_size();
-  if ((intptr_t(x) & page_bits) == (intptr_t(y) & page_bits)) {
-    return x;
-  } else if (x > y) {
-    return (address)(intptr_t(y) | ~page_bits) + 1;
-  } else {
-    return (address)(intptr_t(y) & page_bits);
-  }
-}
-
 
 // Another interface that isn't ambiguous in dbx.
 // Can we someday rename the other find to hsfind?
