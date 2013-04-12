@@ -335,17 +335,10 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
                 TTY.println("LIRGen for " + instr);
             }
             FrameState stateAfter = null;
-            if (instr instanceof StateSplit) {
+            if (instr instanceof StateSplit && !(instr instanceof InfopointNode)) {
                 stateAfter = ((StateSplit) instr).stateAfter();
             }
-            if (instr instanceof DeoptimizingNode) {
-                DeoptimizingNode deopt = (DeoptimizingNode) instr;
-                if (deopt.canDeoptimize() && deopt.getDeoptimizationState() == null) {
-                    deopt.setDeoptimizationState(lastState);
-                }
-            }
             if (instr instanceof ValueNode) {
-
                 ValueNode valueNode = (ValueNode) instr;
                 if (operand(valueNode) == null) {
                     if (!peephole(valueNode)) {

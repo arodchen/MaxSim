@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,20 +28,27 @@ import static com.oracle.graal.replacements.SnippetTemplate.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.replacements.*;
-import com.oracle.graal.replacements.Snippet.Parameter;
+import com.oracle.graal.replacements.Snippet.ConstantParameter;
 import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
-import com.oracle.graal.replacements.SnippetTemplate.Key;
+import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
+import com.oracle.graal.replacements.nodes.*;
 import com.oracle.graal.word.*;
 
 public class WriteBarrierSnippets implements Snippets {
 
     @Snippet
-    public static void serialFieldWriteBarrier(@Parameter("object") Object obj) {
+    public static void serialArrayWriteBarrier(Object obj, Object location, @ConstantParameter boolean usePrecise) {
         Object object = FixedValueAnchorNode.getObject(obj);
-        Pointer oop = Word.fromObject(object);
+        Pointer oop;
+        if (usePrecise) {
+            oop = Word.fromArray(object, location);
+        } else {
+            oop = Word.fromObject(object);
+        }
         Word base = (Word) oop.unsignedShiftRight(cardTableShift());
         long startAddress = cardTableStart();
         int displacement = 0;
@@ -54,49 +61,44 @@ public class WriteBarrierSnippets implements Snippets {
     }
 
     @Snippet
-    public static void serialArrayWriteBarrier(@Parameter("object") Object obj, @Parameter("location") Object location) {
-        Object object = FixedValueAnchorNode.getObject(obj);
-        Pointer oop = Word.fromArray(object, location);
-        Word base = (Word) oop.unsignedShiftRight(cardTableShift());
-        long startAddress = cardTableStart();
-        int displacement = 0;
-        if (((int) startAddress) == startAddress) {
-            displacement = (int) startAddress;
-        } else {
-            base = base.add(Word.unsigned(cardTableStart()));
+    public static void serialArrayRangeWriteBarrier(Object object, int startIndex, int length) {
+        Object dest = FixedValueAnchorNode.getObject(object);
+        int cardShift = cardTableShift();
+        long cardStart = cardTableStart();
+        final int scale = arrayIndexScale(Kind.Object);
+        int header = arrayBaseOffset(Kind.Object);
+        long dstAddr = GetObjectAddressNode.get(dest);
+        long start = (dstAddr + header + (long) startIndex * scale) >>> cardShift;
+        long end = (dstAddr + header + ((long) startIndex + length - 1) * scale) >>> cardShift;
+        long count = end - start + 1;
+        while (count-- > 0) {
+            DirectStoreNode.store((start + cardStart) + count, false, Kind.Boolean);
         }
-        base.writeByte(displacement, (byte) 0);
     }
 
-    public static class Templates extends AbstractTemplates<WriteBarrierSnippets> {
+    public static class Templates extends AbstractTemplates {
 
-        private final ResolvedJavaMethod serialFieldWriteBarrier;
-        private final ResolvedJavaMethod serialArrayWriteBarrier;
+        private final SnippetInfo serialArrayWriteBarrier = snippet(WriteBarrierSnippets.class, "serialArrayWriteBarrier");
+        private final SnippetInfo serialArrayRangeWriteBarrier = snippet(WriteBarrierSnippets.class, "serialArrayRangeWriteBarrier");
 
         public Templates(CodeCacheProvider runtime, Replacements replacements, TargetDescription target) {
-            super(runtime, replacements, target, WriteBarrierSnippets.class);
-            serialFieldWriteBarrier = snippet("serialFieldWriteBarrier", Object.class);
-            serialArrayWriteBarrier = snippet("serialArrayWriteBarrier", Object.class, Object.class);
+            super(runtime, replacements, target);
         }
 
-        public void lower(ArrayWriteBarrier arrayWriteBarrier, @SuppressWarnings("unused") LoweringTool tool) {
-            ResolvedJavaMethod method = serialArrayWriteBarrier;
-            Key key = new Key(method);
-            Arguments arguments = new Arguments();
-            arguments.add("object", arrayWriteBarrier.getObject());
-            arguments.add("location", arrayWriteBarrier.getLocation());
-            SnippetTemplate template = cache.get(key);
-            template.instantiate(runtime, arrayWriteBarrier, DEFAULT_REPLACER, arguments);
+        public void lower(SerialWriteBarrier arrayWriteBarrier, @SuppressWarnings("unused") LoweringTool tool) {
+            Arguments args = new Arguments(serialArrayWriteBarrier);
+            args.add("obj", arrayWriteBarrier.getObject());
+            args.add("location", arrayWriteBarrier.getLocation());
+            args.addConst("usePrecise", arrayWriteBarrier.usePrecise());
+            template(args).instantiate(runtime, arrayWriteBarrier, DEFAULT_REPLACER, args);
         }
 
-        public void lower(FieldWriteBarrier fieldWriteBarrier, @SuppressWarnings("unused") LoweringTool tool) {
-            ResolvedJavaMethod method = serialFieldWriteBarrier;
-            Key key = new Key(method);
-            Arguments arguments = new Arguments();
-            arguments.add("object", fieldWriteBarrier.getObject());
-            SnippetTemplate template = cache.get(key);
-            template.instantiate(runtime, fieldWriteBarrier, DEFAULT_REPLACER, arguments);
+        public void lower(SerialArrayRangeWriteBarrier arrayRangeWriteBarrier, @SuppressWarnings("unused") LoweringTool tool) {
+            Arguments args = new Arguments(serialArrayRangeWriteBarrier);
+            args.add("object", arrayRangeWriteBarrier.getObject());
+            args.add("startIndex", arrayRangeWriteBarrier.getStartIndex());
+            args.add("length", arrayRangeWriteBarrier.getLength());
+            template(args).instantiate(runtime, arrayRangeWriteBarrier, DEFAULT_REPLACER, args);
         }
-
     }
 }
