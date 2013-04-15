@@ -70,15 +70,19 @@ ClassLoaderData::ClassLoaderData(Handle h_class_loader, bool is_anonymous) :
   _is_anonymous(is_anonymous), _keep_alive(is_anonymous), // initially
   _metaspace(NULL), _unloading(false), _klasses(NULL),
   _claimed(0), _jmethod_ids(NULL), _handles(NULL), _deallocate_list(NULL),
-  _next(NULL), _dependencies(NULL),
+  _next(NULL), _dependencies(),
   _metaspace_lock(new Mutex(Monitor::leaf+1, "Metaspace allocation lock", true)) {
     // empty
 }
 
 void ClassLoaderData::init_dependencies(TRAPS) {
+  _dependencies.init(CHECK);
+}
+
+void ClassLoaderData::Dependencies::init(TRAPS) {
   // Create empty dependencies array to add to. CMS requires this to be
   // an oop so that it can track additions via card marks.  We think.
-  _dependencies = (oop)oopFactory::new_objectArray(2, CHECK);
+  _list_head = oopFactory::new_objectArray(2, CHECK);
 }
 
 bool ClassLoaderData::claim() {
@@ -95,16 +99,21 @@ void ClassLoaderData::oops_do(OopClosure* f, KlassClosure* klass_closure, bool m
   }
 
   f->do_oop(&_class_loader);
-  f->do_oop(&_dependencies);
+  _dependencies.oops_do(f);
   _handles->oops_do(f);
   if (klass_closure != NULL) {
     classes_do(klass_closure);
   }
 }
 
+void ClassLoaderData::Dependencies::oops_do(OopClosure* f) {
+  f->do_oop((oop*)&_list_head);
+}
+
 void ClassLoaderData::classes_do(KlassClosure* klass_closure) {
   for (Klass* k = _klasses; k != NULL; k = k->next_link()) {
     klass_closure->do_klass(k);
+    assert(k != k->next_link(), "no loops!");
   }
 }
 
@@ -113,6 +122,7 @@ void ClassLoaderData::classes_do(void f(InstanceKlass*)) {
     if (k->oop_is_instance()) {
       f(InstanceKlass::cast(k));
     }
+    assert(k != k->next_link(), "no loops!");
   }
 }
 
@@ -152,14 +162,14 @@ void ClassLoaderData::record_dependency(Klass* k, TRAPS) {
   // It's a dependency we won't find through GC, add it. This is relatively rare
   // Must handle over GC point.
   Handle dependency(THREAD, to);
-  from_cld->add_dependency(dependency, CHECK);
+  from_cld->_dependencies.add(dependency, CHECK);
 }
 
 
-void ClassLoaderData::add_dependency(Handle dependency, TRAPS) {
+void ClassLoaderData::Dependencies::add(Handle dependency, TRAPS) {
   // Check first if this dependency is already in the list.
   // Save a pointer to the last to add to under the lock.
-  objArrayOop ok = (objArrayOop)_dependencies;
+  objArrayOop ok = _list_head;
   objArrayOop last = NULL;
   while (ok != NULL) {
     last = ok;
@@ -182,16 +192,17 @@ void ClassLoaderData::add_dependency(Handle dependency, TRAPS) {
   objArrayHandle new_dependency(THREAD, deps);
 
   // Add the dependency under lock
-  locked_add_dependency(last_handle, new_dependency);
+  locked_add(last_handle, new_dependency, THREAD);
 }
 
-void ClassLoaderData::locked_add_dependency(objArrayHandle last_handle,
-                                            objArrayHandle new_dependency) {
+void ClassLoaderData::Dependencies::locked_add(objArrayHandle last_handle,
+                                               objArrayHandle new_dependency,
+                                               Thread* THREAD) {
 
   // Have to lock and put the new dependency on the end of the dependency
   // array so the card mark for CMS sees that this dependency is new.
   // Can probably do this lock free with some effort.
-  MutexLockerEx ml(metaspace_lock(),  Mutex::_no_safepoint_check_flag);
+  ObjectLocker ol(Handle(THREAD, _list_head), THREAD);
 
   oop loader_or_mirror = new_dependency->obj_at(0);
 
@@ -258,6 +269,7 @@ void ClassLoaderData::remove_class(Klass* scratch_class) {
       return;
     }
     prev = k;
+    assert(k != k->next_link(), "no loops!");
   }
   ShouldNotReachHere();   // should have found this class!!
 }
@@ -316,6 +328,13 @@ ClassLoaderData::~ClassLoaderData() {
   if (_deallocate_list != NULL) {
     delete _deallocate_list;
   }
+}
+
+/**
+ * Returns true if this class loader data is for the extension class loader.
+ */
+bool ClassLoaderData::is_ext_class_loader_data() const {
+  return SystemDictionary::is_ext_class_loader(class_loader());
 }
 
 Metaspace* ClassLoaderData::metaspace_non_null() {
@@ -439,6 +458,7 @@ void ClassLoaderData::dump(outputStream * const out) {
     while (k != NULL) {
       out->print_cr("klass "PTR_FORMAT", %s, CT: %d, MUT: %d", k, k->name()->as_C_string(),
           k->has_modified_oops(), k->has_accumulated_modified_oops());
+      assert(k != k->next_link(), "no loops!");
       k = k->next_link();
     }
   }
@@ -465,6 +485,7 @@ void ClassLoaderData::verify() {
   for (Klass* k = _klasses; k != NULL; k = k->next_link()) {
     guarantee(k->class_loader_data() == this, "Must be the same");
     k->verify();
+    assert(k != k->next_link(), "no loops!");
   }
 }
 

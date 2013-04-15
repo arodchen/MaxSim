@@ -23,18 +23,21 @@
 package com.oracle.graal.hotspot.stubs;
 
 import static com.oracle.graal.hotspot.nodes.DirectCompareAndSwapNode.*;
-import static com.oracle.graal.hotspot.nodes.NewInstanceStubCall.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotSnippetUtils.*;
 import static com.oracle.graal.hotspot.replacements.NewObjectSnippets.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.hotspot.replacements.*;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.replacements.*;
-import com.oracle.graal.replacements.Snippet.*;
-import com.oracle.graal.replacements.SnippetTemplate.*;
+import com.oracle.graal.replacements.Snippet.ConstantParameter;
+import com.oracle.graal.replacements.Snippet.Fold;
+import com.oracle.graal.replacements.SnippetTemplate.Arguments;
+import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
 import com.oracle.graal.word.*;
 
 /**
@@ -45,15 +48,19 @@ import com.oracle.graal.word.*;
  */
 public class NewInstanceStub extends Stub {
 
-    public NewInstanceStub(final HotSpotRuntime runtime, Assumptions assumptions, TargetDescription target) {
-        super(runtime, assumptions, target, NEW_INSTANCE);
+    public NewInstanceStub(final HotSpotRuntime runtime, Replacements replacements, TargetDescription target, HotSpotRuntimeCallTarget linkage) {
+        super(runtime, replacements, target, linkage, "newInstance");
     }
 
     @Override
-    protected void populateKey(Key key) {
+    protected Arguments makeArguments(SnippetInfo stub) {
         HotSpotResolvedObjectType intArrayType = (HotSpotResolvedObjectType) runtime.lookupJavaType(int[].class);
-        Constant intArrayHub = intArrayType.klass();
-        key.add("intArrayHub", intArrayHub).add("log", Boolean.getBoolean("graal.logNewInstanceStub"));
+
+        Arguments args = new Arguments(stub);
+        args.add("hub", null);
+        args.addConst("intArrayHub", intArrayType.klass());
+        args.addConst("log", Boolean.getBoolean("graal.logNewInstanceStub"));
+        return args;
     }
 
     /**
@@ -64,7 +71,7 @@ public class NewInstanceStub extends Stub {
      * @param intArrayHub the hub for {@code int[].class}
      */
     @Snippet
-    private static Object newInstance(@Parameter("hub") Word hub, @ConstantParameter("intArrayHub") Word intArrayHub, @ConstantParameter("log") boolean log) {
+    private static Object newInstance(Word hub, @ConstantParameter Word intArrayHub, @ConstantParameter boolean log) {
         int sizeInBytes = hub.readInt(klassInstanceSizeOffset(), FINAL_LOCATION);
         if (!forceSlowPath() && inlineContiguousAllocationSupported()) {
             if (hub.readInt(klassStateOffset(), CLASS_STATE_LOCATION) == klassStateFullyInitialized()) {
@@ -92,9 +99,6 @@ public class NewInstanceStub extends Stub {
      *         operation was unsuccessful
      */
     static Word refillAllocate(Word intArrayHub, int sizeInBytes, boolean log) {
-        if (useG1GC()) {
-            return Word.zero();
-        }
         if (!useTLAB()) {
             return edenAllocate(Word.unsigned(sizeInBytes), log);
         }

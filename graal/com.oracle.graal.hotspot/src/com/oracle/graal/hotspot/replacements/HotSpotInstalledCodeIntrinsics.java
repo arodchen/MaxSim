@@ -23,16 +23,16 @@
 package com.oracle.graal.hotspot.replacements;
 
 import com.oracle.graal.api.runtime.*;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.replacements.*;
 
 @ServiceProvider(ReplacementsProvider.class)
 public class HotSpotInstalledCodeIntrinsics implements ReplacementsProvider {
 
     @Override
-    public void installReplacements(ReplacementsInstaller installer) {
+    public void registerReplacements(Replacements replacements) {
         if (GraalOptions.IntrinsifyInstalledCodeMethods) {
-            installer.installSubstitutions(HotSpotInstalledCodeSubstitutions.class);
+            replacements.registerSubstitutions(HotSpotInstalledCodeSubstitutions.class);
         }
     }
 }

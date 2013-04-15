@@ -76,8 +76,8 @@ public class InvokeHintsTest extends GraalCompilerTest {
         }
 
         Assumptions assumptions = new Assumptions(false);
-        new InliningPhase(runtime(), hints, assumptions, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
-        new CanonicalizerPhase(runtime(), assumptions).apply(graph);
+        new InliningPhase(runtime(), hints, replacements, assumptions, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
+        new CanonicalizerPhase.Instance(runtime(), assumptions).apply(graph);
         new DeadCodeEliminationPhase().apply(graph);
         StructuredGraph referenceGraph = parse(REFERENCE_SNIPPET);
         assertEquals(referenceGraph, graph);

@@ -31,7 +31,7 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.virtual.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
-import com.oracle.graal.replacements.*;
+import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.replacements.nodes.*;
 
 public class ArrayCopyNode extends MacroNode implements Virtualizable, IterableNodeType, Lowerable {
@@ -60,7 +60,7 @@ public class ArrayCopyNode extends MacroNode implements Virtualizable, IterableN
         return arguments.get(4);
     }
 
-    private StructuredGraph selectSnippet(LoweringTool tool) {
+    private StructuredGraph selectSnippet(LoweringTool tool, Replacements replacements) {
         ResolvedJavaType srcType = getSource().objectStamp().type();
         ResolvedJavaType destType = getDestination().objectStamp().type();
 
@@ -72,7 +72,7 @@ public class ArrayCopyNode extends MacroNode implements Virtualizable, IterableN
         }
         Kind componentKind = srcType.getComponentType().getKind();
         ResolvedJavaMethod snippetMethod = tool.getRuntime().lookupJavaMethod(ArrayCopySnippets.getSnippetForKind(componentKind));
-        return (StructuredGraph) snippetMethod.getCompilerStorage().get(Snippet.class);
+        return replacements.getSnippet(snippetMethod);
     }
 
     private static void unrollFixedLengthLoop(StructuredGraph snippetGraph, int length, LoweringTool tool) {
@@ -82,9 +82,10 @@ public class ArrayCopyNode extends MacroNode implements Virtualizable, IterableN
         }
         // the canonicalization before loop unrolling is needed to propagate the length into
         // additions, etc.
-        new CanonicalizerPhase(tool.getRuntime(), tool.assumptions()).apply(snippetGraph);
-        new LoopFullUnrollPhase(tool.getRuntime(), tool.assumptions()).apply(snippetGraph);
-        new CanonicalizerPhase(tool.getRuntime(), tool.assumptions()).apply(snippetGraph);
+        HighTierContext context = new HighTierContext(tool.getRuntime(), tool.assumptions());
+        new CanonicalizerPhase().apply(snippetGraph, context);
+        new LoopFullUnrollPhase().apply(snippetGraph, context);
+        new CanonicalizerPhase().apply(snippetGraph, context);
     }
 
     @Override
@@ -93,12 +94,11 @@ public class ArrayCopyNode extends MacroNode implements Virtualizable, IterableN
             return null;
         }
 
-        StructuredGraph snippetGraph = selectSnippet(tool);
+        Replacements replacements = tool.getReplacements();
+        StructuredGraph snippetGraph = selectSnippet(tool, replacements);
         if (snippetGraph == null) {
             ResolvedJavaMethod snippetMethod = tool.getRuntime().lookupJavaMethod(ArrayCopySnippets.genericArraycopySnippet);
-            snippetGraph = ((StructuredGraph) snippetMethod.getCompilerStorage().get(Snippet.class)).copy();
-            assert snippetGraph != null : "ArrayCopySnippets should be installed";
-
+            snippetGraph = replacements.getSnippet(snippetMethod).copy();
             replaceSnippetInvokes(snippetGraph);
         } else {
             assert snippetGraph != null : "ArrayCopySnippets should be installed";

@@ -218,13 +218,18 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         return false;
     }
 
-    public LIRFrameState state() {
-        return state(null);
+    public LIRFrameState state(DeoptimizingNode deopt) {
+        if (!deopt.canDeoptimize()) {
+            return null;
+        }
+        return stateFor(deopt.getDeoptimizationState(), deopt.getDeoptimizationReason());
     }
 
-    public LIRFrameState state(DeoptimizationReason reason) {
-        assert lastState != null || needOnlyOopMaps() : "must have state before instruction";
-        return stateFor(lastState, reason);
+    public LIRFrameState stateWithExceptionEdge(DeoptimizingNode deopt, LabelRef exceptionEdge) {
+        if (!deopt.canDeoptimize()) {
+            return null;
+        }
+        return stateForWithExceptionEdge(deopt.getDeoptimizationState(), deopt.getDeoptimizationReason(), exceptionEdge);
     }
 
     public LIRFrameState stateFor(FrameState state, DeoptimizationReason reason) {
@@ -235,6 +240,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         if (needOnlyOopMaps()) {
             return new LIRFrameState(null, null, null, (short) -1);
         }
+        assert state != null;
         return debugInfoBuilder.build(state, lir.getDeoptimizationReasons().addSpeculation(reason), exceptionEdge);
     }
 
@@ -329,11 +335,10 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
                 TTY.println("LIRGen for " + instr);
             }
             FrameState stateAfter = null;
-            if (instr instanceof StateSplit) {
+            if (instr instanceof StateSplit && !(instr instanceof InfopointNode)) {
                 stateAfter = ((StateSplit) instr).stateAfter();
             }
             if (instr instanceof ValueNode) {
-
                 ValueNode valueNode = (ValueNode) instr;
                 if (operand(valueNode) == null) {
                     if (!peephole(valueNode)) {
@@ -594,18 +599,18 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     @Override
     public void emitInvoke(Invoke x) {
         AbstractCallTargetNode callTarget = (AbstractCallTargetNode) x.callTarget();
-        CallingConvention cc = frameMap.registerConfig.getCallingConvention(callTarget.callType(), x.node().stamp().javaType(runtime), callTarget.signature(), target(), false);
+        CallingConvention cc = frameMap.registerConfig.getCallingConvention(callTarget.callType(), x.asNode().stamp().javaType(runtime), callTarget.signature(), target(), false);
         frameMap.callsMethod(cc);
 
         Value[] parameters = visitInvokeArguments(cc, callTarget.arguments());
 
-        LIRFrameState callState = null;
-        if (x.stateAfter() != null) {
-            callState = stateForWithExceptionEdge(x.stateDuring(), null, x instanceof InvokeWithExceptionNode ? getLIRBlock(((InvokeWithExceptionNode) x).exceptionEdge()) : null);
+        LabelRef exceptionEdge = null;
+        if (x instanceof InvokeWithExceptionNode) {
+            exceptionEdge = getLIRBlock(((InvokeWithExceptionNode) x).exceptionEdge());
         }
+        LIRFrameState callState = stateWithExceptionEdge(x, exceptionEdge);
 
         Value result = cc.getReturn();
-
         if (callTarget instanceof DirectCallTargetNode) {
             emitDirectCall((DirectCallTargetNode) callTarget, result, parameters, cc.getTemporaries(), callState);
         } else if (callTarget instanceof IndirectCallTargetNode) {
@@ -615,7 +620,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         }
 
         if (isLegal(result)) {
-            setResult(x.node(), emitMove(result));
+            setResult(x.asNode(), emitMove(result));
         }
     }
 
@@ -658,8 +663,8 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     }
 
     @Override
-    public Variable emitCall(RuntimeCallTarget callTarget, CallingConvention cc, boolean canTrap, Value... args) {
-        LIRFrameState info = canTrap ? state() : null;
+    public Variable emitCall(RuntimeCallTarget callTarget, CallingConvention cc, DeoptimizingNode info, Value... args) {
+        LIRFrameState state = info != null ? state(info) : null;
 
         // move the arguments into the correct location
         frameMap.callsMethod(cc);
@@ -671,7 +676,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
             emitMove(loc, arg);
             argLocations[i] = loc;
         }
-        emitCall(callTarget, cc.getReturn(), argLocations, cc.getTemporaries(), info);
+        emitCall(callTarget, cc.getReturn(), argLocations, cc.getTemporaries(), state);
 
         if (isLegal(cc.getReturn())) {
             return emitMove(cc.getReturn());
@@ -688,25 +693,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         Value resultOperand = cc.getReturn();
         Value[] args = visitInvokeArguments(cc, x.arguments());
 
-        LIRFrameState info = null;
-        FrameState stateAfter = x.stateAfter();
-        if (stateAfter != null) {
-            // (cwimmer) I made the code that modifies the operand stack conditional. My scenario:
-            // runtime calls to, e.g.,
-            // CreateNullPointerException have no equivalent in the bytecodes, so there is no invoke
-            // bytecode.
-            // Therefore, the result of the runtime call was never pushed to the stack, and we
-            // cannot pop it here.
-            FrameState stateBeforeReturn = stateAfter;
-            if ((stateAfter.stackSize() > 0 && stateAfter.stackAt(stateAfter.stackSize() - 1) == x) || (stateAfter.stackSize() > 1 && stateAfter.stackAt(stateAfter.stackSize() - 2) == x)) {
-                stateBeforeReturn = stateAfter.duplicateModified(stateAfter.bci, stateAfter.rethrowException(), x.kind());
-            }
-            info = stateFor(stateBeforeReturn, null);
-        } else {
-            info = state();
-        }
-
-        emitCall(call, resultOperand, args, cc.getTemporaries(), info);
+        emitCall(call, resultOperand, args, cc.getTemporaries(), state(x));
 
         if (isLegal(resultOperand)) {
             setResult(x, emitMove(resultOperand));

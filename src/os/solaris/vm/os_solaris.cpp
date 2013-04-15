@@ -476,24 +476,6 @@ julong os::physical_memory() {
    return Solaris::physical_memory();
 }
 
-julong os::allocatable_physical_memory(julong size) {
-#ifdef _LP64
-   return size;
-#else
-   julong result = MIN2(size, (julong)3835*M);
-   if (!is_allocatable(result)) {
-     // Memory allocations will be aligned but the alignment
-     // is not known at this point.  Alignments will
-     // be at most to LargePageSizeInBytes.  Protect
-     // allocations from alignments up to illegal
-     // values. If at this point 2G is illegal.
-     julong reasonable_size = (julong)2*G - 2 * LargePageSizeInBytes;
-     result =  MIN2(size, reasonable_size);
-   }
-   return result;
-#endif
-}
-
 static hrtime_t first_hrtime = 0;
 static const hrtime_t hrtime_hz = 1000*1000*1000;
 const int LOCK_BUSY = 1;
@@ -1903,6 +1885,9 @@ bool os::dll_build_name(char* buffer, size_t buflen,
   } else if (strchr(pname, *os::path_separator()) != NULL) {
     int n;
     char** pelements = split_path(pname, &n);
+    if (pelements == NULL) {
+      return false;
+    }
     for (int i = 0 ; i < n ; i++) {
       // really shouldn't be NULL but what the heck, check can't hurt
       if (pelements[i] == NULL || strlen(pelements[i]) == 0) {
@@ -2945,7 +2930,7 @@ char *os::scan_pages(char *start, char* end, page_info* page_expected, page_info
   while (p < (uint64_t)end) {
     addrs[0] = p;
     size_t addrs_count = 1;
-    while (addrs_count < MAX_MEMINFO_CNT && addrs[addrs_count - 1] < (uint64_t)end) {
+    while (addrs_count < MAX_MEMINFO_CNT && addrs[addrs_count - 1] + page_size < (uint64_t)end) {
       addrs[addrs_count] = addrs[addrs_count - 1] + page_size;
       addrs_count++;
     }
@@ -3420,13 +3405,25 @@ char* os::reserve_memory_special(size_t size, char* addr, bool exec) {
   if ((retAddr != NULL) && UseNUMAInterleaving) {
     numa_make_global(retAddr, size);
   }
+
+  // The memory is committed
+  address pc = CALLER_PC;
+  MemTracker::record_virtual_memory_reserve((address)retAddr, size, pc);
+  MemTracker::record_virtual_memory_commit((address)retAddr, size, pc);
+
   return retAddr;
 }
 
 bool os::release_memory_special(char* base, size_t bytes) {
   // detaching the SHM segment will also delete it, see reserve_memory_special()
   int rslt = shmdt(base);
-  return rslt == 0;
+  if (rslt == 0) {
+    MemTracker::record_virtual_memory_uncommit((address)base, bytes);
+    MemTracker::record_virtual_memory_release((address)base, bytes);
+    return true;
+  } else {
+   return false;
+  }
 }
 
 size_t os::large_page_size() {
@@ -5793,16 +5790,6 @@ int os::loadavg(double loadavg[], int nelem) {
 
 //---------------------------------------------------------------------------------
 
-static address same_page(address x, address y) {
-  intptr_t page_bits = -os::vm_page_size();
-  if ((intptr_t(x) & page_bits) == (intptr_t(y) & page_bits))
-    return x;
-  else if (x > y)
-    return (address)(intptr_t(y) | ~page_bits) + 1;
-  else
-    return (address)(intptr_t(y) & page_bits);
-}
-
 bool os::find(address addr, outputStream* st) {
   Dl_info dlinfo;
   memset(&dlinfo, 0, sizeof(dlinfo));
@@ -5828,8 +5815,8 @@ bool os::find(address addr, outputStream* st) {
 
     if (Verbose) {
       // decode some bytes around the PC
-      address begin = same_page(addr-40, addr);
-      address end   = same_page(addr+40, addr);
+      address begin = clamp_address_in_page(addr-40, addr, os::vm_page_size());
+      address end   = clamp_address_in_page(addr+40, addr, os::vm_page_size());
       address       lowest = (address) dlinfo.dli_sname;
       if (!lowest)  lowest = (address) dlinfo.dli_fbase;
       if (begin < lowest)  begin = lowest;

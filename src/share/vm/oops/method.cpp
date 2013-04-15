@@ -77,22 +77,19 @@ Method* Method::allocate(ClassLoaderData* loader_data,
   return new (loader_data, size, false, THREAD) Method(cm, access_flags, size);
 }
 
-Method::Method(ConstMethod* xconst,
-                             AccessFlags access_flags, int size) {
+Method::Method(ConstMethod* xconst, AccessFlags access_flags, int size) {
   No_Safepoint_Verifier no_safepoint;
   set_constMethod(xconst);
   set_access_flags(access_flags);
   set_method_size(size);
-  set_name_index(0);
-  set_signature_index(0);
 #ifdef CC_INTERP
   set_result_index(T_VOID);
 #endif
-  set_constants(NULL);
-  set_max_stack(0);
-  set_max_locals(0);
   set_intrinsic_id(vmIntrinsics::_none);
   set_jfr_towrite(false);
+  set_force_inline(false);
+  set_hidden(false);
+  set_dont_inline(false);
   set_method_data(NULL);
   set_interpreter_throwout_count(0);
   set_vtable_index(Method::garbage_vtable_index);
@@ -725,7 +722,7 @@ bool Method::is_not_compilable(int comp_level) const {
   if (number_of_breakpoints() > 0)
     return true;
   if (is_method_handle_intrinsic())
-    return !is_synthetic();  // the generated adapters must be compiled
+    return !is_synthetic() && intrinsic_id() != vmIntrinsics::_CompilerToVMImpl_executeCompiledMethod;  // the generated adapters must be compiled
   if (comp_level == CompLevel_any)
     return is_not_c1_compilable() || is_not_c2_compilable();
   if (is_c1_compile(comp_level))
@@ -806,7 +803,15 @@ void Method::unlink_method() {
   backedge_counter()->reset();
   _adapter = NULL;
   _from_compiled_entry = NULL;
-  assert(_method_data == NULL, "unexpected method data?");
+
+  // In case of DumpSharedSpaces, _method_data should always be NULL.
+  //
+  // During runtime (!DumpSharedSpaces), when we are cleaning a
+  // shared class that failed to load, this->link_method() may
+  // have already been called (before an exception happened), so
+  // this->_method_data may not be NULL.
+  assert(!DumpSharedSpaces || _method_data == NULL, "unexpected method data?");
+
   set_method_data(NULL);
   set_interpreter_throwout_count(0);
   set_interpreter_invocation_count(0);
@@ -846,6 +851,14 @@ void Method::link_method(methodHandle h_method, TRAPS) {
 
   // ONLY USE the h_method now as make_adapter may have blocked
 
+#ifdef GRAAL
+  // Check for special intrinsic that executes a compiled method.
+  if (h_method->intrinsic_id() == vmIntrinsics::_CompilerToVMImpl_executeCompiledMethod) {
+    // Actively install the stub for calling the intrinsic from compiled code.
+    CompileBroker::compile_method(h_method, InvocationEntryBci, CompLevel_highest_tier,
+                                  methodHandle(), CompileThreshold, "executeCompiledMethod", CHECK);
+  }
+#endif
 }
 
 address Method::make_adapters(methodHandle mh, TRAPS) {
@@ -967,6 +980,32 @@ bool Method::should_not_be_cached() const {
   return false;
 }
 
+
+/**
+ *  Returns true if this is one of the specially treated methods for
+ *  security related stack walks (like Reflection.getCallerClass).
+ */
+bool Method::is_ignored_by_security_stack_walk() const {
+  const bool use_new_reflection = JDK_Version::is_gte_jdk14x_version() && UseNewReflection;
+
+  assert(intrinsic_id() != vmIntrinsics::_invoke || Universe::reflect_invoke_cache()->is_same_method((Method*)this), "sanity");
+  if (intrinsic_id() == vmIntrinsics::_invoke) {
+    // This is Method.invoke() -- ignore it
+    return true;
+  }
+  if (use_new_reflection &&
+      method_holder()->is_subclass_of(SystemDictionary::reflect_MethodAccessorImpl_klass())) {
+    // This is an auxilary frame -- ignore it
+    return true;
+  }
+  if (is_method_handle_intrinsic() || is_compiled_lambda_form()) {
+    // This is an internal adapter frame for method handles -- ignore it
+    return true;
+  }
+  return false;
+}
+
+
 // Constant pool structure for invoke methods:
 enum {
   _imcp_invoke_name = 1,        // utf8: 'invokeExact', etc.
@@ -983,8 +1022,8 @@ bool Method::is_compiled_lambda_form() const {
 // Test if this method is an internal MH primitive method.
 bool Method::is_method_handle_intrinsic() const {
   vmIntrinsics::ID iid = intrinsic_id();
-  return (MethodHandles::is_signature_polymorphic(iid) &&
-          MethodHandles::is_signature_polymorphic_intrinsic(iid));
+  return ((MethodHandles::is_signature_polymorphic(iid) &&
+          MethodHandles::is_signature_polymorphic_intrinsic(iid))) || iid == vmIntrinsics::_CompilerToVMImpl_executeCompiledMethod;
 }
 
 bool Method::has_member_arg() const {
@@ -1170,6 +1209,8 @@ methodHandle Method::clone_with_new_data(methodHandle m, u_char* new_code, int n
     newm->set_stackmap_data(stackmap_data);
   }
 
+  // copy annotations over to new method
+  newcm->copy_annotations_from(cm);
   return newm;
 }
 
@@ -1178,13 +1219,13 @@ vmSymbols::SID Method::klass_id_for_intrinsics(Klass* holder) {
   // because we are not loading from core libraries
   // exception: the AES intrinsics come from lib/ext/sunjce_provider.jar
   // which does not use the class default class loader so we check for its loader here
-  if ((InstanceKlass::cast(holder)->class_loader() != NULL) &&
-       InstanceKlass::cast(holder)->class_loader()->klass()->name() != vmSymbols::sun_misc_Launcher_ExtClassLoader()) {
+  InstanceKlass* ik = InstanceKlass::cast(holder);
+  if ((ik->class_loader() != NULL) && !SystemDictionary::is_ext_class_loader(ik->class_loader())) {
     return vmSymbols::NO_SID;   // regardless of name, no intrinsics here
   }
 
   // see if the klass name is well-known:
-  Symbol* klass_name = InstanceKlass::cast(holder)->name();
+  Symbol* klass_name = ik->name();
   return vmSymbols::find_sid(klass_name);
 }
 

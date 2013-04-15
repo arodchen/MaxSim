@@ -554,6 +554,8 @@ void GenCollectedHeap::do_collection(bool  full,
     }
 
     if (complete) {
+      // Delete metaspaces for unloaded class loaders and clean up loader_data graph
+      ClassLoaderDataGraph::purge();
       // Resize the metaspace capacity after full collections
       MetaspaceGC::compute_new_size();
       update_full_collections_completed();
@@ -563,11 +565,6 @@ void GenCollectedHeap::do_collection(bool  full,
     MemoryService::track_memory_usage();
 
     gc_epilogue(complete);
-
-    // Delete metaspaces for unloaded class loaders and clean up loader_data graph
-    if (complete) {
-      ClassLoaderDataGraph::purge();
-    }
 
     if (must_restore_marks_for_biased_locking) {
       BiasedLocking::restore_marks();
@@ -822,12 +819,13 @@ bool GenCollectedHeap::is_in_young(oop p) {
 // Returns "TRUE" iff "p" points into the committed areas of the heap.
 bool GenCollectedHeap::is_in(const void* p) const {
   #ifndef ASSERT
-  guarantee(VerifyBeforeGC   ||
-            VerifyDuringGC   ||
-            VerifyBeforeExit ||
-            PrintAssembly    ||
-            tty->count() != 0 ||   // already printing
-            VerifyAfterGC    ||
+  guarantee(VerifyBeforeGC      ||
+            VerifyDuringGC      ||
+            VerifyBeforeExit    ||
+            VerifyDuringStartup ||
+            PrintAssembly       ||
+            tty->count() != 0   ||   // already printing
+            VerifyAfterGC       ||
     VMError::fatal_error_in_progress(), "too expensive");
 
   #endif
@@ -1131,6 +1129,17 @@ void GenCollectedHeap::print_gc_threads_on(outputStream* st) const {
   }
   if (UseConcMarkSweepGC) {
     ConcurrentMarkSweepThread::print_all_on(st);
+  }
+#endif // INCLUDE_ALL_GCS
+}
+
+void GenCollectedHeap::print_on_error(outputStream* st) const {
+  this->CollectedHeap::print_on_error(st);
+
+#if INCLUDE_ALL_GCS
+  if (UseConcMarkSweepGC) {
+    st->cr();
+    CMSCollector::print_on_error(st);
   }
 #endif // INCLUDE_ALL_GCS
 }

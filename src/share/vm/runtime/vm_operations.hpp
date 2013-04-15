@@ -94,6 +94,7 @@
   template(ReportJavaOutOfMemory)                 \
   template(JFRCheckpoint)                         \
   template(Exit)                                  \
+  template(LinuxDllLoad)                          \
 
 class VM_Operation: public CHeapObj<mtInternal> {
  public:
@@ -300,9 +301,9 @@ class VM_UnlinkSymbols: public VM_Operation {
 
 class VM_Verify: public VM_Operation {
  private:
-  KlassHandle _dependee;
+  bool _silent;
  public:
-  VM_Verify() {}
+  VM_Verify(bool silent) : _silent(silent) {}
   VMOp_Type type() const { return VMOp_Verify; }
   void doit();
 };

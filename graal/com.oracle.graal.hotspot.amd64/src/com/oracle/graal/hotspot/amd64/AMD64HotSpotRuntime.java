@@ -37,23 +37,22 @@ import static com.oracle.graal.hotspot.nodes.NewMultiArrayStubCall.*;
 import static com.oracle.graal.hotspot.nodes.ThreadIsInterruptedStubCall.*;
 import static com.oracle.graal.hotspot.nodes.VMErrorNode.*;
 import static com.oracle.graal.hotspot.nodes.VerifyOopStubCall.*;
+import static com.oracle.graal.hotspot.nodes.WriteBarrierPostStubCall.*;
+import static com.oracle.graal.hotspot.nodes.WriteBarrierPreStubCall.*;
 import static com.oracle.graal.hotspot.replacements.AESCryptSubstitutions.DecryptBlockStubCall.*;
 import static com.oracle.graal.hotspot.replacements.AESCryptSubstitutions.EncryptBlockStubCall.*;
 import static com.oracle.graal.hotspot.replacements.CipherBlockChainingSubstitutions.DecryptAESCryptStubCall.*;
 import static com.oracle.graal.hotspot.replacements.CipherBlockChainingSubstitutions.EncryptAESCryptStubCall.*;
-import static com.oracle.graal.hotspot.nodes.WriteBarrierPostStubCall.*;
-import static com.oracle.graal.hotspot.nodes.WriteBarrierPreStubCall.*;
 
+import com.oracle.graal.amd64.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.replacements.amd64.*;
-import com.oracle.graal.replacements.*;
 
 public class AMD64HotSpotRuntime extends HotSpotRuntime {
 
@@ -73,13 +72,13 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
                 /*             ret */ ret(Kind.Void));
 
         addRuntimeCall(ARITHMETIC_FREM, config.arithmeticFremStub,
-                /*           temps */ null,
+                /*           temps */ new Register[]{AMD64.rax},
                 /*             ret */ ret(Kind.Float),
                 /* arg0:         a */ javaCallingConvention(Kind.Float,
                 /* arg1:         b */                       Kind.Float));
 
         addRuntimeCall(ARITHMETIC_DREM, config.arithmeticDremStub,
-                /*           temps */ null,
+                /*           temps */ new Register[]{AMD64.rax},
                 /*             ret */ ret(Kind.Double),
                 /* arg0:         a */ javaCallingConvention(Kind.Double,
                 /* arg1:         b */                       Kind.Double));
@@ -208,10 +207,9 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
     private AMD64ConvertSnippets.Templates convertSnippets;
 
     @Override
-    public void installReplacements(Backend backend, ReplacementsInstaller installer, Assumptions assumptions) {
-        installer.installSnippets(AMD64ConvertSnippets.class);
-        convertSnippets = new AMD64ConvertSnippets.Templates(this, assumptions, graalRuntime.getTarget());
-        super.installReplacements(backend, installer, assumptions);
+    public void registerReplacements(Replacements replacements) {
+        convertSnippets = new AMD64ConvertSnippets.Templates(this, replacements, graalRuntime.getTarget());
+        super.registerReplacements(replacements);
     }
 
     @Override

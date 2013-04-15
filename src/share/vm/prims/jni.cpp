@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2012 Red Hat, Inc.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -95,7 +95,7 @@
 # include "os_bsd.inline.hpp"
 #endif
 
-static jint CurrentVersion = JNI_VERSION_1_6;
+static jint CurrentVersion = JNI_VERSION_1_8;
 
 
 // The DT_RETURN_MARK macros create a scoped object to fire the dtrace
@@ -1291,32 +1291,6 @@ enum JNICallType {
   JNI_VIRTUAL,
   JNI_NONVIRTUAL
 };
-
-static methodHandle jni_resolve_interface_call(Handle recv, methodHandle method, TRAPS) {
-  assert(!method.is_null() , "method should not be null");
-
-  KlassHandle recv_klass; // Default to NULL (use of ?: can confuse gcc)
-  if (recv.not_null()) recv_klass = KlassHandle(THREAD, recv->klass());
-  KlassHandle spec_klass (THREAD, method->method_holder());
-  Symbol*  name  = method->name();
-  Symbol*  signature  = method->signature();
-  CallInfo info;
-  LinkResolver::resolve_interface_call(info, recv, recv_klass,  spec_klass, name, signature, KlassHandle(), false, true, CHECK_(methodHandle()));
-  return info.selected_method();
-}
-
-static methodHandle jni_resolve_virtual_call(Handle recv, methodHandle method, TRAPS) {
-  assert(!method.is_null() , "method should not be null");
-
-  KlassHandle recv_klass; // Default to NULL (use of ?: can confuse gcc)
-  if (recv.not_null()) recv_klass = KlassHandle(THREAD, recv->klass());
-  KlassHandle spec_klass (THREAD, method->method_holder());
-  Symbol*  name  = method->name();
-  Symbol*  signature  = method->signature();
-  CallInfo info;
-  LinkResolver::resolve_virtual_call(info, recv, recv_klass,  spec_klass, name, signature, KlassHandle(), false, true, CHECK_(methodHandle()));
-  return info.selected_method();
-}
 
 
 
@@ -5056,6 +5030,7 @@ _JNI_IMPORT_OR_EXPORT_ jint JNICALL JNI_GetDefaultJavaVMInitArgs(void *args_) {
 void execute_internal_vm_tests() {
   if (ExecuteInternalVMTests) {
     tty->print_cr("Running internal VM tests");
+    run_unit_test(GlobalDefinitions::test_globals());
     run_unit_test(arrayOopDesc::test_max_array_length());
     run_unit_test(CollectedHeap::test_is_in());
     run_unit_test(QuickSort::test_quick_sort());

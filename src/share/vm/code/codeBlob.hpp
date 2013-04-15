@@ -66,7 +66,7 @@ class CodeBlob VALUE_OBJ_CLASS_SPEC {
   int        _data_offset;                       // offset to where data region begins
   int        _frame_size;                        // size of stack frame
   OopMapSet* _oop_maps;                          // OopMap for this CodeBlob
-  CodeComments _comments;
+  CodeStrings _strings;
 
  public:
   // Returns the space needed for CodeBlob
@@ -187,12 +187,12 @@ class CodeBlob VALUE_OBJ_CLASS_SPEC {
   // Print the comment associated with offset on stream, if there is one
   virtual void print_block_comment(outputStream* stream, address block_begin) const {
     intptr_t offset = (intptr_t)(block_begin - code_begin());
-    _comments.print_block_comment(stream, offset);
+    _strings.print_block_comment(stream, offset);
   }
 
   // Transfer ownership of comments to this CodeBlob
-  void set_comments(CodeComments& comments) {
-    _comments.assign(comments);
+  void set_strings(CodeStrings& strings) {
+    _strings.assign(strings);
   }
 };
 
@@ -358,10 +358,11 @@ class DeoptimizationBlob: public SingletonBlob {
 
   int _unpack_with_exception_in_tls;
 
+#ifdef GRAAL
   // (thomaswue) Offset when Graal calls uncommon_trap.
   int _uncommon_trap_offset;
   int _implicit_exception_uncommon_trap_offset;
-
+#endif
 
   // Creation support
   DeoptimizationBlob(
@@ -416,6 +417,7 @@ class DeoptimizationBlob: public SingletonBlob {
   }
   address unpack_with_exception_in_tls() const   { return code_begin() + _unpack_with_exception_in_tls; }
 
+#ifdef GRAAL
   // (thomaswue) Offset when Graal calls uncommon_trap.
   void set_uncommon_trap_offset(int offset) {
     _uncommon_trap_offset = offset;
@@ -427,7 +429,7 @@ class DeoptimizationBlob: public SingletonBlob {
     assert(contains(code_begin() + _implicit_exception_uncommon_trap_offset), "must be PC inside codeblob");
   }
   address implicit_exception_uncommon_trap() const                  { return code_begin() + _implicit_exception_uncommon_trap_offset;     }
-
+#endif
 };
 
 

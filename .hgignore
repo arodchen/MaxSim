@@ -4,6 +4,7 @@
 ^mx/ecj.jar
 ^mx/includes
 ^build/
+^build-nograal/
 ^dist/
 ^java/
 ^lib/
@@ -30,6 +31,7 @@
 \.dot$
 \.pyc$
 \.hprof$
+\javafilelist.txt$
 \.hprof\.txt$
 ^graal/.*/build.xml
 ^graal/.*/nbproject/

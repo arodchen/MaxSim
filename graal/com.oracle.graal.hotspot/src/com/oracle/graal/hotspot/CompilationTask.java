@@ -22,20 +22,22 @@
  */
 package com.oracle.graal.hotspot;
 
+import static com.oracle.graal.nodes.StructuredGraph.*;
 import static com.oracle.graal.phases.common.InliningUtil.*;
 
+import java.lang.reflect.Modifier;
 import java.util.concurrent.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.internal.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
-import static com.oracle.graal.nodes.StructuredGraph.*;
 
 public final class CompilationTask implements Runnable, Comparable<CompilationTask> {
 
@@ -133,6 +135,9 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
                 TTY.println(String.format("%-6d Graal %-70s %-45s %-50s %s...", id, method.getDeclaringClass().getName(), method.getName(), method.getSignature(),
                                 entryBCI == StructuredGraph.INVOCATION_ENTRY_BCI ? "" : "(OSR@" + entryBCI + ") "));
             }
+            if (GraalOptions.HotSpotPrintCompilation) {
+                printCompilation();
+            }
 
             CompilationResult result = null;
             TTY.Filter filter = new TTY.Filter(GraalOptions.PrintFilter, method);
@@ -143,7 +148,8 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
                     @Override
                     public CompilationResult call() throws Exception {
                         graalRuntime.evictDeoptedGraphs();
-                        StructuredGraph graph = (StructuredGraph) method.getCompilerStorage().get(MethodSubstitution.class);
+                        Replacements replacements = graalRuntime.getReplacements();
+                        StructuredGraph graph = replacements.getMethodSubstitution(method);
                         if (graph == null || entryBCI != INVOCATION_ENTRY_BCI) {
                             graph = new StructuredGraph(method, entryBCI);
                         } else {
@@ -151,7 +157,7 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
                             graph = graph.copy();
                         }
                         InlinedBytecodes.add(method.getCodeSize());
-                        return GraalCompiler.compileMethod(graalRuntime.getRuntime(), graalRuntime.getBackend(), graalRuntime.getTarget(), method, graph, graalRuntime.getCache(), plan,
+                        return GraalCompiler.compileMethod(graalRuntime.getRuntime(), replacements, graalRuntime.getBackend(), graalRuntime.getTarget(), method, graph, graalRuntime.getCache(), plan,
                                         optimisticOpts, method.getSpeculationLog());
                     }
                 });
@@ -162,7 +168,7 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
                 }
             }
 
-            installMethod(result);
+            installMethod(result, null);
         } catch (BailoutException bailout) {
             Debug.metric("Bailouts").increment();
             if (GraalOptions.ExitVMOnBailout) {
@@ -182,12 +188,22 @@ public final class CompilationTask implements Runnable, Comparable<CompilationTa
         stats.finish(method);
     }
 
-    private void installMethod(final CompilationResult compResult) {
+    /**
+     * Print a HotSpot-style compilation message to the console.
+     */
+    private void printCompilation() {
+        final boolean isOSR = entryBCI != StructuredGraph.INVOCATION_ENTRY_BCI;
+        final int mod = method.getModifiers();
+        TTY.println(String.format("%7d %4d %c%c%c%c%c       %s %s(%d bytes)", 0, id, isOSR ? '%' : ' ', Modifier.isSynchronized(mod) ? 's' : ' ', ' ', ' ', Modifier.isNative(mod) ? 'n' : ' ',
+                        MetaUtil.format("%H::%n(%p)", method), isOSR ? "@ " + entryBCI + " " : "", method.getCodeSize()));
+    }
+
+    private void installMethod(final CompilationResult compResult, final Graph graph) {
         Debug.scope("CodeInstall", new Object[]{new DebugDumpScope(String.valueOf(id), true), graalRuntime.getRuntime(), method}, new Runnable() {
 
             @Override
             public void run() {
-                HotSpotInstalledCode installedCode = graalRuntime.getRuntime().installMethod(method, entryBCI, compResult);
+                HotSpotInstalledCode installedCode = graalRuntime.getRuntime().installMethod(method, graph, entryBCI, compResult);
                 if (Debug.isDumpEnabled()) {
                     Debug.dump(new Object[]{compResult, installedCode}, "After code installation");
                 }

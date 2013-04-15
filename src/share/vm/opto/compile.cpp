@@ -892,7 +892,7 @@ Compile::Compile( ciEnv* ci_env,
   : Phase(Compiler),
     _env(ci_env),
     _log(ci_env->log()),
-    _compile_id(-1),
+    _compile_id(0),
     _save_argument_registers(save_arg_registers),
     _method(NULL),
     _stub_name(stub_name),
@@ -2326,12 +2326,14 @@ struct Final_Reshape_Counts : public StackObj {
   int  get_inner_loop_count() const { return _inner_loop_count; }
 };
 
+#ifdef ASSERT
 static bool oop_offset_is_sane(const TypeInstPtr* tp) {
   ciInstanceKlass *k = tp->klass()->as_instance_klass();
   // Make sure the offset goes inside the instance layout.
   return k->contains_field_offset(tp->offset());
   // Note that OffsetBot and OffsetTop are very negative.
 }
+#endif
 
 // Eliminate trivially redundant StoreCMs and accumulate their
 // precedence edges.
@@ -2897,6 +2899,13 @@ void Compile::final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &frc) {
       if (in2->outcnt() == 0) { // Remove dead node
         in2->disconnect_inputs(NULL, this);
       }
+    }
+    break;
+  case Op_MemBarStoreStore:
+    // Break the link with AllocateNode: it is no longer useful and
+    // confuses register allocation.
+    if (n->req() > MemBarNode::Precedent) {
+      n->set_req(MemBarNode::Precedent, top());
     }
     break;
   default:
@@ -3668,4 +3677,39 @@ void Compile::add_expensive_node(Node * n) {
     // OptimizeExpensiveOps is off.
     n->set_req(0, NULL);
   }
+}
+
+// Auxiliary method to support randomized stressing/fuzzing.
+//
+// This method can be called the arbitrary number of times, with current count
+// as the argument. The logic allows selecting a single candidate from the
+// running list of candidates as follows:
+//    int count = 0;
+//    Cand* selected = null;
+//    while(cand = cand->next()) {
+//      if (randomized_select(++count)) {
+//        selected = cand;
+//      }
+//    }
+//
+// Including count equalizes the chances any candidate is "selected".
+// This is useful when we don't have the complete list of candidates to choose
+// from uniformly. In this case, we need to adjust the randomicity of the
+// selection, or else we will end up biasing the selection towards the latter
+// candidates.
+//
+// Quick back-envelope calculation shows that for the list of n candidates
+// the equal probability for the candidate to persist as "best" can be
+// achieved by replacing it with "next" k-th candidate with the probability
+// of 1/k. It can be easily shown that by the end of the run, the
+// probability for any candidate is converged to 1/n, thus giving the
+// uniform distribution among all the candidates.
+//
+// We don't care about the domain size as long as (RANDOMIZED_DOMAIN / count) is large.
+#define RANDOMIZED_DOMAIN_POW 29
+#define RANDOMIZED_DOMAIN (1 << RANDOMIZED_DOMAIN_POW)
+#define RANDOMIZED_DOMAIN_MASK ((1 << (RANDOMIZED_DOMAIN_POW + 1)) - 1)
+bool Compile::randomized_select(int count) {
+  assert(count > 0, "only positive");
+  return (os::random() & RANDOMIZED_DOMAIN_MASK) < (RANDOMIZED_DOMAIN / count);
 }

@@ -106,6 +106,7 @@ class SymbolPropertyTable;
   do_klass(ThreadDeath_klass,                           java_lang_ThreadDeath,                     Pre                 ) \
   do_klass(Exception_klass,                             java_lang_Exception,                       Pre                 ) \
   do_klass(RuntimeException_klass,                      java_lang_RuntimeException,                Pre                 ) \
+  do_klass(SecurityManager_klass,                       java_lang_SecurityManager,                 Pre                 ) \
   do_klass(ProtectionDomain_klass,                      java_security_ProtectionDomain,            Pre                 ) \
   do_klass(AccessControlContext_klass,                  java_security_AccessControlContext,        Pre                 ) \
   do_klass(ClassNotFoundException_klass,                java_lang_ClassNotFoundException,          Pre                 ) \
@@ -138,13 +139,14 @@ class SymbolPropertyTable;
   /* NOTE: needed too early in bootstrapping process to have checks based on JDK version */                              \
   /* Universe::is_gte_jdk14x_version() is not set up by this point. */                                                   \
   /* It's okay if this turns out to be NULL in non-1.4 JDKs. */                                                          \
-  do_klass(lambda_MagicLambdaImpl_klass,                java_lang_invoke_MagicLambdaImpl, Opt ) \
+  do_klass(lambda_MagicLambdaImpl_klass,                java_lang_invoke_MagicLambdaImpl,          Opt                 ) \
   do_klass(reflect_MagicAccessorImpl_klass,             sun_reflect_MagicAccessorImpl,             Opt                 ) \
   do_klass(reflect_MethodAccessorImpl_klass,            sun_reflect_MethodAccessorImpl,            Opt_Only_JDK14NewRef) \
   do_klass(reflect_ConstructorAccessorImpl_klass,       sun_reflect_ConstructorAccessorImpl,       Opt_Only_JDK14NewRef) \
   do_klass(reflect_DelegatingClassLoader_klass,         sun_reflect_DelegatingClassLoader,         Opt                 ) \
   do_klass(reflect_ConstantPool_klass,                  sun_reflect_ConstantPool,                  Opt_Only_JDK15      ) \
   do_klass(reflect_UnsafeStaticFieldAccessorImpl_klass, sun_reflect_UnsafeStaticFieldAccessorImpl, Opt_Only_JDK15      ) \
+  do_klass(reflect_CallerSensitive_klass,               sun_reflect_CallerSensitive,               Opt                 ) \
                                                                                                                          \
   /* support for dynamic typing; it's OK if these are NULL in earlier JDKs */                                            \
   do_klass(MethodHandle_klass,                          java_lang_invoke_MethodHandle,             Pre_JSR292          ) \
@@ -197,8 +199,10 @@ class SymbolPropertyTable;
   /* graal.api.code */                                                                                               \
   do_klass(Assumptions_klass,                     com_oracle_graal_api_code_Assumptions,                        Opt) \
   do_klass(Assumptions_ConcreteMethod_klass,      com_oracle_graal_api_code_Assumptions_ConcreteMethod,         Opt) \
+  do_klass(Assumptions_NoFinalizableSubclass_klass, com_oracle_graal_api_code_Assumptions_NoFinalizableSubclass, Opt) \
   do_klass(Assumptions_ConcreteSubtype_klass,     com_oracle_graal_api_code_Assumptions_ConcreteSubtype,        Opt) \
   do_klass(Assumptions_MethodContents_klass,      com_oracle_graal_api_code_Assumptions_MethodContents,         Opt) \
+  do_klass(Assumptions_CallSiteTargetValue_klass, com_oracle_graal_api_code_Assumptions_CallSiteTargetValue,    Opt) \
   do_klass(BytecodePosition_klass,                com_oracle_graal_api_code_BytecodePosition,                   Opt) \
   do_klass(DebugInfo_klass,                       com_oracle_graal_api_code_DebugInfo,                          Opt) \
   do_klass(BytecodeFrame_klass,                   com_oracle_graal_api_code_BytecodeFrame,                      Opt) \
@@ -207,8 +211,9 @@ class SymbolPropertyTable;
   do_klass(CompilationResult_DataPatch_klass,     com_oracle_graal_api_code_CompilationResult_DataPatch,        Opt) \
   do_klass(CompilationResult_ExceptionHandler_klass, com_oracle_graal_api_code_CompilationResult_ExceptionHandler, Opt) \
   do_klass(CompilationResult_Mark_klass,          com_oracle_graal_api_code_CompilationResult_Mark,             Opt) \
-  do_klass(CompilationResult_Safepoint_klass,     com_oracle_graal_api_code_CompilationResult_Safepoint,        Opt) \
+  do_klass(CompilationResult_Infopoint_klass,     com_oracle_graal_api_code_CompilationResult_Infopoint,        Opt) \
   do_klass(CompilationResult_Site_klass,          com_oracle_graal_api_code_CompilationResult_Site,             Opt) \
+  do_klass(InfopointReason_klass,                 com_oracle_graal_api_code_InfopointReason,                    Opt) \
   do_klass(code_Register_klass,                   com_oracle_graal_api_code_Register,                           Opt) \
   do_klass(RegisterValue_klass,                   com_oracle_graal_api_code_RegisterValue,                      Opt) \
   do_klass(StackSlot_klass,                       com_oracle_graal_api_code_StackSlot,                          Opt) \
@@ -525,8 +530,8 @@ public:
   // Check class loader constraints
   static bool add_loader_constraint(Symbol* name, Handle loader1,
                                     Handle loader2, TRAPS);
-  static char* check_signature_loaders(Symbol* signature, Handle loader1,
-                                       Handle loader2, bool is_method, TRAPS);
+  static Symbol* check_signature_loaders(Symbol* signature, Handle loader1,
+                                         Handle loader2, bool is_method, TRAPS);
 
   // JSR 292
   // find a java.lang.invoke.MethodHandle.invoke* method for a given signature
@@ -663,18 +668,22 @@ private:
                                                Handle class_loader, TRAPS);
   static instanceKlassHandle load_shared_class(instanceKlassHandle ik,
                                                Handle class_loader, TRAPS);
+  static void clean_up_shared_class(instanceKlassHandle ik, Handle class_loader, TRAPS);
   static instanceKlassHandle load_instance_class(Symbol* class_name, Handle class_loader, TRAPS);
   static Handle compute_loader_lock_object(Handle class_loader, TRAPS);
   static void check_loader_lock_contention(Handle loader_lock, TRAPS);
   static bool is_parallelCapable(Handle class_loader);
   static bool is_parallelDefine(Handle class_loader);
 
+public:
+  static bool is_ext_class_loader(Handle class_loader);
+
+private:
   static Klass* find_shared_class(Symbol* class_name);
 
   // Setup link to hierarchy
   static void add_to_hierarchy(instanceKlassHandle k, TRAPS);
 
-private:
   // We pass in the hashtable index so we can calculate it outside of
   // the SystemDictionary_lock.
 

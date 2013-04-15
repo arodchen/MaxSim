@@ -217,6 +217,7 @@ void LinkResolver::lookup_polymorphic_method(methodHandle& result,
                                              TRAPS) {
   vmIntrinsics::ID iid = MethodHandles::signature_polymorphic_name_id(name);
   if (TraceMethodHandles) {
+    ResourceMark rm(THREAD);
     tty->print_cr("lookup_polymorphic_method iid=%s %s.%s%s",
                   vmIntrinsics::name_at(iid), klass->external_name(),
                   name->as_C_string(), full_signature->as_C_string());
@@ -231,6 +232,7 @@ void LinkResolver::lookup_polymorphic_method(methodHandle& result,
       TempNewSymbol basic_signature =
         MethodHandles::lookup_basic_type_signature(full_signature, keep_last_arg, CHECK);
       if (TraceMethodHandles) {
+        ResourceMark rm(THREAD);
         tty->print_cr("lookup_polymorphic_method %s %s => basic %s",
                       name->as_C_string(),
                       full_signature->as_C_string(),
@@ -283,6 +285,8 @@ void LinkResolver::lookup_polymorphic_method(methodHandle& result,
       }
       if (result.not_null()) {
 #ifdef ASSERT
+        ResourceMark rm(THREAD);
+
         TempNewSymbol basic_signature =
           MethodHandles::lookup_basic_type_signature(full_signature, CHECK);
         int actual_size_of_params = result->size_of_parameters();
@@ -458,25 +462,27 @@ void LinkResolver::resolve_method(methodHandle& resolved_method, KlassHandle res
     Handle class_loader (THREAD, resolved_method->method_holder()->class_loader());
     {
       ResourceMark rm(THREAD);
-      char* failed_type_name =
+      Symbol* failed_type_symbol =
         SystemDictionary::check_signature_loaders(method_signature, loader,
                                                   class_loader, true, CHECK);
-      if (failed_type_name != NULL) {
+      if (failed_type_symbol != NULL) {
         const char* msg = "loader constraint violation: when resolving method"
           " \"%s\" the class loader (instance of %s) of the current class, %s,"
-          " and the class loader (instance of %s) for resolved class, %s, have"
+          " and the class loader (instance of %s) for the method's defining class, %s, have"
           " different Class objects for the type %s used in the signature";
         char* sig = Method::name_and_sig_as_C_string(resolved_klass(),method_name,method_signature);
         const char* loader1 = SystemDictionary::loader_name(loader());
         char* current = InstanceKlass::cast(current_klass())->name()->as_C_string();
         const char* loader2 = SystemDictionary::loader_name(class_loader());
-        char* resolved = InstanceKlass::cast(resolved_klass())->name()->as_C_string();
+        char* target = InstanceKlass::cast(resolved_method->method_holder())
+                       ->name()->as_C_string();
+        char* failed_type_name = failed_type_symbol->as_C_string();
         size_t buflen = strlen(msg) + strlen(sig) + strlen(loader1) +
-          strlen(current) + strlen(loader2) + strlen(resolved) +
-          strlen(failed_type_name);
+          strlen(current) + strlen(loader2) + strlen(target) +
+          strlen(failed_type_name) + 1;
         char* buf = NEW_RESOURCE_ARRAY_IN_THREAD(THREAD, char, buflen);
         jio_snprintf(buf, buflen, msg, sig, loader1, current, loader2,
-                     resolved, failed_type_name);
+                     target, failed_type_name);
         THROW_MSG(vmSymbols::java_lang_LinkageError(), buf);
       }
     }
@@ -520,26 +526,28 @@ void LinkResolver::resolve_interface_method(methodHandle& resolved_method,
     Handle class_loader (THREAD, resolved_method->method_holder()->class_loader());
     {
       ResourceMark rm(THREAD);
-      char* failed_type_name =
+      Symbol* failed_type_symbol =
         SystemDictionary::check_signature_loaders(method_signature, loader,
                                                   class_loader, true, CHECK);
-      if (failed_type_name != NULL) {
+      if (failed_type_symbol != NULL) {
         const char* msg = "loader constraint violation: when resolving "
           "interface method \"%s\" the class loader (instance of %s) of the "
           "current class, %s, and the class loader (instance of %s) for "
-          "resolved class, %s, have different Class objects for the type %s "
+          "the method's defining class, %s, have different Class objects for the type %s "
           "used in the signature";
         char* sig = Method::name_and_sig_as_C_string(resolved_klass(),method_name,method_signature);
         const char* loader1 = SystemDictionary::loader_name(loader());
         char* current = InstanceKlass::cast(current_klass())->name()->as_C_string();
         const char* loader2 = SystemDictionary::loader_name(class_loader());
-        char* resolved = InstanceKlass::cast(resolved_klass())->name()->as_C_string();
+        char* target = InstanceKlass::cast(resolved_method->method_holder())
+                       ->name()->as_C_string();
+        char* failed_type_name = failed_type_symbol->as_C_string();
         size_t buflen = strlen(msg) + strlen(sig) + strlen(loader1) +
-          strlen(current) + strlen(loader2) + strlen(resolved) +
-          strlen(failed_type_name);
+          strlen(current) + strlen(loader2) + strlen(target) +
+          strlen(failed_type_name) + 1;
         char* buf = NEW_RESOURCE_ARRAY_IN_THREAD(THREAD, char, buflen);
         jio_snprintf(buf, buflen, msg, sig, loader1, current, loader2,
-                     resolved, failed_type_name);
+                     target, failed_type_name);
         THROW_MSG(vmSymbols::java_lang_LinkageError(), buf);
       }
     }
@@ -642,12 +650,12 @@ void LinkResolver::resolve_field(FieldAccessInfo& result, constantPoolHandle poo
     Symbol*  signature_ref  = pool->signature_ref_at(index);
     {
       ResourceMark rm(THREAD);
-      char* failed_type_name =
+      Symbol* failed_type_symbol =
         SystemDictionary::check_signature_loaders(signature_ref,
                                                   ref_loader, sel_loader,
                                                   false,
                                                   CHECK);
-      if (failed_type_name != NULL) {
+      if (failed_type_symbol != NULL) {
         const char* msg = "loader constraint violation: when resolving field"
           " \"%s\" the class loader (instance of %s) of the referring class, "
           "%s, and the class loader (instance of %s) for the field's resolved "
@@ -656,8 +664,9 @@ void LinkResolver::resolve_field(FieldAccessInfo& result, constantPoolHandle poo
         const char* loader1 = SystemDictionary::loader_name(ref_loader());
         char* sel = InstanceKlass::cast(sel_klass())->name()->as_C_string();
         const char* loader2 = SystemDictionary::loader_name(sel_loader());
+        char* failed_type_name = failed_type_symbol->as_C_string();
         size_t buflen = strlen(msg) + strlen(field_name) + strlen(loader1) +
-          strlen(sel) + strlen(loader2) + strlen(failed_type_name);
+          strlen(sel) + strlen(loader2) + strlen(failed_type_name) + 1;
         char* buf = NEW_RESOURCE_ARRAY_IN_THREAD(THREAD, char, buflen);
         jio_snprintf(buf, buflen, msg, field_name, loader1, sel, loader2,
                      failed_type_name);
@@ -803,7 +812,7 @@ void LinkResolver::runtime_resolve_special_method(CallInfo& result, methodHandle
     if (!direct_calling_default_method &&
         check_access &&
         // a) check if ACC_SUPER flag is set for the current class
-        current_klass->is_super() &&
+        (current_klass->is_super() || !AllowNonVirtualCalls) &&
         // b) check if the method class is a superclass of the current class (superclass relation is not reflexive!)
         current_klass->is_subtype_of(method_klass()) &&
         current_klass() != method_klass() &&
@@ -1217,8 +1226,10 @@ void LinkResolver::resolve_invokehandle(CallInfo& result, constantPoolHandle poo
   Symbol* method_signature = NULL;
   KlassHandle  current_klass;
   resolve_pool(resolved_klass, method_name,  method_signature, current_klass, pool, index, CHECK);
-  if (TraceMethodHandles)
+  if (TraceMethodHandles) {
+    ResourceMark rm(THREAD);
     tty->print_cr("resolve_invokehandle %s %s", method_name->as_C_string(), method_signature->as_C_string());
+  }
   resolve_handle_call(result, resolved_klass, method_name, method_signature, current_klass, CHECK);
 }
 

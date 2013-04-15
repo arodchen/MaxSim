@@ -31,11 +31,11 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.alloc.*;
 import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.loop.phases.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.spi.*;
@@ -43,12 +43,14 @@ import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.PhasePlan.PhasePosition;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.schedule.*;
+import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.virtual.phases.ea.*;
 
 public class GraalCompiler {
 
-    public static CompilationResult compileMethod(final GraalCodeCacheProvider runtime, final Backend backend, final TargetDescription target, final ResolvedJavaMethod method,
-                    final StructuredGraph graph, final GraphCache cache, final PhasePlan plan, final OptimisticOptimizations optimisticOpts, final SpeculationLog speculationLog) {
+    public static CompilationResult compileMethod(final GraalCodeCacheProvider runtime, final Replacements replacements, final Backend backend, final TargetDescription target,
+                    final ResolvedJavaMethod method, final StructuredGraph graph, final GraphCache cache, final PhasePlan plan, final OptimisticOptimizations optimisticOpts,
+                    final SpeculationLog speculationLog) {
         assert (method.getModifiers() & Modifier.NATIVE) == 0 : "compiling native methods is not supported";
 
         final CompilationResult compilationResult = new CompilationResult();
@@ -59,7 +61,7 @@ public class GraalCompiler {
                 final LIR lir = Debug.scope("FrontEnd", new Callable<LIR>() {
 
                     public LIR call() {
-                        return emitHIR(runtime, target, graph, assumptions, cache, plan, optimisticOpts, speculationLog);
+                        return emitHIR(runtime, target, graph, replacements, assumptions, cache, plan, optimisticOpts, speculationLog);
                     }
                 });
                 final LIRGenerator lirGen = Debug.scope("BackEnd", lir, new Callable<LIRGenerator>() {
@@ -98,7 +100,7 @@ public class GraalCompiler {
      * 
      * @param target
      */
-    public static LIR emitHIR(GraalCodeCacheProvider runtime, TargetDescription target, StructuredGraph graph, Assumptions assumptions, GraphCache cache, PhasePlan plan,
+    public static LIR emitHIR(GraalCodeCacheProvider runtime, TargetDescription target, StructuredGraph graph, Replacements replacements, Assumptions assumptions, GraphCache cache, PhasePlan plan,
                     OptimisticOptimizations optimisticOpts, final SpeculationLog speculationLog) {
 
         if (speculationLog != null) {
@@ -117,71 +119,42 @@ public class GraalCompiler {
         }
 
         if (GraalOptions.OptCanonicalizer) {
-            new CanonicalizerPhase(runtime, assumptions).apply(graph);
+            new CanonicalizerPhase.Instance(runtime, assumptions).apply(graph);
         }
+
+        HighTierContext highTierContext = new HighTierContext(runtime, assumptions);
 
         if (GraalOptions.Inline && !plan.isPhaseDisabled(InliningPhase.class)) {
             if (GraalOptions.IterativeInlining) {
-                new IterativeInliningPhase(runtime, assumptions, cache, plan, optimisticOpts, GraalOptions.OptEarlyReadElimination).apply(graph);
+                new IterativeInliningPhase(replacements, cache, plan, optimisticOpts, GraalOptions.OptEarlyReadElimination).apply(graph, highTierContext);
             } else {
-                new InliningPhase(runtime, null, assumptions, cache, plan, optimisticOpts).apply(graph);
+                new InliningPhase(runtime, null, replacements, assumptions, cache, plan, optimisticOpts).apply(graph);
                 new DeadCodeEliminationPhase().apply(graph);
 
                 if (GraalOptions.ConditionalElimination && GraalOptions.OptCanonicalizer) {
-                    new CanonicalizerPhase(runtime, assumptions).apply(graph);
+                    new CanonicalizerPhase.Instance(runtime, assumptions).apply(graph);
                     new IterativeConditionalEliminationPhase(runtime, assumptions).apply(graph);
                 }
             }
         }
 
-        // new ConvertUnreachedToGuardPhase(optimisticOpts).apply(graph);
-
         plan.runPhases(PhasePosition.HIGH_LEVEL, graph);
 
-        if (GraalOptions.FullUnroll) {
-            new LoopFullUnrollPhase(runtime, assumptions).apply(graph);
+        Suites.HIGH_TIER.apply(graph, highTierContext);
+
+        new LoweringPhase(target, runtime, replacements, assumptions).apply(graph);
+
+        if (GraalOptions.OptPushThroughPi) {
+            new PushThroughPiPhase().apply(graph);
             if (GraalOptions.OptCanonicalizer) {
-                new CanonicalizerPhase(runtime, assumptions).apply(graph);
+                new CanonicalizerPhase.Instance(runtime, assumptions).apply(graph);
             }
         }
-
-        if (GraalOptions.OptTailDuplication) {
-            new TailDuplicationPhase().apply(graph);
-            if (GraalOptions.OptCanonicalizer) {
-                new CanonicalizerPhase(runtime, assumptions).apply(graph);
-            }
-        }
-
-        if (GraalOptions.PartialEscapeAnalysis && !plan.isPhaseDisabled(PartialEscapeAnalysisPhase.class)) {
-            new PartialEscapeAnalysisPhase(runtime, assumptions, true, GraalOptions.OptEarlyReadElimination).apply(graph);
-        }
-
-        if (GraalOptions.OptConvertDeoptsToGuards) {
-            new ConvertDeoptimizeToGuardPhase().apply(graph);
-        }
-
-        new LockEliminationPhase().apply(graph);
-
-        if (GraalOptions.OptLoopTransform) {
-            new LoopTransformHighPhase().apply(graph);
-            new LoopTransformLowPhase().apply(graph);
-        }
-        new RemoveValueProxyPhase().apply(graph);
-
-        if (GraalOptions.CullFrameStates) {
-            new CullFrameStatesPhase().apply(graph);
-        }
-
-        if (GraalOptions.OptCanonicalizer) {
-            new CanonicalizerPhase(runtime, assumptions).apply(graph);
-        }
-
-        new LoweringPhase(target, runtime, assumptions).apply(graph);
 
         if (GraalOptions.OptFloatingReads) {
             int mark = graph.getMark();
             new FloatingReadPhase().apply(graph);
-            new CanonicalizerPhase(runtime, assumptions, mark, null).apply(graph);
+            new CanonicalizerPhase.Instance(runtime, assumptions, mark, null).apply(graph);
             if (GraalOptions.OptReadElimination) {
                 new ReadEliminationPhase().apply(graph);
             }
@@ -189,7 +162,7 @@ public class GraalCompiler {
         new RemoveValueProxyPhase().apply(graph);
 
         if (GraalOptions.OptCanonicalizer) {
-            new CanonicalizerPhase(runtime, assumptions).apply(graph);
+            new CanonicalizerPhase.Instance(runtime, assumptions).apply(graph);
         }
 
         if (GraalOptions.OptEliminatePartiallyRedundantGuards) {
@@ -205,17 +178,23 @@ public class GraalCompiler {
         }
 
         if (GraalOptions.OptCanonicalizer) {
-            new CanonicalizerPhase(runtime, assumptions).apply(graph);
+            new CanonicalizerPhase.Instance(runtime, assumptions).apply(graph);
         }
 
         plan.runPhases(PhasePosition.MID_LEVEL, graph);
 
-        plan.runPhases(PhasePosition.LOW_LEVEL, graph);
+        // Add safepoints to loops
+        new SafepointInsertionPhase().apply(graph);
 
         new GuardLoweringPhase(target).apply(graph);
 
-        // Add safepoints to loops
-        new SafepointInsertionPhase().apply(graph);
+        plan.runPhases(PhasePosition.LOW_LEVEL, graph);
+
+        new LoweringPhase(target, runtime, replacements, assumptions).apply(graph);
+
+        new FrameStateAssignmentPhase().apply(graph);
+
+        new DeadCodeEliminationPhase().apply(graph);
 
         final SchedulePhase schedule = new SchedulePhase();
         schedule.apply(graph);

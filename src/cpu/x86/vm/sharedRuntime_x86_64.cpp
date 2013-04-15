@@ -1670,6 +1670,17 @@ static void gen_special_dispatch(MacroAssembler* masm,
   verify_oop_args(masm, method, sig_bt, regs);
   vmIntrinsics::ID iid = method->intrinsic_id();
 
+#ifdef GRAAL
+  if (iid == vmIntrinsics::_CompilerToVMImpl_executeCompiledMethod) {
+    // We are called from compiled code here. The three object arguments
+    // are already in the correct registers (j_rarg0, jrarg1, jrarg2). The
+    // fourth argument (j_rarg3) is a raw pointer to the nmethod. Make a tail
+    // call to its verified entry point.
+    __ jmp(Address(j_rarg3, nmethod::verified_entry_point_offset()));
+    return;
+  }
+#endif
+
   // Now write the args into the outgoing interpreter space
   bool     has_receiver   = false;
   Register receiver_reg   = noreg;
@@ -2326,16 +2337,8 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
 
   __ call(RuntimeAddress(native_func));
 
-    // Either restore the MXCSR register after returning from the JNI Call
-    // or verify that it wasn't changed.
-    if (RestoreMXCSROnJNICalls) {
-      __ ldmxcsr(ExternalAddress(StubRoutines::x86::mxcsr_std()));
-
-    }
-    else if (CheckJNICalls ) {
-      __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, StubRoutines::x86::verify_mxcsr_entry())));
-    }
-
+  // Verify or restore cpu control state after JNI call
+  __ restore_cpu_control_state_after_jni();
 
   // Unpack native results.
   switch (ret_type) {
@@ -3338,6 +3341,10 @@ void SharedRuntime::generate_deopt_blob() {
   __ jmp(cont);
 
   int reexecute_offset = __ pc() - start;
+#ifdef GRAALVM
+  // Graal does not use this kind of deoptimization
+  __ should_not_reach_here();
+#endif
 
   // Reexecute case
   // return address is the pc describes what bci to do re-execute at
@@ -3347,6 +3354,32 @@ void SharedRuntime::generate_deopt_blob() {
 
   __ movl(r14, Deoptimization::Unpack_reexecute); // callee-saved
   __ jmp(cont);
+
+#ifdef GRAAL
+  int implicit_exception_uncommon_trap_offset = __ pc() - start;
+  // pc where the exception happened is in ScratchA
+  __ pushptr(Address(r15_thread, in_bytes(JavaThread::ScratchA_offset())));
+
+  int uncommon_trap_offset = __ pc() - start;
+
+  // Save everything in sight.
+  RegisterSaver::save_live_registers(masm, 0, &frame_size_in_words);
+  // fetch_unroll_info needs to call last_java_frame()
+  __ set_last_Java_frame(noreg, noreg, NULL);
+
+  __ movl(c_rarg1, Address(r15_thread, in_bytes(ThreadShadow::pending_deoptimization_offset())));
+  __ movl(Address(r15_thread, in_bytes(ThreadShadow::pending_deoptimization_offset())), -1);
+
+  __ movl(r14, (int32_t)Deoptimization::Unpack_reexecute);
+  __ mov(c_rarg0, r15_thread);
+  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, Deoptimization::uncommon_trap)));
+  oop_maps->add_gc_map( __ pc()-start, map->deep_copy());
+
+  __ reset_last_Java_frame(false, false);
+
+  Label after_fetch_unroll_info_call;
+  __ jmp(after_fetch_unroll_info_call);
+#endif // GRAAL
 
   int exception_offset = __ pc() - start;
 
@@ -3403,34 +3436,6 @@ void SharedRuntime::generate_deopt_blob() {
   __ stop("must not have pending exception here");
   __ bind(no_pending_exception);
 #endif
-
-#ifdef GRAAL
-  __ jmp(cont);
-
-  int implicit_exception_uncommon_trap_offset = __ pc() - start;
-  // pc where the exception happened is in ScratchA
-  __ pushptr(Address(r15_thread, in_bytes(JavaThread::ScratchA_offset())));
-
-  int uncommon_trap_offset = __ pc() - start;
-
-  // Save everything in sight.
-  RegisterSaver::save_live_registers(masm, 0, &frame_size_in_words);
-  // fetch_unroll_info needs to call last_java_frame()
-  __ set_last_Java_frame(noreg, noreg, NULL);
-
-  __ movl(c_rarg1, Address(r15_thread, in_bytes(ThreadShadow::pending_deoptimization_offset())));
-  __ movl(Address(r15_thread, in_bytes(ThreadShadow::pending_deoptimization_offset())), -1);
-
-  __ movl(r14, (int32_t)Deoptimization::Unpack_reexecute);
-  __ mov(c_rarg0, r15_thread);
-  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, Deoptimization::uncommon_trap)));
-  oop_maps->add_gc_map( __ pc()-start, map->deep_copy());
-
-  __ reset_last_Java_frame(false, false);
-
-  Label after_fetch_unroll_info_call;
-  __ jmp(after_fetch_unroll_info_call);
-#endif // GRAAL
 
   __ bind(cont);
 

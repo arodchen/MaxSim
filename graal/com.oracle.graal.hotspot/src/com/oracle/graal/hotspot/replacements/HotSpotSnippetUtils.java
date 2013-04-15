@@ -46,7 +46,6 @@ import com.oracle.graal.word.*;
 public class HotSpotSnippetUtils {
 
     public static final Object ANY_LOCATION = LocationNode.ANY_LOCATION;
-    public static final Object UNKNOWN_LOCATION = LocationNode.UNKNOWN_LOCATION;
     public static final Object FINAL_LOCATION = LocationNode.FINAL_LOCATION;
 
     public static HotSpotVMConfig config() {
@@ -61,6 +60,20 @@ public class HotSpotSnippetUtils {
     @Fold
     public static boolean verifyOops() {
         return config().verifyOops;
+    }
+
+    public static final Object EXCEPTION_OOP_LOCATION = LocationNode.createLocation("ExceptionOop");
+
+    @Fold
+    public static int threadExceptionOopOffset() {
+        return config().threadExceptionOopOffset;
+    }
+
+    public static final Object EXCEPTION_PC_LOCATION = LocationNode.createLocation("ExceptionPc");
+
+    @Fold
+    public static int threadExceptionPcOffset() {
+        return config().threadExceptionPcOffset;
     }
 
     public static final Object TLAB_TOP_LOCATION = LocationNode.createLocation("TlabTop");
@@ -82,6 +95,18 @@ public class HotSpotSnippetUtils {
     @Fold
     private static int threadTlabStartOffset() {
         return config().threadTlabStartOffset;
+    }
+
+    public static Object readExceptionOop(Word thread) {
+        return thread.readObject(threadExceptionOopOffset(), EXCEPTION_OOP_LOCATION);
+    }
+
+    public static void writeExceptionOop(Word thread, Object value) {
+        thread.writeObject(threadExceptionOopOffset(), value, EXCEPTION_OOP_LOCATION);
+    }
+
+    public static void writeExceptionPc(Word thread, Word value) {
+        thread.writeWord(threadExceptionPcOffset(), value, EXCEPTION_PC_LOCATION);
     }
 
     public static Word readTlabTop(Word thread) {

@@ -57,6 +57,7 @@
 #include "runtime/threadCritical.hpp"
 #include "runtime/timer.hpp"
 #include "services/attachListener.hpp"
+#include "services/memTracker.hpp"
 #include "services/runtimeService.hpp"
 #include "utilities/decoder.hpp"
 #include "utilities/defaultStream.hpp"
@@ -151,7 +152,6 @@ sigset_t SR_sigset;
 // utility functions
 
 static int SR_initialize();
-static int SR_finalize();
 
 julong os::available_memory() {
   return Bsd::available_memory();
@@ -164,20 +164,6 @@ julong os::Bsd::available_memory() {
 
 julong os::physical_memory() {
   return Bsd::physical_memory();
-}
-
-julong os::allocatable_physical_memory(julong size) {
-#ifdef _LP64
-  return size;
-#else
-  julong result = MIN2(size, (julong)3800*M);
-   if (!is_allocatable(result)) {
-     // See comments under solaris for alignment considerations
-     julong reasonable_size = (julong)2*G - 2 * os::vm_page_size();
-     result =  MIN2(size, reasonable_size);
-   }
-   return result;
-#endif // _LP64
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1213,6 +1199,9 @@ bool os::dll_build_name(char* buffer, size_t buflen,
   } else if (strchr(pname, *os::path_separator()) != NULL) {
     int n;
     char** pelements = split_path(pname, &n);
+    if (pelements == NULL) {
+      return false;
+    }
     for (int i = 0 ; i < n ; i++) {
       // Really shouldn't be NULL, but check can't hurt
       if (pelements[i] == NULL || strlen(pelements[i]) == 0) {
@@ -2275,13 +2264,25 @@ char* os::reserve_memory_special(size_t bytes, char* req_addr, bool exec) {
      return NULL;
   }
 
+  // The memory is committed
+  address pc = CALLER_PC;
+  MemTracker::record_virtual_memory_reserve((address)addr, bytes, pc);
+  MemTracker::record_virtual_memory_commit((address)addr, bytes, pc);
+
   return addr;
 }
 
 bool os::release_memory_special(char* base, size_t bytes) {
   // detaching the SHM segment will also delete it, see reserve_memory_special()
   int rslt = shmdt(base);
-  return rslt == 0;
+  if (rslt == 0) {
+    MemTracker::record_virtual_memory_uncommit((address)base, bytes);
+    MemTracker::record_virtual_memory_release((address)base, bytes);
+    return true;
+  } else {
+    return false;
+  }
+
 }
 
 size_t os::large_page_size() {
@@ -2695,7 +2696,7 @@ static void SR_handler(int sig, siginfo_t* siginfo, ucontext_t* context) {
   assert(thread->is_VM_thread(), "Must be VMThread");
   // read current suspend action
   int action = osthread->sr.suspend_action();
-  if (action == SR_SUSPEND) {
+  if (action == os::Bsd::SuspendResume::SR_SUSPEND) {
     suspend_save_context(osthread, siginfo, context);
 
     // Notify the suspend action is about to be completed. do_suspend()
@@ -2717,12 +2718,12 @@ static void SR_handler(int sig, siginfo_t* siginfo, ucontext_t* context) {
     do {
       sigsuspend(&suspend_set);
       // ignore all returns until we get a resume signal
-    } while (osthread->sr.suspend_action() != SR_CONTINUE);
+    } while (osthread->sr.suspend_action() != os::Bsd::SuspendResume::SR_CONTINUE);
 
     resume_clear_context(osthread);
 
   } else {
-    assert(action == SR_CONTINUE, "unexpected sr action");
+    assert(action == os::Bsd::SuspendResume::SR_CONTINUE, "unexpected sr action");
     // nothing special to do - just leave the handler
   }
 
@@ -2767,16 +2768,12 @@ static int SR_initialize() {
   return 0;
 }
 
-static int SR_finalize() {
-  return 0;
-}
-
 
 // returns true on success and false on error - really an error is fatal
 // but this seems the normal response to library errors
 static bool do_suspend(OSThread* osthread) {
   // mark as suspended and send signal
-  osthread->sr.set_suspend_action(SR_SUSPEND);
+  osthread->sr.set_suspend_action(os::Bsd::SuspendResume::SR_SUSPEND);
   int status = pthread_kill(osthread->pthread_id(), SR_signum);
   assert_status(status == 0, status, "pthread_kill");
 
@@ -2785,18 +2782,18 @@ static bool do_suspend(OSThread* osthread) {
     for (int i = 0; !osthread->sr.is_suspended(); i++) {
       os::yield_all(i);
     }
-    osthread->sr.set_suspend_action(SR_NONE);
+    osthread->sr.set_suspend_action(os::Bsd::SuspendResume::SR_NONE);
     return true;
   }
   else {
-    osthread->sr.set_suspend_action(SR_NONE);
+    osthread->sr.set_suspend_action(os::Bsd::SuspendResume::SR_NONE);
     return false;
   }
 }
 
 static void do_resume(OSThread* osthread) {
   assert(osthread->sr.is_suspended(), "thread should be suspended");
-  osthread->sr.set_suspend_action(SR_CONTINUE);
+  osthread->sr.set_suspend_action(os::Bsd::SuspendResume::SR_CONTINUE);
 
   int status = pthread_kill(osthread->pthread_id(), SR_signum);
   assert_status(status == 0, status, "pthread_kill");
@@ -2806,7 +2803,7 @@ static void do_resume(OSThread* osthread) {
       os::yield_all(i);
     }
   }
-  osthread->sr.set_suspend_action(SR_NONE);
+  osthread->sr.set_suspend_action(os::Bsd::SuspendResume::SR_NONE);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3579,16 +3576,6 @@ int os::Bsd::safe_cond_timedwait(pthread_cond_t *_cond, pthread_mutex_t *_mutex,
 ////////////////////////////////////////////////////////////////////////////////
 // debug support
 
-static address same_page(address x, address y) {
-  int page_bits = -os::vm_page_size();
-  if ((intptr_t(x) & page_bits) == (intptr_t(y) & page_bits))
-    return x;
-  else if (x > y)
-    return (address)(intptr_t(y) | ~page_bits) + 1;
-  else
-    return (address)(intptr_t(y) & page_bits);
-}
-
 bool os::find(address addr, outputStream* st) {
   Dl_info dlinfo;
   memset(&dlinfo, 0, sizeof(dlinfo));
@@ -3612,8 +3599,8 @@ bool os::find(address addr, outputStream* st) {
 
     if (Verbose) {
       // decode some bytes around the PC
-      address begin = same_page(addr-40, addr);
-      address end   = same_page(addr+40, addr);
+      address begin = clamp_address_in_page(addr-40, addr, os::vm_page_size());
+      address end   = clamp_address_in_page(addr+40, addr, os::vm_page_size());
       address       lowest = (address) dlinfo.dli_sname;
       if (!lowest)  lowest = (address) dlinfo.dli_fbase;
       if (begin < lowest)  begin = lowest;
@@ -3903,15 +3890,27 @@ bool os::pd_unmap_memory(char* addr, size_t bytes) {
 jlong os::current_thread_cpu_time() {
 #ifdef __APPLE__
   return os::thread_cpu_time(Thread::current(), true /* user + sys */);
+#else
+  Unimplemented();
+  return 0;
 #endif
 }
 
 jlong os::thread_cpu_time(Thread* thread) {
+#ifdef __APPLE__
+  return os::thread_cpu_time(thread, true /* user + sys */);
+#else
+  Unimplemented();
+  return 0;
+#endif
 }
 
 jlong os::current_thread_cpu_time(bool user_sys_cpu_time) {
 #ifdef __APPLE__
   return os::thread_cpu_time(Thread::current(), user_sys_cpu_time);
+#else
+  Unimplemented();
+  return 0;
 #endif
 }
 
@@ -3935,6 +3934,9 @@ jlong os::thread_cpu_time(Thread *thread, bool user_sys_cpu_time) {
   } else {
     return ((jlong)tinfo.user_time.seconds * 1000000000) + ((jlong)tinfo.user_time.microseconds * (jlong)1000);
   }
+#else
+  Unimplemented();
+  return 0;
 #endif
 }
 

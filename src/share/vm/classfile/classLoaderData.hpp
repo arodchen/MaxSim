@@ -93,6 +93,18 @@ class ClassLoaderDataGraph : public AllStatic {
 class ClassLoaderData : public CHeapObj<mtClass> {
   friend class VMStructs;
  private:
+  class Dependencies VALUE_OBJ_CLASS_SPEC {
+    objArrayOop _list_head;
+    void locked_add(objArrayHandle last,
+                    objArrayHandle new_dependency,
+                    Thread* THREAD);
+   public:
+    Dependencies() : _list_head(NULL) {}
+    void add(Handle dependency, TRAPS);
+    void init(TRAPS);
+    void oops_do(OopClosure* f);
+  };
+
   friend class ClassLoaderDataGraph;
   friend class ClassLoaderDataGraphMetaspaceIterator;
   friend class MetaDataFactory;
@@ -100,10 +112,11 @@ class ClassLoaderData : public CHeapObj<mtClass> {
 
   static ClassLoaderData * _the_null_class_loader_data;
 
-  oop _class_loader;       // oop used to uniquely identify a class loader
-                           // class loader or a canonical class path
-  oop _dependencies;       // oop to hold dependencies from this class loader
-                           // data to others.
+  oop _class_loader;          // oop used to uniquely identify a class loader
+                              // class loader or a canonical class path
+  Dependencies _dependencies; // holds dependencies from this class loader
+                              // data to others.
+
   Metaspace * _metaspace;  // Meta-space where meta-data defined by the
                            // classes in the class loader are allocated.
   Mutex* _metaspace_lock;  // Locks the metaspace for allocations and setup.
@@ -133,9 +146,6 @@ class ClassLoaderData : public CHeapObj<mtClass> {
   // class loader for now).
   static Metaspace* _ro_metaspace;
   static Metaspace* _rw_metaspace;
-
-  void add_dependency(Handle dependency, TRAPS);
-  void locked_add_dependency(objArrayHandle last, objArrayHandle new_dependency);
 
   void set_next(ClassLoaderData* next) { _next = next; }
   ClassLoaderData* next() const        { return _next; }
@@ -191,6 +201,7 @@ class ClassLoaderData : public CHeapObj<mtClass> {
   bool is_the_null_class_loader_data() const {
     return this == _the_null_class_loader_data;
   }
+  bool is_ext_class_loader_data() const;
 
   // The Metaspace is created lazily so may be NULL.  This
   // method will allocate a Metaspace if needed.
@@ -234,6 +245,7 @@ class ClassLoaderData : public CHeapObj<mtClass> {
   void add_to_deallocate_list(Metadata* m);
 
   static ClassLoaderData* class_loader_data(oop loader);
+  static ClassLoaderData* class_loader_data_or_null(oop loader);
   static ClassLoaderData* anonymous_class_loader_data(oop loader, TRAPS);
   static void print_loader(ClassLoaderData *loader_data, outputStream *out);
 

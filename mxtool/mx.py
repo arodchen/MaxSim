@@ -663,12 +663,14 @@ class XMLDoc(xml.dom.minidom.Document):
     def element(self, tag, attributes={}, data=None):
         return self.open(tag, attributes, data).close(tag)
 
-    def xml(self, indent='', newl='', escape=False):
+    def xml(self, indent='', newl='', escape=False, standalone=None):
         assert self.current == self
         result = self.toprettyxml(indent, newl, encoding="UTF-8")
         if escape:
             entities = { '"':  "&quot;", "'":  "&apos;", '\n': '&#10;' }
             result = xml.sax.saxutils.escape(result, entities)
+        if standalone is not None:
+            result = result.replace('encoding="UTF-8"?>', 'encoding="UTF-8" standalone="' + str(standalone) + '"?>')
         return result
 
 def get_os():
@@ -944,7 +946,7 @@ def waitOn(p):
         retcode = p.wait()
     return retcode
 
-def run(args, nonZeroIsFatal=True, out=None, err=None, cwd=None, timeout=None):
+def run(args, nonZeroIsFatal=True, out=None, err=None, cwd=None, timeout=None, env=None):
     """
     Run a command in a subprocess, wait for it to complete and return the exit status of the process.
     If the exit status is non-zero and `nonZeroIsFatal` is true, then mx is exited with
@@ -981,7 +983,7 @@ def run(args, nonZeroIsFatal=True, out=None, err=None, cwd=None, timeout=None):
 
         if not callable(out) and not callable(err) and timeout is None:
             # The preexec_fn=os.setsid
-            p = subprocess.Popen(args, cwd=cwd, preexec_fn=preexec_fn, creationflags=creationflags)
+            p = subprocess.Popen(args, cwd=cwd, preexec_fn=preexec_fn, creationflags=creationflags, env=env)
             _currentSubprocess = (p, args)
             retcode = waitOn(p)
         else:
@@ -991,7 +993,7 @@ def run(args, nonZeroIsFatal=True, out=None, err=None, cwd=None, timeout=None):
                 stream.close()
             stdout=out if not callable(out) else subprocess.PIPE
             stderr=err if not callable(err) else subprocess.PIPE
-            p = subprocess.Popen(args, cwd=cwd, stdout=stdout, stderr=stderr, preexec_fn=preexec_fn, creationflags=creationflags)
+            p = subprocess.Popen(args, cwd=cwd, stdout=stdout, stderr=stderr, preexec_fn=preexec_fn, creationflags=creationflags, env=env)
             _currentSubprocess = (p, args)
             if callable(out):
                 t = Thread(target=redirect, args=(p.stdout, out))
@@ -1342,7 +1344,7 @@ def build(args, parser=None):
     parser = parser if parser is not None else ArgumentParser(prog='mx build')
     parser.add_argument('-f', action='store_true', dest='force', help='force build (disables timestamp checking)')
     parser.add_argument('-c', action='store_true', dest='clean', help='removes existing build output')
-    parser.add_argument('--source', dest='compliance', help='Java compliance level', default=str(javaCompliance))
+    parser.add_argument('--source', dest='compliance', help='Java compliance level for projects without an explicit one', default=str(javaCompliance))
     parser.add_argument('--Wapi', action='store_true', dest='warnAPI', help='show warnings about using internal APIs')
     parser.add_argument('--projects', action='store', help='comma separated projects to build (omit to build all projects)')
     parser.add_argument('--only', action='store', help='comma separated projects to build, without checking their dependencies (omit to build all projects)')
@@ -1500,16 +1502,17 @@ def build(args, parser=None):
 
         toBeDeleted = [argfileName]
         try:
+            compliance = str(p.javaCompliance) if p.javaCompliance is not None else args.compliance
             if jdtJar is None:
                 log('Compiling Java sources for {0} with javac...'.format(p.name))
-                javacCmd = [java().javac, '-g', '-J-Xmx1g', '-source', args.compliance, '-classpath', cp, '-d', outputDir] + javacArgs + ['@' + argfile.name]
+                javacCmd = [java().javac, '-g', '-J-Xmx1g', '-source', compliance, '-classpath', cp, '-d', outputDir] + javacArgs + ['@' + argfile.name]
                 if not args.warnAPI:
                     javacCmd.append('-XDignore.symbol.file')
                 run(javacCmd)
             else:
                 log('Compiling Java sources for {0} with JDT...'.format(p.name))
                 jdtArgs = [java().java, '-Xmx1g', '-jar', jdtJar,
-                         '-' + args.compliance,
+                         '-' + compliance,
                          '-cp', cp, '-g', '-enableJavadoc',
                          '-d', outputDir] + javacArgs
                 jdtProperties = join(p.dir, '.settings', 'org.eclipse.jdt.core.prefs')
@@ -1559,6 +1562,13 @@ def eclipseformat(args):
         args.eclipse_exe = os.environ.get('ECLIPSE_EXE')
     if args.eclipse_exe is None:
         abort('Could not find Eclipse executable. Use -e option or ensure ECLIPSE_EXE environment variable is set.')
+        
+    # Maybe an Eclipse installation dir was specified - look for the executable in it
+    if join(args.eclipse_exe, exe_suffix('eclipse')):
+        args.eclipse_exe = join(args.eclipse_exe, exe_suffix('eclipse'))
+        
+    if not os.path.isfile(args.eclipse_exe) or not os.access(args.eclipse_exe, os.X_OK):
+        abort('Not an executable file: ' + args.eclipse_exe)
 
     eclipseinit([], buildProcessorJars=False)
 
@@ -1811,11 +1821,6 @@ def checkstyle(args):
                 log('[all Java sources in {0} already checked - skipping]'.format(sourceDir))
                 continue
 
-            if exists(timestampFile):
-                os.utime(timestampFile, None)
-            else:
-                file(timestampFile, 'a')
-
             dotCheckstyleXML = xml.dom.minidom.parse(dotCheckstyle)
             localCheckConfig = dotCheckstyleXML.getElementsByTagName('local-check-config')[0]
             configLocation = localCheckConfig.getAttribute('location')
@@ -1881,6 +1886,11 @@ def checkstyle(args):
                                 if len(warnings) != 0:
                                     map(log, warnings)
                                     return 1
+                                else:
+                                    if exists(timestampFile):
+                                        os.utime(timestampFile, None)
+                                    else:
+                                        file(timestampFile, 'a')
             finally:
                 if exists(auditfileName):
                     os.unlink(auditfileName)
@@ -1977,16 +1987,16 @@ def _source_locator_memento(deps):
     slm.open('sourceContainers', {'duplicates' : 'false'})
 
     # Every Java program depends on the JRE
-    memento = XMLDoc().element('classpathContainer', {'path' : 'org.eclipse.jdt.launching.JRE_CONTAINER'}).xml()
+    memento = XMLDoc().element('classpathContainer', {'path' : 'org.eclipse.jdt.launching.JRE_CONTAINER'}).xml(standalone='no')
     slm.element('classpathContainer', {'memento' : memento, 'typeId':'org.eclipse.jdt.launching.sourceContainer.classpathContainer'})
 
     for dep in deps:
         if dep.isLibrary():
             if hasattr(dep, 'eclipse.container'):
-                memento = XMLDoc().element('classpathContainer', {'path' : getattr(dep, 'eclipse.container')}).xml()
+                memento = XMLDoc().element('classpathContainer', {'path' : getattr(dep, 'eclipse.container')}).xml(standalone='no')
                 slm.element('classpathContainer', {'memento' : memento, 'typeId':'org.eclipse.jdt.launching.sourceContainer.classpathContainer'})
         else:
-            memento = XMLDoc().element('javaProject', {'name' : dep.name}).xml()
+            memento = XMLDoc().element('javaProject', {'name' : dep.name}).xml(standalone='no')
             slm.element('container', {'memento' : memento, 'typeId':'org.eclipse.jdt.launching.sourceContainer.javaProject'})
 
     slm.close('sourceContainers')
@@ -2010,7 +2020,7 @@ def make_eclipse_attach(hostname, port, name=None, deps=[]):
     launch.element('stringAttribute', {'key' : 'org.eclipse.jdt.launching.PROJECT_ATTR', 'value' : ''})
     launch.element('stringAttribute', {'key' : 'org.eclipse.jdt.launching.VM_CONNECTOR_ID', 'value' : 'org.eclipse.jdt.launching.socketAttachConnector'})
     launch.close('launchConfiguration')
-    launch = launch.xml(newl='\n') % slm.xml(escape=True)
+    launch = launch.xml(newl='\n', standalone='no') % slm.xml(escape=True, standalone='no')
 
     if name is None:
         name = 'attach-' + hostname + '-' + port
@@ -2077,7 +2087,7 @@ def make_eclipse_launch(javaArgs, jre, name=None, deps=[]):
     launch.element('stringAttribute', {'key' : 'org.eclipse.jdt.launching.PROJECT_ATTR', 'value' : ''})
     launch.element('stringAttribute', {'key' : 'org.eclipse.jdt.launching.VM_ARGUMENTS', 'value' : ' '.join(vmArgs)})
     launch.close('launchConfiguration')
-    launch = launch.xml(newl='\n') % slm.xml(escape=True)
+    launch = launch.xml(newl='\n', standalone='no') % slm.xml(escape=True, standalone='no')
 
     eclipseLaunches = join('mx', 'eclipse-launches')
     if not exists(eclipseLaunches):
@@ -2214,7 +2224,7 @@ def eclipseinit(args, suite=None, buildProcessorJars=True):
                 out.close('buildCommand')
 
         if _isAnnotationProcessorDependency(p):
-            _genEclipseBuilder(out, p, 'Jar.launch', 'archive ' + p.name, refresh = False, async = False)
+            _genEclipseBuilder(out, p, 'Jar.launch', 'archive ' + p.name, refresh = False, async = False, xmlIndent='', xmlStandalone='no')
             _genEclipseBuilder(out, p, 'Refresh.launch', '', refresh = True, async = True)
                        
         if projToDist.has_key(p.name):
@@ -2296,10 +2306,11 @@ def _isAnnotationProcessorDependency(p):
     
     return False
 
-def _genEclipseBuilder(dotProjectDoc, p, name, mxCommand, refresh=True, async=False, logToConsole=False):
+def _genEclipseBuilder(dotProjectDoc, p, name, mxCommand, refresh=True, async=False, logToConsole=False, xmlIndent='\t', xmlStandalone=None):
     launchOut = XMLDoc();
     consoleOn = 'true' if logToConsole else 'false'
     launchOut.open('launchConfiguration', {'type' : 'org.eclipse.ui.externaltools.ProgramBuilderLaunchConfigurationType'})
+    launchOut.element('booleanAttribute', {'key' : 'org.eclipse.debug.core.capture_output',                'value': consoleOn})
     launchOut.open('mapAttribute', {'key' : 'org.eclipse.debug.core.environmentVariables'})
     launchOut.element('mapEntry', {'key' : 'JAVA_HOME',	'value' : java().jdk})
     launchOut.close('mapAttribute')
@@ -2307,9 +2318,7 @@ def _genEclipseBuilder(dotProjectDoc, p, name, mxCommand, refresh=True, async=Fa
     if refresh:
         launchOut.element('stringAttribute',  {'key' : 'org.eclipse.debug.core.ATTR_REFRESH_SCOPE',            'value': '${project}'})
     launchOut.element('booleanAttribute', {'key' : 'org.eclipse.debug.ui.ATTR_CONSOLE_OUTPUT_ON',          'value': consoleOn})
-    launchOut.element('booleanAttribute', {'key' : 'org.eclipse.debug.core.capture_output',                'value': consoleOn})
-    if async:
-        launchOut.element('booleanAttribute', {'key' : 'org.eclipse.debug.ui.ATTR_LAUNCH_IN_BACKGROUND',       'value': 'true'})
+    launchOut.element('booleanAttribute', {'key' : 'org.eclipse.debug.ui.ATTR_LAUNCH_IN_BACKGROUND',       'value': 'true' if async else 'false'})
     
     baseDir = dirname(dirname(os.path.abspath(__file__)))
     
@@ -2329,7 +2338,7 @@ def _genEclipseBuilder(dotProjectDoc, p, name, mxCommand, refresh=True, async=Fa
     
     if not exists(externalToolDir):
         os.makedirs(externalToolDir)
-    update_file(join(externalToolDir, name), launchOut.xml(indent='\t', newl='\n'))
+    update_file(join(externalToolDir, name), launchOut.xml(indent=xmlIndent, standalone=xmlStandalone, newl='\n'))
     
     dotProjectDoc.open('buildCommand')
     dotProjectDoc.element('name', data='org.eclipse.ui.externaltools.ExternalToolBuilder')
@@ -3009,9 +3018,10 @@ def site(args):
         if exists(tmpbase):
             shutil.rmtree(tmpbase)
 
-def findclass(args):
+def findclass(args, logToConsole=True):
     """find all classes matching a given substring"""
 
+    matches = []
     for entry, filename in classpath_walk(includeBootClasspath=True):
         if filename.endswith('.class'):
             if isinstance(entry, zipfile.ZipFile):
@@ -3021,20 +3031,19 @@ def findclass(args):
             classname = classname[:-len('.class')]
             for a in args:
                 if a in classname:
-                    log(classname)
+                    matches.append(classname)
+                    if logToConsole:
+                        log(classname)
+    return matches
 
 def javap(args):
-    """launch javap with a -classpath option denoting all available classes
-
-    Run the JDK javap class file disassembler with the following prepended options:
-
-        -private -verbose -classpath <path to project classes>"""
+    """disassemble classes matching given pattern with javap"""
 
     javap = java().javap
     if not exists(javap):
         abort('The javap executable does not exists: ' + javap)
     else:
-        run([javap, '-private', '-verbose', '-classpath', classpath()] + args)
+        run([javap, '-private', '-verbose', '-classpath', classpath()] + findclass(args, logToConsole=False))
 
 def show_projects(args):
     """show all loaded projects"""
@@ -3072,7 +3081,7 @@ commands = {
     'ideinit': [ideinit, ''],
     'archive': [archive, '[options]'],
     'projectgraph': [projectgraph, ''],
-    'javap': [javap, ''],
+    'javap': [javap, '<class name patterns>'],
     'javadoc': [javadoc, '[options]'],
     'site': [site, '[options]'],
     'netbeansinit': [netbeansinit, ''],

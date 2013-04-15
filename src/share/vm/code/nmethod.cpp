@@ -497,7 +497,6 @@ void nmethod::init_defaults() {
 #endif // def HAVE_DTRACE_H
 }
 
-
 nmethod* nmethod::new_native_nmethod(methodHandle method,
   int compile_id,
   CodeBuffer *code_buffer,
@@ -513,17 +512,19 @@ nmethod* nmethod::new_native_nmethod(methodHandle method,
   {
     MutexLockerEx mu(CodeCache_lock, Mutex::_no_safepoint_check_flag);
     int native_nmethod_size = allocation_size(code_buffer, sizeof(nmethod));
-    CodeOffsets offsets;
-    offsets.set_value(CodeOffsets::Verified_Entry, vep_offset);
-    offsets.set_value(CodeOffsets::Frame_Complete, frame_complete);
-    nm = new (native_nmethod_size)
-      nmethod(method(), native_nmethod_size, compile_id, &offsets,
-              code_buffer, frame_size,
-              basic_lock_owner_sp_offset, basic_lock_sp_offset,
-              oop_maps);
-    NOT_PRODUCT(if (nm != NULL)  nmethod_stats.note_native_nmethod(nm));
-    if (PrintAssembly && nm != NULL)
-      Disassembler::decode(nm);
+    if (CodeCache::has_space(native_nmethod_size)) {
+      CodeOffsets offsets;
+      offsets.set_value(CodeOffsets::Verified_Entry, vep_offset);
+      offsets.set_value(CodeOffsets::Frame_Complete, frame_complete);
+      nm = new (native_nmethod_size) nmethod(method(), native_nmethod_size,
+                                             compile_id, &offsets,
+                                             code_buffer, frame_size,
+                                             basic_lock_owner_sp_offset,
+                                             basic_lock_sp_offset, oop_maps);
+      NOT_PRODUCT(if (nm != NULL)  nmethod_stats.note_native_nmethod(nm));
+      if (PrintAssembly && nm != NULL)
+        Disassembler::decode(nm);
+    }
   }
   // verify nmethod
   debug_only(if (nm) nm->verify();) // might block
@@ -548,16 +549,19 @@ nmethod* nmethod::new_dtrace_nmethod(methodHandle method,
   {
     MutexLockerEx mu(CodeCache_lock, Mutex::_no_safepoint_check_flag);
     int nmethod_size = allocation_size(code_buffer, sizeof(nmethod));
-    CodeOffsets offsets;
-    offsets.set_value(CodeOffsets::Verified_Entry, vep_offset);
-    offsets.set_value(CodeOffsets::Dtrace_trap, trap_offset);
-    offsets.set_value(CodeOffsets::Frame_Complete, frame_complete);
+    if (CodeCache::has_space(nmethod_size)) {
+      CodeOffsets offsets;
+      offsets.set_value(CodeOffsets::Verified_Entry, vep_offset);
+      offsets.set_value(CodeOffsets::Dtrace_trap, trap_offset);
+      offsets.set_value(CodeOffsets::Frame_Complete, frame_complete);
 
-    nm = new (nmethod_size) nmethod(method(), nmethod_size, &offsets, code_buffer, frame_size);
+      nm = new (nmethod_size) nmethod(method(), nmethod_size,
+                                      &offsets, code_buffer, frame_size);
 
-    NOT_PRODUCT(if (nm != NULL)  nmethod_stats.note_nmethod(nm));
-    if (PrintAssembly && nm != NULL)
-      Disassembler::decode(nm);
+      NOT_PRODUCT(if (nm != NULL)  nmethod_stats.note_nmethod(nm));
+      if (PrintAssembly && nm != NULL)
+        Disassembler::decode(nm);
+    }
   }
   // verify nmethod
   debug_only(if (nm) nm->verify();) // might block
@@ -605,7 +609,8 @@ nmethod* nmethod::new_nmethod(methodHandle method,
       + round_to(nul_chk_table->size_in_bytes(), oopSize)
       + round_to(debug_info->data_size()       , oopSize)
       + leaf_graph_ids_size;
-    nm = new (nmethod_size)
+    if (CodeCache::has_space(nmethod_size)) {
+      nm = new (nmethod_size)
       nmethod(method(), nmethod_size, compile_id, entry_bci, offsets,
               orig_pc_offset, debug_info, dependencies, code_buffer, frame_size,
               oop_maps,
@@ -619,6 +624,7 @@ nmethod* nmethod::new_nmethod(methodHandle method,
               triggered_deoptimizations
 #endif
               );
+    }
     if (nm != NULL) {
       // To make dependency checking during class loading fast, record
       // the nmethod dependencies in the classes it is dependent on.
@@ -818,9 +824,9 @@ nmethod::nmethod(
 #endif // def HAVE_DTRACE_H
 
 void* nmethod::operator new(size_t size, int nmethod_size) {
-  // Always leave some room in the CodeCache for I2C/C2I adapters
-  if (CodeCache::largest_free_block() < CodeCacheMinimumFreeSpace) return NULL;
-  return CodeCache::allocate(nmethod_size);
+  void*  alloc = CodeCache::allocate(nmethod_size);
+  guarantee(alloc != NULL, "CodeCache should have enough space");
+  return alloc;
 }
 
 
@@ -1301,10 +1307,12 @@ void nmethod::make_unloaded(BoolObjectClosure* is_alive, oop cause) {
   }
 
 #ifdef GRAAL
-    if (_graal_installed_code != NULL) {
-      HotSpotInstalledCode::set_nmethod(_graal_installed_code, 0);
-      _graal_installed_code = NULL;
-    }
+  // The method can only be unloaded after the pointer to the installed code
+  // Java wrapper is no longer alive. Here we need to clear out this weak
+  // reference to the dead object.
+  if (_graal_installed_code != NULL) {
+    _graal_installed_code = NULL;
+  }
 #endif
 
   // Make the class unloaded - i.e., change state and notify sweeper
@@ -1388,18 +1396,17 @@ bool nmethod::make_not_entrant_or_zombie(unsigned int state) {
       return false;
     }
 
-#ifdef GRAAL
-    if (_graal_installed_code != NULL) {
-      HotSpotInstalledCode::set_nmethod(_graal_installed_code, 0);
-      _graal_installed_code = NULL;
-    }
-#endif
-
     // The caller can be calling the method statically or through an inline
     // cache call.
     if (!is_osr_method() && !is_not_entrant()) {
-      NativeJump::patch_verified_entry(entry_point(), verified_entry_point(),
-                  SharedRuntime::get_handle_wrong_method_stub());
+      address stub = SharedRuntime::get_handle_wrong_method_stub();
+#ifdef GRAAL
+      if (_graal_installed_code != NULL && !HotSpotInstalledCode::isDefault(_graal_installed_code)) {
+        // This was manually installed machine code. Patch entry with stub that throws an exception.
+        stub = SharedRuntime::get_deoptimized_installed_code_stub();
+      }
+#endif
+      NativeJump::patch_verified_entry(entry_point(), verified_entry_point(), stub);
     }
 
     if (is_in_use()) {

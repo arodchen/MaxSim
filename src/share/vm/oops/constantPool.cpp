@@ -1378,12 +1378,13 @@ const char* ConstantPool::printable_name_at(int which) {
 
 // JVMTI GetConstantPool support
 
-// For temporary use until code is stable.
-#define DBG(code)
+// For debugging of constant pool
+const bool debug_cpool = false;
 
-static const char* WARN_MSG = "Must not be such entry!";
+#define DBG(code) do { if (debug_cpool) { (code); } } while(0)
 
 static void print_cpool_bytes(jint cnt, u1 *bytes) {
+  const char* WARN_MSG = "Must not be such entry!";
   jint size = 0;
   u2   idx1, idx2;
 
@@ -1669,8 +1670,7 @@ int ConstantPool::copy_cpool_bytes(int cpool_size,
         idx1 = tbl->symbol_to_value(sym);
         assert(idx1 != 0, "Have not found a hashtable entry");
         Bytes::put_Java_u2((address) (bytes+1), idx1);
-        DBG(char *str = sym->as_utf8());
-        DBG(printf("JVM_CONSTANT_String: idx=#%03hd, %s", idx1, str));
+        DBG(printf("JVM_CONSTANT_String: idx=#%03hd, %s", idx1, sym->as_utf8()));
         break;
       }
       case JVM_CONSTANT_Fieldref:
@@ -1744,6 +1744,8 @@ int ConstantPool::copy_cpool_bytes(int cpool_size,
   DBG(print_cpool_bytes(cnt, start_bytes));
   return (int)(bytes - start_bytes);
 } /* end copy_cpool_bytes */
+
+#undef DBG
 
 
 void ConstantPool::set_on_stack(const bool value) {
@@ -1852,6 +1854,7 @@ void ConstantPool::print_entry_on(const int index, outputStream* st) {
   switch (tag_at(index).value()) {
     case JVM_CONSTANT_Class :
       { Klass* k = klass_at(index, CATCH);
+        guarantee(k != NULL, "need klass");
         k->print_value_on(st);
         st->print(" {0x%lx}", (address)k);
       }

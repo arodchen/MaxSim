@@ -62,7 +62,9 @@ public class NodeParser extends TemplateParser<NodeData> {
                 if (node != null) {
                     String dump = parsed.dump();
                     log.message(Kind.ERROR, null, null, null, dump);
+                    // CheckStyle: stop system..print check
                     System.out.println(dump);
+                    // CheckStyle: resume system..print check
                 }
             }
         } finally {
@@ -108,8 +110,7 @@ public class NodeParser extends TemplateParser<NodeData> {
         }
 
         NodeData rootNode = parseNode(rootType);
-        boolean hasErrors = rootNode != null ? rootNode.hasErrors() : false;
-        if ((rootNode == null || hasErrors) && children.size() > 0) {
+        if (rootNode == null && children.size() > 0) {
             rootNode = new NodeData(rootType, rootType.getSimpleName().toString());
         }
 
@@ -152,6 +153,10 @@ public class NodeParser extends TemplateParser<NodeData> {
 
         NodeData nodeData = parseNodeData(type, nodeType);
 
+        if (nodeData.hasErrors()) {
+            return nodeData; // error sync point
+        }
+
         if (Utils.typeEquals(nodeType.asType(), type.asType())) {
             // filter fields if they were not split. (field are accessible anyway)
             for (ListIterator<NodeFieldData> iterator = nodeData.getFields().listIterator(); iterator.hasNext();) {
@@ -160,10 +165,6 @@ public class NodeParser extends TemplateParser<NodeData> {
                     iterator.remove();
                 }
             }
-        }
-
-        if (nodeData.hasErrors()) {
-            return nodeData; // error sync point
         }
 
         List<Element> elements = new ArrayList<>(context.getEnvironment().getElementUtils().getAllMembers(type));
@@ -328,6 +329,23 @@ public class NodeParser extends TemplateParser<NodeData> {
         }
 
         if (genericSpecialization != null) {
+            if (genericSpecialization.isUseSpecializationsForGeneric()) {
+                for (ActualParameter parameter : genericSpecialization.getReturnTypeAndParameters()) {
+                    if (Utils.isObject(parameter.getActualType())) {
+                        continue;
+                    }
+                    Set<String> types = new HashSet<>();
+                    for (SpecializationData specialization : specializations) {
+                        ActualParameter actualParameter = specialization.findParameter(parameter.getLocalName());
+                        if (actualParameter != null) {
+                            types.add(Utils.getQualifiedName(actualParameter.getActualType()));
+                        }
+                    }
+                    if (types.size() > 1) {
+                        genericSpecialization.replaceParameter(parameter.getLocalName(), new ActualParameter(parameter, node.getTypeSystem().getGenericType()));
+                    }
+                }
+            }
             TemplateMethod uninializedMethod = new TemplateMethod("Uninitialized", node, genericSpecialization.getSpecification(), null, null, genericSpecialization.getReturnType(),
                             genericSpecialization.getParameters());
             // should not use messages from generic specialization
