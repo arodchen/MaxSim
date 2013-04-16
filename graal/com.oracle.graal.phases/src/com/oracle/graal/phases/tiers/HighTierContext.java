@@ -25,21 +25,9 @@ package com.oracle.graal.phases.tiers;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 
-public class HighTierContext {
-
-    private final MetaAccessProvider runtime;
-    private final Assumptions assumptions;
+public class HighTierContext extends PhaseContext {
 
     public HighTierContext(MetaAccessProvider runtime, Assumptions assumptions) {
-        this.runtime = runtime;
-        this.assumptions = assumptions;
-    }
-
-    public MetaAccessProvider getRuntime() {
-        return runtime;
-    }
-
-    public Assumptions getAssumptions() {
-        return assumptions;
+        super(runtime, assumptions);
     }
 }

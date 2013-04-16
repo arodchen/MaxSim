@@ -128,6 +128,8 @@ public interface CompilerToVM {
      */
     JavaType lookupType(String name, HotSpotResolvedObjectType accessingClass, boolean eagerResolve);
 
+    int constantPoolLength(HotSpotResolvedObjectType pool);
+
     Object lookupConstantInPool(HotSpotResolvedObjectType pool, int cpi);
 
     JavaMethod lookupMethodInPool(HotSpotResolvedObjectType pool, int cpi, byte opcode);
@@ -166,6 +168,8 @@ public interface CompilerToVM {
     ResolvedJavaType getResolvedType(Class<?> javaClass);
 
     HotSpotResolvedJavaField[] getInstanceFields(HotSpotResolvedObjectType klass);
+
+    boolean hasFinalizableSubclass(HotSpotResolvedObjectType klass);
 
     /**
      * Gets the compiled code size for a method.

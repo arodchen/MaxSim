@@ -320,6 +320,11 @@ C2V_ENTRY(jint, getCompiledCodeSize, (JNIEnv *env, jobject, jlong metaspace_meth
   return code == NULL ? 0 : code->insts_size();
 C2V_END
 
+C2V_VMENTRY(jint, constantPoolLength, (JNIEnv *env, jobject, jobject type))
+  ConstantPool* cp = InstanceKlass::cast(java_lang_Class::as_Klass(HotSpotResolvedObjectType::javaMirror(type)))->constants();
+  return cp->length();
+C2V_END
+
 C2V_VMENTRY(jobject, lookupType, (JNIEnv *env, jobject, jstring jname, jobject accessingClass, jboolean eagerResolve))
   ResourceMark rm;
 
@@ -545,6 +550,12 @@ C2V_VMENTRY(jboolean, isTypeInitialized,(JNIEnv *, jobject, jobject hotspot_klas
   return InstanceKlass::cast(klass)->is_initialized();
 C2V_END
 
+C2V_VMENTRY(jboolean, hasFinalizableSubclass,(JNIEnv *, jobject, jobject hotspot_klass))
+  Klass* klass = java_lang_Class::as_Klass(HotSpotResolvedObjectType::javaMirror(hotspot_klass));
+  assert(klass != NULL, "method must not be called for primitive types");
+  return Dependencies::find_finalizable_subclass(klass) != NULL;
+C2V_END
+
 C2V_VMENTRY(void, initializeType, (JNIEnv *, jobject, jobject hotspot_klass))
   Klass* klass = java_lang_Class::as_Klass(HotSpotResolvedObjectType::javaMirror(hotspot_klass));
   assert(klass != NULL, "method must not be called for primitive types");
@@ -621,6 +632,9 @@ C2V_ENTRY(void, initializeConfiguration, (JNIEnv *env, jobject, jobject config))
 #endif
   set_boolean("verifyOops", VerifyOops);
   set_boolean("ciTime", CITime);
+  set_boolean("compileTheWorld", CompileTheWorld);
+  set_int("compileTheWorldStartAt", CompileTheWorldStartAt);
+  set_int("compileTheWorldStopAt", CompileTheWorldStopAt);
   set_boolean("printCompilation", PrintCompilation);
   set_boolean("printInlining", PrintInlining);
   set_boolean("useFastLocking", GraalUseFastLocking);
@@ -1112,6 +1126,7 @@ JNINativeMethod CompilerToVM_methods[] = {
   {CC"getInvocationCount",            CC"("METASPACE_METHOD")I",                                        FN_PTR(getInvocationCount)},
   {CC"getCompiledCodeSize",           CC"("METASPACE_METHOD")I",                                        FN_PTR(getCompiledCodeSize)},
   {CC"getVtableEntryOffset",          CC"("METASPACE_METHOD")I",                                        FN_PTR(getVtableEntryOffset)},
+  {CC"constantPoolLength",            CC"("HS_RESOLVED_TYPE")I",                                        FN_PTR(constantPoolLength)},
   {CC"lookupType",                    CC"("STRING HS_RESOLVED_TYPE"Z)"TYPE,                             FN_PTR(lookupType)},
   {CC"lookupConstantInPool",          CC"("HS_RESOLVED_TYPE"I)"OBJECT,                                  FN_PTR(lookupConstantInPool)},
   {CC"lookupAppendixInPool",          CC"("HS_RESOLVED_TYPE"IB)"OBJECT,                                 FN_PTR(lookupAppendixInPool)},
@@ -1122,6 +1137,7 @@ JNINativeMethod CompilerToVM_methods[] = {
   {CC"resolveMethod",                 CC"("HS_RESOLVED_TYPE STRING STRING")"METHOD,                     FN_PTR(resolveMethod)},
   {CC"getInstanceFields",             CC"("HS_RESOLVED_TYPE")["HS_RESOLVED_FIELD,                       FN_PTR(getInstanceFields)},
   {CC"isTypeInitialized",             CC"("HS_RESOLVED_TYPE")Z",                                        FN_PTR(isTypeInitialized)},
+  {CC"hasFinalizableSubclass",        CC"("HS_RESOLVED_TYPE")Z",                                        FN_PTR(hasFinalizableSubclass)},
   {CC"initializeType",                CC"("HS_RESOLVED_TYPE")V",                                        FN_PTR(initializeType)},
   {CC"getMaxCallTargetOffset",        CC"(J)J",                                                         FN_PTR(getMaxCallTargetOffset)},
   {CC"getResolvedType",               CC"("CLASS")"RESOLVED_TYPE,                                       FN_PTR(getResolvedType)},

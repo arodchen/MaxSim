@@ -393,6 +393,10 @@ public class VMToCompilerImpl implements VMToCompiler {
         System.gc();
         phaseTransition("bootstrap2");
 
+        if (GraalOptions.CompileTheWorld != null) {
+            new CompileTheWorld().compile();
+            System.exit(0);
+        }
     }
 
     private MetricRateInPhase parsedBytecodesPerSecond;
@@ -679,8 +683,8 @@ public class VMToCompilerImpl implements VMToCompiler {
     }
 
     @Override
-    public HotSpotResolvedObjectType createResolvedJavaType(long metaspaceKlass, String name, String simpleName, Class javaMirror, boolean hasFinalizableSubclass, int sizeOrSpecies) {
-        HotSpotResolvedObjectType type = new HotSpotResolvedObjectType(metaspaceKlass, name, simpleName, javaMirror, hasFinalizableSubclass, sizeOrSpecies);
+    public HotSpotResolvedObjectType createResolvedJavaType(long metaspaceKlass, String name, String simpleName, Class javaMirror, int sizeOrSpecies) {
+        HotSpotResolvedObjectType type = new HotSpotResolvedObjectType(metaspaceKlass, name, simpleName, javaMirror, sizeOrSpecies);
 
         long offset = HotSpotGraalRuntime.getInstance().getConfig().graalMirrorInClassOffset;
         if (!unsafe.compareAndSwapObject(javaMirror, offset, null, type)) {

@@ -20,38 +20,14 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.compiler.phases;
+package com.oracle.graal.phases.tiers;
 
-import java.util.*;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 
-import com.oracle.graal.loop.phases.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.common.*;
-import com.oracle.graal.phases.tiers.*;
+public class MidTierContext extends PhaseContext {
 
-public class Suites {
-
-    public static final PhaseSuite<HighTierContext> HIGH_TIER = createHighTier();
-
-    private static PhaseSuite<HighTierContext> createHighTier() {
-        ArrayList<BasePhase<? super HighTierContext>> phases = new ArrayList<>();
-
-        if (GraalOptions.OptConvertDeoptsToGuards) {
-            phases.add(new ConvertDeoptimizeToGuardPhase());
-        }
-
-        phases.add(new LockEliminationPhase());
-
-        if (GraalOptions.OptLoopTransform) {
-            phases.add(new LoopTransformHighPhase());
-            phases.add(new LoopTransformLowPhase());
-        }
-        phases.add(new RemoveValueProxyPhase());
-
-        if (GraalOptions.CullFrameStates) {
-            phases.add(new CullFrameStatesPhase());
-        }
-
-        return new PhaseSuite<>("HighTier", phases);
+    public MidTierContext(MetaAccessProvider runtime, Assumptions assumptions) {
+        super(runtime, assumptions);
     }
 }
