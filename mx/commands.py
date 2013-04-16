@@ -46,7 +46,7 @@ _vmChoices = ['graal', 'server', 'client', 'server-nograal', 'client-nograal', '
 _vm = _vmChoices[0]
 
 """ The VM builds that will be run by the 'vm' command - default is first in list """
-_vmbuildChoices = ['product', 'fastdebug', 'debug']
+_vmbuildChoices = ['product', 'fastdebug', 'debug', 'optimized']
 
 """ The VM build that will be run by the 'vm' command.
     This can be set via the global '--product', '--fastdebug' and '--debug' options. """
@@ -658,8 +658,6 @@ def build(args, vm=None):
         else:
             cpus = multiprocessing.cpu_count()
             runCmd = [mx.gmake_cmd()]
-            if build == 'debug':
-                build = 'jvmg'
             runCmd.append(build + buildSuffix) 
             env = os.environ.copy()
             
@@ -672,6 +670,8 @@ def build(args, vm=None):
             env.setdefault('LANG', 'C')
             env.setdefault('HOTSPOT_BUILD_JOBS', str(cpus))
             env.setdefault('ALT_BOOTDIR', mx.java().jdk)
+            if not mx._opts.verbose:
+                runCmd.append('MAKE_VERBOSE=')
             env['JAVA_HOME'] = jdk
             if vm.endswith('nograal'):
                 env['OMIT_GRAAL'] = 'true'
@@ -1167,6 +1167,13 @@ def bench(args):
         
     if ('specjbb2013' in args): # or 'all' in args //currently not in default set
         benchmarks += [sanitycheck.getSPECjbb2013()]
+        
+    if ('ctw-full' in args):
+        benchmarks.append(sanitycheck.getCTW(vm, sanitycheck.CTWMode.Full))
+    if ('ctw-noinline' in args):
+        benchmarks.append(sanitycheck.getCTW(vm, sanitycheck.CTWMode.NoInline))
+    if ('ctw-nocomplex' in args):
+        benchmarks.append(sanitycheck.getCTW(vm, sanitycheck.CTWMode.NoComplex))
 
     for test in benchmarks:
         for (groupName, res) in test.bench(vm, opts=vmArgs).items():
