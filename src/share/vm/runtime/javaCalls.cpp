@@ -188,6 +188,23 @@ void JavaCalls::call_default_constructor(JavaThread* thread, methodHandle method
   }
 }
 
+// ============ Interface calls ============
+
+void JavaCalls::call_interface(JavaValue* result, KlassHandle spec_klass, Symbol* name, Symbol* signature, JavaCallArguments* args, TRAPS) {
+  CallInfo callinfo;
+  Handle receiver = args->receiver();
+  KlassHandle recvrKlass(THREAD, receiver.is_null() ? (Klass*)NULL : receiver->klass());
+  LinkResolver::resolve_interface_call(
+          callinfo, receiver, recvrKlass, spec_klass, name, signature,
+          KlassHandle(), false, true, CHECK);
+  methodHandle method = callinfo.selected_method();
+  assert(method.not_null(), "should have thrown exception");
+
+  // Invoke the method
+  JavaCalls::call(result, method, args, CHECK);
+}
+
+
 // ============ Virtual calls ============
 
 void JavaCalls::call_virtual(JavaValue* result, KlassHandle spec_klass, Symbol* name, Symbol* signature, JavaCallArguments* args, TRAPS) {
@@ -325,11 +342,13 @@ void JavaCalls::call_helper(JavaValue* result, methodHandle* m, JavaCallArgument
   }
   else debug_only(args->verify(method, result->get_type(), thread));
 
+#ifndef GRAAL
   // Ignore call if method is empty
   if (method->is_empty_method()) {
     assert(result->get_type() == T_VOID, "an empty method must return a void value");
     return;
   }
+#endif
 
 
 #ifdef ASSERT
@@ -386,6 +405,18 @@ void JavaCalls::call_helper(JavaValue* result, methodHandle* m, JavaCallArgument
     os::bang_stack_shadow_pages();
   }
 
+#ifdef GRAAL
+  nmethod* nm = args->alternative_target();
+  if (nm != NULL) {
+    if (nm->is_alive()) {
+      ((JavaThread*) THREAD)->set_graal_alternate_call_target(nm->verified_entry_point());
+      entry_point = method->adapter()->get_i2c_entry();
+    } else {
+      THROW(vmSymbols::com_oracle_graal_api_code_InvalidInstalledCodeException());
+    }
+  }
+#endif
+  
   // do call
   { JavaCallWrapper link(method, receiver, result, CHECK);
     { HandleMark hm(thread);  // HandleMark used by HandleMarkCleaner

@@ -3190,10 +3190,9 @@ void InstanceKlass::verify_on(outputStream* st) {
   if (protection_domain() != NULL) {
     guarantee(protection_domain()->is_oop(), "should be oop");
   }
-  const Klass* host = host_klass();
-  if (host != NULL) {
-    guarantee(host->is_metadata(), "should be in metaspace");
-    guarantee(host->is_klass(), "should be klass");
+  if (host_klass() != NULL) {
+    guarantee(host_klass()->is_metadata(), "should be in metaspace");
+    guarantee(host_klass()->is_klass(), "should be klass");
   }
   if (signers() != NULL) {
     guarantee(signers()->is_objArray(), "should be obj array");

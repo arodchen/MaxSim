@@ -84,12 +84,16 @@ else
   ALT_OUT=
 endif
 
+# Directory for shared code (e.g. graal.jar)
+SHARED_DIR=$(OUTPUTDIR)/shared
+
 # Typical C1/C2 targets made available with this Makefile
 C1_VM_TARGETS=product1 fastdebug1 optimized1 debug1
 C2_VM_TARGETS=product  fastdebug  optimized  debug
 ZERO_VM_TARGETS=productzero fastdebugzero optimizedzero debugzero
 SHARK_VM_TARGETS=productshark fastdebugshark optimizedshark debugshark
 MINIMAL1_VM_TARGETS=productminimal1 fastdebugminimal1 debugminimal1
+GRAAL_VM_TARGETS=productgraal fastdebuggraal optimizedgraal debuggraal
 
 COMMON_VM_PRODUCT_TARGETS=product product1 docs export_product
 COMMON_VM_FASTDEBUG_TARGETS=fastdebug fastdebug1 docs export_fastdebug
@@ -136,6 +140,12 @@ all_fastdebugshark: fastdebugshark docs export_fastdebug
 all_debugshark:     debugshark docs export_debug
 all_optimizedshark: optimizedshark docs export_optimized
 
+allgraal:           all_productgraal all_fastdebuggraal
+all_productgraal:   productgraal docs export_product
+all_fastdebuggraal: fastdebuggraal docs export_fastdebug
+all_debuggraal:     debuggraal docs export_debug
+all_optimizedgraal: optimizedgraal docs export_optimized
+
 # Do everything
 world:         all create_jdk
 
@@ -175,8 +185,13 @@ $(MINIMAL1_VM_TARGETS):
 	$(MAKE) BUILD_FLAVOR=$(@:%minimal1=%) VM_TARGET=$@ \
 	  generic_buildminimal1 $(ALT_OUT)
 
+$(GRAAL_VM_TARGETS):
+	$(CD) $(GAMMADIR)/make; \
+	$(MAKE) BUILD_FLAVOR=$@ VM_TARGET=$@ \
+	  generic_buildgraal $(ALT_OUT)
+
 # Build compiler1 (client) rule, different for platforms
-generic_build1:
+generic_build1: buildshared
 	$(MKDIR) -p $(OUTPUTDIR)
 ifeq ($(OSNAME),windows)
   ifeq ($(ARCH_DATA_MODEL), 32)
@@ -191,17 +206,13 @@ ifeq ($(OSNAME),windows)
 	@$(ECHO) "No compiler1 ($(VM_TARGET)) for ARCH_DATA_MODEL=$(ARCH_DATA_MODEL)"
   endif
 else
-  ifeq ($(ARCH_DATA_MODEL), 32)
 	$(CD) $(OUTPUTDIR); \
 	    $(MAKE) -f $(ABS_OS_MAKEFILE) \
 		      $(MAKE_ARGS) $(VM_TARGET)
-  else
-	@$(ECHO) "No compiler1 ($(VM_TARGET)) for ARCH_DATA_MODEL=$(ARCH_DATA_MODEL)"
-  endif
 endif
 
 # Build compiler2 (server) rule, different for platforms
-generic_build2:
+generic_build2: buildshared
 	$(MKDIR) -p $(OUTPUTDIR)
 ifeq ($(OSNAME),windows)
 	$(CD) $(OUTPUTDIR); \
@@ -250,6 +261,16 @@ else
 	@$(ECHO) "Error: trying to build a minimal target but JVM_VARIANT_MINIMAL1 is not true."
 endif
 
+generic_buildgraal: buildshared
+	$(MKDIR) -p $(OUTPUTDIR)
+	$(CD) $(OUTPUTDIR); \
+		$(MAKE) -f $(ABS_OS_MAKEFILE) \
+			$(MAKE_ARGS) $(VM_TARGET) 
+
+# Builds code that can be shared among different build flavors
+buildshared:
+	$(REMOTE) $(ANT) -f $(GAMMADIR)/make/build-graal.xml -Dgamma.dir=$(GAMMADIR) -Dshared.dir=$(SHARED_DIR)
+
 # Export file rule
 generic_export: $(EXPORT_LIST)
 export_product:
@@ -292,12 +313,14 @@ C1_BASE_DIR=$(OUTPUTDIR)/$(VM_PLATFORM)_compiler1
 C2_BASE_DIR=$(OUTPUTDIR)/$(VM_PLATFORM)_compiler2
 ZERO_BASE_DIR=$(OUTPUTDIR)/$(VM_PLATFORM)_zero
 SHARK_BASE_DIR=$(OUTPUTDIR)/$(VM_PLATFORM)_shark
+GRAAL_BASE_DIR=$(OUTPUTDIR)/$(VM_PLATFORM)_graal
 C1_DIR=$(C1_BASE_DIR)/$(VM_SUBDIR)
 C2_DIR=$(C2_BASE_DIR)/$(VM_SUBDIR)
 ZERO_DIR=$(ZERO_BASE_DIR)/$(VM_SUBDIR)
 SHARK_DIR=$(SHARK_BASE_DIR)/$(VM_SUBDIR)
 MINIMAL1_BASE_DIR=$(OUTPUTDIR)/$(VM_PLATFORM)_minimal1
 MINIMAL1_DIR=$(MINIMAL1_BASE_DIR)/$(VM_SUBDIR)
+GRAAL_DIR=$(GRAAL_BASE_DIR)/$(VM_SUBDIR)
 
 ifeq ($(JVM_VARIANT_SERVER), true)
     MISC_DIR=$(C2_DIR)
@@ -371,6 +394,7 @@ $(EXPORT_MINIMAL_DIR)/%.map:  $(MINIMAL1_DIR)/%.map
 # Shared Library
 ifneq ($(OSNAME),windows)
     ifeq ($(JVM_VARIANT_SERVER), true)
+	# C2
         $(EXPORT_JRE_LIB_ARCH_DIR)/%.$(LIBRARY_SUFFIX): $(C2_DIR)/%.$(LIBRARY_SUFFIX)
 		$(install-file)
         $(EXPORT_SERVER_DIR)/%.$(LIBRARY_SUFFIX):       $(C2_DIR)/%.$(LIBRARY_SUFFIX)
@@ -389,7 +413,27 @@ ifneq ($(OSNAME),windows)
 		$(install-file)
         $(EXPORT_SERVER_DIR)/64/%.diz:    			$(C2_DIR)/%.diz
 		$(install-file)
-    endif
+
+	# Graal
+        $(EXPORT_JRE_LIB_ARCH_DIR)/%.$(LIBRARY_SUFFIX): $(GRAAL_DIR)/%.$(LIBRARY_SUFFIX)
+		$(install-file)
+        $(EXPORT_SERVER_DIR)/%.$(LIBRARY_SUFFIX):       $(GRAAL_DIR)/%.$(LIBRARY_SUFFIX)
+		$(install-file)
+        $(EXPORT_SERVER_DIR)/64/%.$(LIBRARY_SUFFIX):    $(GRAAL_DIR)/%.$(LIBRARY_SUFFIX)
+		$(install-file)
+        $(EXPORT_JRE_LIB_ARCH_DIR)/%.debuginfo: 		$(GRAAL_DIR)/%.debuginfo
+		$(install-file)
+        $(EXPORT_SERVER_DIR)/%.debuginfo:       		$(GRAAL_DIR)/%.debuginfo
+		$(install-file)
+        $(EXPORT_SERVER_DIR)/64/%.debuginfo:    		$(GRAAL_DIR)/%.debuginfo
+		$(install-file)
+        $(EXPORT_JRE_LIB_ARCH_DIR)/%.diz: 			$(GRAAL_DIR)/%.diz
+		$(install-file)
+        $(EXPORT_SERVER_DIR)/%.diz:       			$(GRAAL_DIR)/%.diz
+		$(install-file)
+        $(EXPORT_SERVER_DIR)/64/%.diz:    			$(GRAAL_DIR)/%.diz
+		$(install-file)
+     endif
     ifeq ($(JVM_VARIANT_CLIENT), true)
         $(EXPORT_JRE_LIB_ARCH_DIR)/%.$(LIBRARY_SUFFIX): $(C1_DIR)/%.$(LIBRARY_SUFFIX)
 		$(install-file)
@@ -464,6 +508,10 @@ endif
 $(EXPORT_LIB_DIR)/%.jar: $(GEN_DIR)/%.jar
 	$(install-file)
 
+# Shared jar files
+$(EXPORT_JRE_LIB_DIR)/%.jar: $(SHARED_DIR)/%.jar
+	$(install-file)
+
 # Include files (jvmti.h, jvmticmlr.h, jni.h, $(JDK_INCLUDE_SUBDIR)/jni_md.h, jmm.h, jfr.h)
 $(EXPORT_INCLUDE_DIR)/%: $(GEN_DIR)/jvmtifiles/%
 	$(install-file)
@@ -506,11 +554,13 @@ $(EXPORT_SERVER_DIR)/Xusage.txt $(EXPORT_CLIENT_DIR)/Xusage.txt $(EXPORT_MINIMAL
 #
 clobber clean: clean_build clean_export clean_jdk
 clean_build:
+	$(RM) -r $(SHARED_DIR)
 	$(RM) -r $(C1_DIR)
 	$(RM) -r $(C2_DIR)
 	$(RM) -r $(ZERO_DIR)
 	$(RM) -r $(SHARK_DIR)
 	$(RM) -r $(MINIMAL1_DIR)
+	$(RM) -r $(GRAAL_DIR)
 clean_export:
 	$(RM) -r $(EXPORT_PATH)
 clean_jdk:
@@ -757,6 +807,8 @@ jvmgcore: warn_jvmg_deprecated debugcore
 jvmgzero: warn_jvmg_deprecated debugzero
 
 jvmgshark: warn_jvmg_deprecated debugshark
+
+jvmggraal: warn_jvmg_deprecated debuggraal
 
 # JPRT rule to build this workspace
 include $(GAMMADIR)/make/jprt.gmk

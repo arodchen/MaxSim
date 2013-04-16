@@ -40,20 +40,22 @@ import org.openide.util.actions.CallableSystemAction;
 public final class RemoveAllAction extends CallableSystemAction {
 
 
+    @Override
     public String getName() {
-        return NbBundle.getMessage(RemoveAllAction.class, "CTL_ImportAction");
+        return NbBundle.getMessage(RemoveAllAction.class, "CTL_RemoveAllAction");
     }
 
     public RemoveAllAction() {
-        putValue(Action.SHORT_DESCRIPTION, "Remove all methods");
+        putValue(Action.SHORT_DESCRIPTION, "Remove all graphs and groups");
         putValue(Action.ACCELERATOR_KEY, KeyStroke.getKeyStroke(KeyEvent.VK_SHIFT, InputEvent.CTRL_MASK));
     }
 
     @Override
     protected String iconResource() {
-        return "com/sun/hotspot/igv/coordinator/images/removeall.gif";
+        return "com/sun/hotspot/igv/coordinator/images/removeall.png";
     }
 
+    @Override
     public HelpCtx getHelpCtx() {
         return HelpCtx.DEFAULT_HELP;
     }

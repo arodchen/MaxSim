@@ -35,30 +35,49 @@ import org.openide.util.actions.CookieAction;
  */
 public final class DiffGraphAction extends CookieAction {
 
+    @Override
     protected void performAction(Node[] activatedNodes) {
         DiffGraphCookie c = activatedNodes[0].getCookie(DiffGraphCookie.class);
+        assert c != null;
         c.openDiff();
     }
 
+    @Override
     protected int mode() {
         return CookieAction.MODE_EXACTLY_ONE;
     }
 
+    @Override
+    protected boolean enable(Node[] activatedNodes) {
+        boolean b = super.enable(activatedNodes);
+        if (b) {
+            assert activatedNodes.length == 1;
+            DiffGraphCookie c = activatedNodes[0].getCookie(DiffGraphCookie.class);
+            assert c != null;
+            return c.isPossible();
+        }
+
+        return false;
+    }
+
+    @Override
     public String getName() {
         return NbBundle.getMessage(DiffGraphAction.class, "CTL_DiffGraphAction");
     }
 
-    protected Class[] cookieClasses() {
-        return new Class[]{
+    @Override
+    protected Class<?>[] cookieClasses() {
+        return new Class<?>[]{
             DiffGraphCookie.class
         };
     }
 
     @Override
     protected String iconResource() {
-        return "com/sun/hotspot/igv/coordinator/images/diff.gif";
+        return "com/sun/hotspot/igv/coordinator/images/diff.png";
     }
 
+    @Override
     public HelpCtx getHelpCtx() {
         return HelpCtx.DEFAULT_HELP;
     }
@@ -68,3 +87,4 @@ public final class DiffGraphAction extends CookieAction {
         return false;
     }
 }
+
