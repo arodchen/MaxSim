@@ -204,12 +204,12 @@ final class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSpo
     protected void emitDirectCall(DirectCallTargetNode callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState callState) {
         InvokeKind invokeKind = ((HotSpotDirectCallTargetNode) callTarget).invokeKind();
         if (invokeKind == InvokeKind.Interface || invokeKind == InvokeKind.Virtual) {
-            append(new AMD64HotspotDirectVirtualCallOp(callTarget.target(), result, parameters, temps, callState, invokeKind));
+            append(new AMD64HotspotDirectVirtualCallOp((ResolvedJavaMethod) callTarget.target(), result, parameters, temps, callState, invokeKind));
         } else {
             assert invokeKind == InvokeKind.Static || invokeKind == InvokeKind.Special;
             HotSpotResolvedJavaMethod resolvedMethod = (HotSpotResolvedJavaMethod) callTarget.target();
             Constant metaspaceMethod = resolvedMethod.getMetaspaceMethodConstant();
-            append(new AMD64HotspotDirectStaticCallOp(callTarget.target(), result, parameters, temps, callState, invokeKind, metaspaceMethod));
+            append(new AMD64HotspotDirectStaticCallOp((ResolvedJavaMethod) callTarget.target(), result, parameters, temps, callState, invokeKind, metaspaceMethod));
         }
     }
 
@@ -219,7 +219,7 @@ final class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSpo
         emitMove(metaspaceMethod, operand(((HotSpotIndirectCallTargetNode) callTarget).metaspaceMethod()));
         Value targetAddress = AMD64.rax.asValue();
         emitMove(targetAddress, operand(callTarget.computedAddress()));
-        append(new AMD64IndirectCallOp(callTarget.target(), result, parameters, temps, metaspaceMethod, targetAddress, callState));
+        append(new AMD64IndirectCallOp((ResolvedJavaMethod) callTarget.target(), result, parameters, temps, metaspaceMethod, targetAddress, callState));
     }
 
     @Override
