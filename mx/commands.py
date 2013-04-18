@@ -46,7 +46,7 @@ _vmChoices = ['graal', 'server', 'client', 'server-nograal', 'client-nograal', '
 _vm = _vmChoices[0]
 
 """ The VM builds that will be run by the 'vm' command - default is first in list """
-_vmbuildChoices = ['product', 'fastdebug', 'debug']
+_vmbuildChoices = ['product', 'fastdebug', 'debug', 'optimized']
 
 """ The VM build that will be run by the 'vm' command.
     This can be set via the global '--product', '--fastdebug' and '--debug' options. """
@@ -126,47 +126,6 @@ def export(args):
     shutil.rmtree(tmp)
 
     mx.log('Created distribution in ' + zfName)
-
-def example(args):
-    """run some or all Graal examples"""
-    examples = {
-        'safeadd': ['com.oracle.graal.examples.safeadd', 'com.oracle.graal.examples.safeadd.Main'],
-        'vectorlib': ['com.oracle.graal.examples.vectorlib', 'com.oracle.graal.examples.vectorlib.Main'],
-    }
-
-    def run_example(verbose, project, mainClass):
-        cp = mx.classpath(project)
-        sharedArgs = ['-Xcomp', '-XX:CompileOnly=Main', mainClass]
-
-        res = []
-        mx.log("=== Server VM ===")
-        printArg = '-XX:+PrintCompilation' if verbose else '-XX:-PrintCompilation'
-        res.append(vm(['-cp', cp, printArg] + sharedArgs, vm='server'))
-        mx.log("=== Graal VM ===")
-        printArg = '-G:+PrintCompilation' if verbose else '-G:-PrintCompilation'
-        res.append(vm(['-cp', cp, printArg, '-G:-Extend', '-G:-Inline'] + sharedArgs))
-        mx.log("=== Graal VM with extensions ===")
-        res.append(vm(['-cp', cp, printArg, '-G:+Extend', '-G:-Inline'] + sharedArgs))
-
-        if len([x for x in res if x != 0]) != 0:
-            return 1
-        return 0
-
-    verbose = False
-    if '-v' in args:
-        verbose = True
-        args = [a for a in args if a != '-v']
-
-    if len(args) == 0:
-        args = examples.keys()
-    for a in args:
-        config = examples.get(a)
-        if config is None:
-            mx.log('unknown example: ' + a + '  {available examples = ' + str(examples.keys()) + '}')
-        else:
-            mx.log('--------- ' + a + ' ------------')
-            project, mainClass = config
-            run_example(verbose, project, mainClass)
 
 def dacapo(args):
     """run one or all DaCapo benchmarks
@@ -501,11 +460,31 @@ def initantbuild(args):
     
     out.element('target', {'name' : 'main', 'depends' : 'jar'})
 
+    serviceMap = {};
+    def addService(service, provider):
+        if service not in serviceMap:
+            serviceMap[service] = set();
+        serviceMap[service].add(provider)
+
     out.open('target', {'name' : 'compile', 'depends' : 'cleanclasses'})
     out.element('mkdir', {'dir' : '${classes.dir}'})
-    out.open('javac', {'destdir' : '${classes.dir}', 'debug' : 'on', 'includeantruntime' : 'false', 'encoding' : 'UTF-8'})
+    out.open('javac', {'destdir' : '${classes.dir}', 'debug' : 'on', 'includeantruntime' : 'false', })
+
     for p in mx.sorted_deps(mx.distribution('GRAAL').deps):
         out.element('src', {'path' : '${src.dir}/' + p.name})
+        servicesDir = join(p.output_dir(), 'META-INF', 'services')
+        if exists(servicesDir):
+            for service in os.listdir(servicesDir):
+                with open(join(servicesDir, service), 'r') as serviceFile:
+                    for line in serviceFile:
+                        addService(service, line.strip())
+        providersDir = join(p.output_dir(), 'META-INF', 'providers')
+        if exists(providersDir):
+            for provider in os.listdir(providersDir):
+                with open(join(providersDir, provider), 'r') as providerFile:
+                    for line in providerFile:
+                        addService(line.strip(), provider)
+
     out.element('compilerarg', {'value' : '-XDignore.symbol.file'})
     
     out.open('classpath')
@@ -519,7 +498,15 @@ def initantbuild(args):
 
     out.open('target', {'name' : 'jar', 'depends' : 'compile'})
     out.element('mkdir', {'dir' : '${jar.dir}'})
-    out.element('jar', {'destfile' : '${jar.file}', 'basedir' : '${classes.dir}'})
+    out.open('jar', {'destfile' : '${jar.file}', 'basedir' : '${classes.dir}'})
+
+    for service in sorted(serviceMap.iterkeys()):
+        out.open('service', {'type' : service})
+        for provider in sorted(serviceMap[service]):
+            out.element('provider', {'classname' : provider})
+        out.close('service')
+
+    out.close('jar');
     out.close('target')
     
     out.open('target', {'name' : 'cleanclasses'})
@@ -532,7 +519,7 @@ def initantbuild(args):
 
     out.close('project')
     
-    mx.update_file(args.buildfile, out.xml(indent='  ', newl='\n'))
+    return mx.update_file(args.buildfile, out.xml(indent='  ', newl='\n'))
 
 def buildvars(args):
     """Describes the variables that can be set by the -D option to the 'mx build' commmand"""
@@ -543,7 +530,6 @@ def buildvars(args):
         'HOTSPOT_BUILD_JOBS' : 'Number of CPUs used by make (default: ' + str(multiprocessing.cpu_count()) + ')',
         'INSTALL' : 'Install the built VM into the JDK? (default: y)',
         'ZIP_DEBUGINFO_FILES' : 'Install zipped debug symbols file? (default: 0)',
-        'TEST_IN_BUILD' : 'Run the Queens test as part of build (default: false)'
     }
     
     mx.log('HotSpot build variables that can be set by the -D option to "mx build":')
@@ -658,8 +644,6 @@ def build(args, vm=None):
         else:
             cpus = multiprocessing.cpu_count()
             runCmd = [mx.gmake_cmd()]
-            if build == 'debug':
-                build = 'jvmg'
             runCmd.append(build + buildSuffix) 
             env = os.environ.copy()
             
@@ -672,12 +656,14 @@ def build(args, vm=None):
             env.setdefault('LANG', 'C')
             env.setdefault('HOTSPOT_BUILD_JOBS', str(cpus))
             env.setdefault('ALT_BOOTDIR', mx.java().jdk)
+            if not mx._opts.verbose:
+                runCmd.append('MAKE_VERBOSE=')
             env['JAVA_HOME'] = jdk
             if vm.endswith('nograal'):
-                env['OMIT_GRAAL'] = 'true'
+                env['INCLUDE_GRAAL'] = 'false'
                 env.setdefault('ALT_OUTPUTDIR', join(_graal_home, 'build-nograal', mx.get_os()))
             else:
-                env['GRAAL'] = join(_graal_home, 'graal') # needed for TEST_IN_BUILD
+                env['INCLUDE_GRAAL'] = 'true'
             env.setdefault('INSTALL', 'y')
             if mx.get_os() == 'solaris' :
                 # If using sparcWorks, setup flags to avoid make complaining about CC version
@@ -693,9 +679,6 @@ def build(args, vm=None):
                         runCmd.append('STRIP_POLICY=no_strip')
             # This removes the need to unzip the *.diz files before debugging in gdb
             env.setdefault('ZIP_DEBUGINFO_FILES', '0')
-
-            # We don't need to run the Queens test (i.e. test_gamma)
-            env.setdefault('TEST_IN_BUILD', 'false')
 
             # Clear these 2 variables as having them set can cause very confusing build problems
             env.pop('LD_LIBRARY_PATH', None)
@@ -980,6 +963,12 @@ def gate(args):
         t = Task('BuildJava')
         build(['--no-native', '--jdt-warning-as-error'])
         tasks.append(t.stop())
+
+        t = Task('Check build-graal.xml')
+        mx.log(time.strftime('%d %b %Y %H:%M:%S - Ensuring make/build-graal.xml file is up to date...'))
+        if initantbuild([]):
+            t.abort('Rerun "mx build" and check-in the modified make/build-graal.xml file.')
+        tasks.append(t.stop())
         
         t = Task('Checkstyle')
         if mx.checkstyle([]) != 0:
@@ -1167,6 +1156,13 @@ def bench(args):
         
     if ('specjbb2013' in args): # or 'all' in args //currently not in default set
         benchmarks += [sanitycheck.getSPECjbb2013()]
+        
+    if ('ctw-full' in args):
+        benchmarks.append(sanitycheck.getCTW(vm, sanitycheck.CTWMode.Full))
+    if ('ctw-noinline' in args):
+        benchmarks.append(sanitycheck.getCTW(vm, sanitycheck.CTWMode.NoInline))
+    if ('ctw-nocomplex' in args):
+        benchmarks.append(sanitycheck.getCTW(vm, sanitycheck.CTWMode.NoComplex))
 
     for test in benchmarks:
         for (groupName, res) in test.bench(vm, opts=vmArgs).items():
@@ -1341,7 +1337,6 @@ def mx_init(suite):
         'specjvm2008': [specjvm2008, '[VM options|specjvm2008 options (-v, -ikv, -ict, -wt, -it)]'],
         'specjbb2013': [specjbb2013, '[VM options]'],
         'specjbb2005': [specjbb2005, '[VM options]'],
-        #'example': [example, '[-v] example names...'],
         'gate' : [gate, '[-options]'],
         'gv' : [gv, ''],
         'bench' : [bench, '[-resultfile file] [all(default)|dacapo|specjvm2008|bootstrap]'],

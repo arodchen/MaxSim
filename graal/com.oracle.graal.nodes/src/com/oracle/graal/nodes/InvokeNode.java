@@ -27,7 +27,6 @@ import java.util.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
 
@@ -46,7 +45,7 @@ public final class InvokeNode extends AbstractStateSplit implements StateSplit, 
 
     /**
      * Constructs a new Invoke instruction.
-     *
+     * 
      * @param bci the bytecode index of the original invoke (used for debug infos)
      * @param callTarget the target method being called
      */
@@ -62,11 +61,6 @@ public final class InvokeNode extends AbstractStateSplit implements StateSplit, 
     @Override
     public CallTargetNode callTarget() {
         return callTarget;
-    }
-
-    @Override
-    public MethodCallTargetNode methodCallTarget() {
-        return (MethodCallTargetNode) callTarget;
     }
 
     @Override
@@ -101,11 +95,7 @@ public final class InvokeNode extends AbstractStateSplit implements StateSplit, 
     @Override
     public Map<Object, Object> getDebugProperties(Map<Object, Object> map) {
         Map<Object, Object> debugProperties = super.getDebugProperties(map);
-        if (callTarget instanceof MethodCallTargetNode && methodCallTarget().targetJavaMethod() != null) {
-            debugProperties.put("targetMethod", methodCallTarget().targetJavaMethod());
-        } else if (callTarget instanceof AbstractCallTargetNode) {
-            debugProperties.put("targetMethod", ((AbstractCallTargetNode) callTarget).target());
-        }
+        debugProperties.put("targetMethod", callTarget.targetName());
         return debugProperties;
     }
 
