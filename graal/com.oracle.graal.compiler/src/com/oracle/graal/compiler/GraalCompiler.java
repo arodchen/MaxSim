@@ -49,7 +49,7 @@ public class GraalCompiler {
 
     public static CompilationResult compileMethod(final GraalCodeCacheProvider runtime, final Replacements replacements, final Backend backend, final TargetDescription target,
                     final ResolvedJavaMethod method, final StructuredGraph graph, final GraphCache cache, final PhasePlan plan, final OptimisticOptimizations optimisticOpts,
-                    final SpeculationLog speculationLog) {
+                    final SpeculationLog speculationLog, final Suites suites) {
         assert (method.getModifiers() & Modifier.NATIVE) == 0 : "compiling native methods is not supported";
 
         final CompilationResult compilationResult = new CompilationResult();
@@ -60,7 +60,7 @@ public class GraalCompiler {
                 final LIR lir = Debug.scope("FrontEnd", new Callable<LIR>() {
 
                     public LIR call() {
-                        return emitHIR(runtime, target, graph, replacements, assumptions, cache, plan, optimisticOpts, speculationLog);
+                        return emitHIR(runtime, target, graph, replacements, assumptions, cache, plan, optimisticOpts, speculationLog, suites);
                     }
                 });
                 final LIRGenerator lirGen = Debug.scope("BackEnd", lir, new Callable<LIRGenerator>() {
@@ -94,13 +94,13 @@ public class GraalCompiler {
 
     /**
      * Builds the graph, optimizes it.
-     * 
+     *
      * @param runtime
-     * 
+     *
      * @param target
      */
     public static LIR emitHIR(GraalCodeCacheProvider runtime, TargetDescription target, StructuredGraph graph, Replacements replacements, Assumptions assumptions, GraphCache cache, PhasePlan plan,
-                    OptimisticOptimizations optimisticOpts, final SpeculationLog speculationLog) {
+                    OptimisticOptimizations optimisticOpts, final SpeculationLog speculationLog, final Suites suites) {
 
         if (speculationLog != null) {
             speculationLog.snapshot();
@@ -139,12 +139,12 @@ public class GraalCompiler {
 
         plan.runPhases(PhasePosition.HIGH_LEVEL, graph);
 
-        Suites.DEFAULT.getHighTier().apply(graph, highTierContext);
+        suites.getHighTier().apply(graph, highTierContext);
 
         new LoweringPhase(target, runtime, replacements, assumptions).apply(graph);
 
         MidTierContext midTierContext = new MidTierContext(runtime, assumptions);
-        Suites.DEFAULT.getMidTier().apply(graph, midTierContext);
+        suites.getMidTier().apply(graph, midTierContext);
 
         plan.runPhases(PhasePosition.MID_LEVEL, graph);
 

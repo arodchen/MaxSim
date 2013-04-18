@@ -29,8 +29,6 @@ import com.oracle.graal.phases.*;
 
 public final class Suites {
 
-    public static final Suites DEFAULT;
-
     private final PhaseSuite<HighTierContext> highTier;
     private final PhaseSuite<MidTierContext> midTier;
 
@@ -53,8 +51,6 @@ public final class Suites {
             }
             configurations.put(name.toLowerCase(), config);
         }
-
-        DEFAULT = createDefaultSuites();
     }
 
     private Suites(CompilerConfiguration config) {
