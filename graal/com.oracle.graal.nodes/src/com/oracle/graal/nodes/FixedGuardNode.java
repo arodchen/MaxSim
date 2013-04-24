@@ -29,7 +29,7 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 @NodeInfo(nameTemplate = "FixedGuard(!={p#negated}) {p#reason/s}")
-public final class FixedGuardNode extends FixedWithNextNode implements Simplifiable, Lowerable, Node.IterableNodeType, Negatable {
+public class FixedGuardNode extends FixedWithNextNode implements Simplifiable, Lowerable, Node.IterableNodeType, Negatable {
 
     @Input private LogicNode condition;
     private final DeoptimizationReason reason;

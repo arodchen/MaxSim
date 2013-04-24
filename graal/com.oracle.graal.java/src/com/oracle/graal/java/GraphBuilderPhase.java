@@ -754,7 +754,7 @@ public class GraphBuilderPhase extends Phase {
 
     private void genThrow() {
         ValueNode exception = frameState.apop();
-        FixedGuardNode node = currentGraph.add(new FixedGuardNode(currentGraph.unique(new IsNullNode(exception)), NullCheckException, InvalidateReprofile, true));
+        FixedGuardNode node = currentGraph.add(createFixedGuardNode(currentGraph.unique(new IsNullNode(exception)), NullCheckException, InvalidateReprofile, true));
         append(node);
         append(handleException(exception, bci()));
     }
@@ -1599,11 +1599,15 @@ public class GraphBuilderPhase extends Phase {
     private void createUnwind() {
         assert frameState.stackSize() == 1 : frameState;
         ValueNode exception = frameState.apop();
-        FixedGuardNode guard = currentGraph.add(new FixedGuardNode(currentGraph.unique(new IsNullNode(exception)), NullCheckException, InvalidateReprofile, true));
+        FixedGuardNode guard = currentGraph.add(createFixedGuardNode(currentGraph.unique(new IsNullNode(exception)), NullCheckException, InvalidateReprofile, true));
         append(guard);
         synchronizedEpilogue(FrameState.AFTER_EXCEPTION_BCI);
         UnwindNode unwindNode = currentGraph.add(new UnwindNode(exception));
         append(unwindNode);
+    }
+
+    protected FixedGuardNode createFixedGuardNode(LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated) {
+        return new FixedGuardNode(condition, deoptReason, action, negated);
     }
 
     private void createReturn() {

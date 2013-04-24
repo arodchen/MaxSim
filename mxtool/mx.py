@@ -37,7 +37,9 @@ The organizing principle of mx is a project suite. A suite is a directory
 containing one or more projects. It's not coincidental that this closely
 matches the layout of one or more projects in a Mercurial repository.
 The configuration information for a suite lives in an 'mx' sub-directory
-at the top level of the suite.
+at the top level of the suite. A suite is given a name taken from the basename
+of the directory. An 'mx' subdirectory can be named as plain 'mx' or 'mxbasename'.
+The latter is useful to avoid clashes in IDE project names.
 
 When launched, mx treats the current working directory as a suite.
 This is the primary suite. All other suites are called included suites.
@@ -462,15 +464,16 @@ class Library(Dependency):
             cp.append(path)
 
 class Suite:
-    def __init__(self, dir, primary):
-        self.dir = os.path.abspath(dir)
+    def __init__(self, name, dirPath, mxDir, primary):
+        self.name = name;
+        self.dir = dirPath
+        self.mxDir = mxDir
         self.projects = []
         self.libs = []
         self.dists = []
         self.includes = []
         self.commands = None
         self.primary = primary
-        mxDir = join(dir, 'mx')
         self._load_env(mxDir)
         self._load_commands(mxDir)
         self._load_includes(mxDir)
@@ -595,8 +598,7 @@ class Suite:
                         os.environ[key.strip()] = expandvars_in_property(value.strip())
 
     def _post_init(self, opts):
-        mxDir = join(self.dir, 'mx')
-        self._load_projects(mxDir)
+        self._load_projects(self.mxDir)
         for p in self.projects:
             existing = _projects.get(p.name)
             if existing is not None:
@@ -705,12 +707,22 @@ def get_os():
         abort('Unknown operating system ' + sys.platform)
 
 def _loadSuite(d, primary=False):
-    mxDir = join(d, 'mx')
-    if not exists(mxDir) or not isdir(mxDir):
+    name = os.path.basename(d)
+    mxBaseDir = join(d, 'mx')
+    mxTaggedDir = mxBaseDir + name
+    mxDir = None
+    if exists(mxTaggedDir) and isdir(mxTaggedDir):
+        mxDir = mxTaggedDir
+    else:
+        if exists(mxBaseDir) and isdir(mxBaseDir):
+            mxDir = mxBaseDir
+        
+    if mxDir is None:
         return None
-    if not _suites.has_key(d):
-        suite = Suite(d, primary)
-        _suites[d] = suite
+    
+    if not _suites.has_key(name):
+        suite = Suite(name, d, mxDir, primary)
+        _suites[name] = suite
         return suite
 
 def suites():
@@ -718,6 +730,14 @@ def suites():
     Get the list of all loaded suites.
     """
     return _suites.values()
+
+def suite(name):
+    """Get the suite named 'name'
+    """
+    s = _suites.get(name)
+    if s is None:
+        abort('suite named ' + name + ' not found')
+    return s
 
 def projects():
     """
