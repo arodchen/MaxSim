@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,31 +20,9 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.api.code;
+package com.oracle.truffle.api;
 
-import com.oracle.graal.api.meta.*;
+public interface LoopCountReceiver {
 
-/**
- * Common base class for values that can be manipulated by the register allocator.
- */
-public abstract class AllocatableValue extends Value {
-
-    private static final long serialVersionUID = 153019506717492133L;
-
-    /**
-     * Marker to tell the register allocator that no storage location needs to be allocated for this
-     * value.
-     */
-    @SuppressWarnings("serial") public static final AllocatableValue UNUSED = new AllocatableValue(Kind.Illegal) {
-
-        @Override
-        public String toString() {
-            return "-";
-        }
-    };
-
-    public AllocatableValue(Kind kind) {
-        super(kind);
-    }
-
+    void reportLoopCount(int count);
 }

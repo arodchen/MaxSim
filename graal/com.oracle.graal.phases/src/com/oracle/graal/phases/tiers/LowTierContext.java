@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,14 +20,22 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.api.frame;
+package com.oracle.graal.phases.tiers;
 
-/**
- * Interface for defining type conversions for frame slot values.
- */
-public interface TypeConversion {
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.nodes.spi.*;
 
-    Class<?> getTopType();
+public class LowTierContext extends PhaseContext {
 
-    Object convertTo(Class<?> targetType, Object value);
+    private final TargetDescription target;
+
+    public LowTierContext(MetaAccessProvider runtime, Assumptions assumptions, Replacements replacements, TargetDescription target) {
+        super(runtime, assumptions, replacements);
+        this.target = target;
+    }
+
+    public TargetDescription getTarget() {
+        return target;
+    }
 }

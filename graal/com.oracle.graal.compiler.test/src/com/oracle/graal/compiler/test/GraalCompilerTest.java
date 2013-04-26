@@ -44,6 +44,7 @@ import com.oracle.graal.nodes.virtual.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.PhasePlan.PhasePosition;
 import com.oracle.graal.phases.schedule.*;
+import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.printer.*;
 import com.oracle.graal.test.*;
 import com.oracle.graal.hotspot.phases.WriteBarrierAdditionPhase;
@@ -155,7 +156,7 @@ public abstract class GraalCompilerTest extends GraalTest {
 
     /**
      * Parses a Java method to produce a graph.
-     * 
+     *
      * @param methodName the name of the method in {@code this.getClass()} to be parsed
      */
     protected StructuredGraph parse(String methodName) {
@@ -311,7 +312,7 @@ public abstract class GraalCompilerTest extends GraalTest {
 
     /**
      * Prepends a non-null receiver argument to a given list or args.
-     * 
+     *
      * @param receiver the receiver argument to prepend if it is non-null
      */
     protected Object[] argsWithReceiver(Object receiver, Object... args) {
@@ -369,7 +370,7 @@ public abstract class GraalCompilerTest extends GraalTest {
 
     /**
      * Can be overridden to modify the compilation phases applied for a test.
-     * 
+     *
      * @param method the method being compiled
      * @param graph the graph being compiled
      * @param phasePlan the phase plan to be edited
@@ -379,7 +380,7 @@ public abstract class GraalCompilerTest extends GraalTest {
 
     /**
      * Gets installed code for a given method and graph, compiling it first if necessary.
-     * 
+     *
      * @param forceCompile specifies whether to ignore any previous code cached for the (method,
      *            key) pair
      */
@@ -411,7 +412,7 @@ public abstract class GraalCompilerTest extends GraalTest {
                 phasePlan.addPhase(PhasePosition.LOW_LEVEL, new WriteBarrierAdditionPhase());
                 editPhasePlan(method, graph, phasePlan);
                 CompilationResult compResult = GraalCompiler.compileMethod(runtime(), replacements, backend, runtime().getTarget(), method, graph, null, phasePlan, OptimisticOptimizations.ALL,
-                                new SpeculationLog());
+                                new SpeculationLog(), Suites.createDefaultSuites());
                 if (printCompilation) {
                     TTY.println(String.format("@%-6d Graal %-70s %-45s %-50s | %4dms %5dB", id, "", "", "", System.currentTimeMillis() - start, compResult.getTargetCodeSize()));
                 }
@@ -442,7 +443,7 @@ public abstract class GraalCompilerTest extends GraalTest {
 
     /**
      * Parses a Java method to produce a graph.
-     * 
+     *
      * @param methodName the name of the method in {@code this.getClass()} to be parsed
      */
     protected StructuredGraph parseProfiled(String methodName) {

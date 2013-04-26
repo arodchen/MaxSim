@@ -20,30 +20,41 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.api.frame;
+package com.oracle.truffle.codegen.processor.ast;
 
-/**
- * Default type conversion semantics where a conversion is without changing any data.
- */
-public final class DefaultTypeConversion implements TypeConversion {
+public class CodeTreeVariable extends CodeTree {
 
-    private static DefaultTypeConversion instance = new DefaultTypeConversion();
+    private final String name;
 
-    public static TypeConversion getInstance() {
-        return instance;
+    private CodeTree value;
+
+    public CodeTreeVariable() {
+        super(CodeTreeKind.GROUP, null, null);
+        this.name = "";
     }
 
-    private DefaultTypeConversion() {
-
+    public CodeTreeVariable(String name) {
+        super(CodeTreeKind.GROUP, null, null);
+        this.name = name;
     }
 
-    @Override
-    public Class<?> getTopType() {
-        return Object.class;
+    public String getName() {
+        return name;
     }
 
-    @Override
-    public Object convertTo(Class<?> targetType, Object value) {
+    public void set(CodeTree tree) {
+        if (value == tree) {
+            return;
+        }
+        if (this.value != null) {
+            remove(this.value);
+        }
+        this.value = tree;
+        add(tree);
+    }
+
+    public CodeTree get() {
         return value;
     }
+
 }

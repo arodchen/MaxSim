@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,12 +20,14 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.api.frame;
+package com.oracle.truffle.api.codegen;
 
-/**
- * Listener for the event of a type change of a frame slot.
- */
-public interface FrameSlotTypeListener {
+import java.lang.annotation.*;
 
-    void typeChanged(FrameSlot slot, Class<?> oldType);
+@Retention(RetentionPolicy.CLASS)
+@Target({ElementType.TYPE})
+public @interface NodeChildren {
+
+    NodeChild[] value() default {};
+
 }

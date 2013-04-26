@@ -39,17 +39,17 @@ final class AMD64HotSpotGraalRuntime extends HotSpotGraalRuntime {
      * Called from C++ code to retrieve the singleton instance, creating it first if necessary.
      */
     public static HotSpotGraalRuntime makeInstance() {
-        if (getInstance() == null) {
+        if (graalRuntime() == null) {
             setInstance(new AMD64HotSpotGraalRuntime());
         }
-        return getInstance();
+        return graalRuntime();
     }
 
     @Override
     protected TargetDescription createTarget() {
         final int stackFrameAlignment = 16;
         final int implicitNullCheckLimit = 4096;
-        return new TargetDescription(new AMD64(), true, stackFrameAlignment, implicitNullCheckLimit, true);
+        return new TargetDescription(new AMD64(config.useSSE, config.useAVX), true, stackFrameAlignment, implicitNullCheckLimit, true);
     }
 
     @Override

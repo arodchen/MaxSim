@@ -22,6 +22,9 @@
  */
 package com.oracle.truffle.api.codegen.test;
 
+import static com.oracle.truffle.api.codegen.test.TestHelper.*;
+import static org.junit.Assert.*;
+
 import org.junit.*;
 
 import com.oracle.truffle.api.codegen.*;
@@ -29,14 +32,11 @@ import com.oracle.truffle.api.codegen.test.BinaryNodeTestFactory.AddNodeFactory;
 import com.oracle.truffle.api.codegen.test.TypeSystemTest.TestRootNode;
 import com.oracle.truffle.api.codegen.test.TypeSystemTest.ValueNode;
 
-import static junit.framework.Assert.*;
-import static com.oracle.truffle.api.codegen.test.TestHelper.*;
-
 public class BinaryNodeTest {
 
     @Test
     public void testAdd() {
-        TestRootNode<AddNode> node = create(AddNodeFactory.getInstance());
+        TestRootNode<AddNode> node = createRoot(AddNodeFactory.getInstance());
         assertEquals(42, executeWith(node, 19, 23));
         assertEquals(42d, executeWith(node, 19d, 23d));
         assertEquals(42d, executeWith(node, "19", "23"));
@@ -45,34 +45,15 @@ public class BinaryNodeTest {
 
     @Test(expected = RuntimeException.class)
     public void testAddUnsupported() {
-        TestRootNode<AddNode> node = create(AddNodeFactory.getInstance());
+        TestRootNode<AddNode> node = createRoot(AddNodeFactory.getInstance());
         executeWith(node, new Object(), new Object());
     }
 
+    @NodeChildren({@NodeChild("left"), @NodeChild("right")})
     abstract static class BinaryNode extends ValueNode {
-
-        @Child protected ValueNode leftNode;
-        @Child protected ValueNode rightNode;
-
-        public BinaryNode(ValueNode left, ValueNode right) {
-            this.leftNode = left;
-            this.rightNode = right;
-        }
-
-        public BinaryNode(BinaryNode prev) {
-            this(prev.leftNode, prev.rightNode);
-        }
     }
 
     abstract static class AddNode extends BinaryNode {
-
-        public AddNode(ValueNode left, ValueNode right) {
-            super(left, right);
-        }
-
-        public AddNode(AddNode prev) {
-            super(prev);
-        }
 
         @Specialization
         int add(int left, int right) {

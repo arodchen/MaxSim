@@ -22,25 +22,35 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
+import static com.oracle.graal.hotspot.nodes.CStringNode.*;
+
+import java.util.*;
 import java.util.concurrent.*;
 
 import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.internal.*;
+import com.oracle.graal.graph.Node.ConstantNodeParameter;
+import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.PhasePlan.PhasePosition;
+import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.Snippet.ConstantParameter;
 import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
+import com.oracle.graal.word.*;
 
 /**
  * Base class for implementing some low level code providing the out-of-line slow path for a
@@ -64,12 +74,27 @@ public abstract class Stub extends AbstractTemplates implements Snippets {
     /**
      * The code installed for the stub.
      */
-    protected InstalledCode stubCode;
+    protected InstalledCode code;
 
     /**
-     * Creates a new stub container. The new stub still needs to be
-     * {@linkplain #getAddress(Backend) installed}.
-     * 
+     * The registers defined by this stub.
+     */
+    private Set<Register> definedRegisters;
+
+    public void initDefinedRegisters(Set<Register> registers) {
+        assert registers != null;
+        assert definedRegisters == null : "cannot redefine";
+        definedRegisters = registers;
+    }
+
+    public Set<Register> getDefinedRegisters() {
+        assert definedRegisters != null : "not yet initialized";
+        return definedRegisters;
+    }
+
+    /**
+     * Creates a new stub container..
+     *
      * @param linkage linkage details for a call to the stub
      */
     public Stub(HotSpotRuntime runtime, Replacements replacements, TargetDescription target, HotSpotRuntimeCallTarget linkage, String methodName) {
@@ -100,37 +125,91 @@ public abstract class Stub extends AbstractTemplates implements Snippets {
     }
 
     /**
-     * Ensures the code for this stub is installed.
-     * 
-     * @return the entry point address for calls to this stub
+     * Gets the code for this stub, compiling it first if necessary.
      */
-    public synchronized long getAddress(Backend backend) {
-        if (stubCode == null) {
-            Arguments args = makeArguments(stubInfo);
-            SnippetTemplate template = template(args);
-            StructuredGraph graph = template.copySpecializedGraph();
-
-            PhasePlan phasePlan = new PhasePlan();
-            GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getDefault(), OptimisticOptimizations.ALL);
-            phasePlan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
-            final CompilationResult compResult = GraalCompiler.compileMethod(runtime(), replacements, backend, runtime().getTarget(), getMethod(), graph, null, phasePlan, OptimisticOptimizations.ALL,
-                            new SpeculationLog());
-
-            stubCode = Debug.scope("CodeInstall", new Object[]{runtime(), getMethod()}, new Callable<InstalledCode>() {
+    public synchronized InstalledCode getCode(final Backend backend) {
+        if (code == null) {
+            Debug.sandbox("CompilingStub", new Object[]{runtime(), getMethod()}, DebugScope.getConfig(), new Runnable() {
 
                 @Override
-                public InstalledCode call() {
-                    InstalledCode installedCode = runtime().addMethod(getMethod(), compResult);
-                    assert installedCode != null : "error installing stub " + getMethod();
-                    if (Debug.isDumpEnabled()) {
-                        Debug.dump(new Object[]{compResult, installedCode}, "After code installation");
-                    }
-                    return installedCode;
+                public void run() {
+
+                    Arguments args = makeArguments(stubInfo);
+                    SnippetTemplate template = template(args);
+                    StructuredGraph graph = template.copySpecializedGraph();
+
+                    PhasePlan phasePlan = new PhasePlan();
+                    GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getDefault(), OptimisticOptimizations.ALL);
+                    phasePlan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
+                    final CompilationResult compResult = GraalCompiler.compileMethod(runtime(), replacements, backend, runtime().getTarget(), getMethod(), graph, null, phasePlan,
+                                    OptimisticOptimizations.ALL, new SpeculationLog(), Suites.createDefaultSuites());
+
+                    assert definedRegisters != null;
+                    code = Debug.scope("CodeInstall", new Callable<InstalledCode>() {
+
+                        @Override
+                        public InstalledCode call() {
+                            InstalledCode installedCode = runtime().addMethod(getMethod(), compResult);
+                            assert installedCode != null : "error installing stub " + getMethod();
+                            if (Debug.isDumpEnabled()) {
+                                Debug.dump(new Object[]{compResult, installedCode}, "After code installation");
+                            }
+                            return installedCode;
+                        }
+                    });
+
                 }
             });
-
-            assert stubCode != null : "error installing stub " + getMethod();
+            assert code != null : "error installing stub " + getMethod();
         }
-        return stubCode.getStart();
+        return code;
+    }
+
+    static void log(boolean enabled, String format, long value) {
+        if (enabled) {
+            printf(format, value);
+        }
+    }
+
+    static void log(boolean enabled, String format, WordBase value) {
+        if (enabled) {
+            printf(format, value.rawValue());
+        }
+    }
+
+    static void log(boolean enabled, String format, Word v1, long v2) {
+        if (enabled) {
+            printf(format, v1.rawValue(), v2);
+        }
+    }
+
+    static void log(boolean enabled, String format, Word v1, Word v2) {
+        if (enabled) {
+            printf(format, v1.rawValue(), v2.rawValue());
+        }
+    }
+
+    public static final Descriptor STUB_PRINTF = new Descriptor("stubPrintf", false, void.class, Word.class, long.class, long.class, long.class);
+
+    @NodeIntrinsic(RuntimeCallNode.class)
+    private static native void printf(@ConstantNodeParameter Descriptor stubPrintf, Word format, long v1, long v2, long v3);
+
+    /**
+     * Prints a formatted string to the log stream.
+     *
+     * @param format a C style printf format value that can contain at most one conversion specifier
+     *            (i.e., a sequence of characters starting with '%').
+     * @param value the value associated with the conversion specifier
+     */
+    public static void printf(String format, long value) {
+        printf(STUB_PRINTF, cstring(format), value, 0L, 0L);
+    }
+
+    public static void printf(String format, long v1, long v2) {
+        printf(STUB_PRINTF, cstring(format), v1, v2, 0L);
+    }
+
+    public static void printf(String format, long v1, long v2, long v3) {
+        printf(STUB_PRINTF, cstring(format), v1, v2, v3);
     }
 }

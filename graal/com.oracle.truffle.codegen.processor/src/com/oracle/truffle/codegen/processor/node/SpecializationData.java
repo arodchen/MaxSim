@@ -26,7 +26,6 @@ import java.util.*;
 
 import com.oracle.truffle.api.codegen.*;
 import com.oracle.truffle.codegen.processor.*;
-import com.oracle.truffle.codegen.processor.node.NodeFieldData.*;
 import com.oracle.truffle.codegen.processor.template.*;
 import com.oracle.truffle.codegen.processor.typesystem.*;
 
@@ -37,8 +36,9 @@ public class SpecializationData extends TemplateMethod {
     private final boolean uninitialized;
     private final List<SpecializationThrowsData> exceptions;
     private List<String> guardDefinitions = Collections.emptyList();
-    private List<GuardData> guards;
+    private List<GuardData> guards = Collections.emptyList();
     private List<ShortCircuitData> shortCircuits;
+    private List<String> assumptions = Collections.emptyList();
     private boolean useSpecializationsForGeneric = true;
     private NodeData node;
 
@@ -60,7 +60,6 @@ public class SpecializationData extends TemplateMethod {
         this.generic = generic;
         this.uninitialized = uninitialized;
         this.exceptions = Collections.emptyList();
-        this.guards = new ArrayList<>();
     }
 
     @Override
@@ -82,15 +81,22 @@ public class SpecializationData extends TemplateMethod {
         if (!getGuards().isEmpty()) {
             return true;
         }
+        if (!getAssumptions().isEmpty()) {
+            return true;
+        }
         for (ActualParameter parameter : getParameters()) {
-            NodeFieldData field = getNode().findField(parameter.getSpecification().getName());
-            if (field == null || field.getKind() == FieldKind.FIELD) {
+            NodeChildData child = getNode().findChild(parameter.getSpecification().getName());
+            if (child == null) {
                 continue;
             }
-            ExecutableTypeData type = field.getNodeData().findExecutableType(parameter.getActualTypeData(field.getNodeData().getTypeSystem()));
+            ExecutableTypeData type = child.findExecutableType(context, parameter.getTypeSystemType());
             if (type.hasUnexpectedValue(context)) {
                 return true;
             }
+            if (type.getReturnType().getTypeSystemType().needsCastTo(context, parameter.getTypeSystemType())) {
+                return true;
+            }
+
         }
         return false;
     }
@@ -174,6 +180,14 @@ public class SpecializationData extends TemplateMethod {
 
     public boolean isUseSpecializationsForGeneric() {
         return useSpecializationsForGeneric;
+    }
+
+    public List<String> getAssumptions() {
+        return assumptions;
+    }
+
+    void setAssumptions(List<String> assumptions) {
+        this.assumptions = assumptions;
     }
 
     public SpecializationData findNextSpecialization() {

@@ -23,22 +23,18 @@
 package com.oracle.graal.nodes.extended;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.ValueNumberable;
-import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
- * A location for a memory access in terms of the kind of value accessed and how to access it. The
- * base version can represent addresses of the form [base + disp] where base is a node and disp is a
- * constant.
+ * A location for a memory access in terms of the kind of value accessed and how to access it. All
+ * locations have the form [base + location], where base is a node and location is defined by
+ * subclasses of the {@link LocationNode}.
  */
-@NodeInfo(nameTemplate = "Loc {p#locationIdentity/s}")
-public class LocationNode extends FloatingNode implements LIRLowerable, ValueNumberable {
+public abstract class LocationNode extends FloatingNode implements LIRLowerable, ValueNumberable {
 
-    private int displacement;
     private Kind valueKind;
     private Object locationIdentity;
 
@@ -70,22 +66,19 @@ public class LocationNode extends FloatingNode implements LIRLowerable, ValueNum
      */
     public static final Object FINAL_LOCATION = createLocation("FINAL_LOCATION");
 
+    /**
+     * Marker interface for locations in snippets.
+     */
+    public interface Location {
+    }
+
     public static Object getArrayLocation(Kind elementKind) {
         return elementKind;
     }
 
-    public int displacement() {
-        return displacement;
-    }
-
-    public static LocationNode create(Object identity, Kind kind, int displacement, Graph graph) {
-        return graph.unique(new LocationNode(identity, kind, displacement));
-    }
-
-    protected LocationNode(Object identity, Kind kind, int displacement) {
+    protected LocationNode(Object identity, Kind kind) {
         super(StampFactory.extension());
         assert kind != Kind.Illegal && kind != Kind.Void;
-        this.displacement = displacement;
         this.valueKind = kind;
         this.locationIdentity = identity;
     }
@@ -98,20 +91,12 @@ public class LocationNode extends FloatingNode implements LIRLowerable, ValueNum
         return locationIdentity;
     }
 
+    protected abstract LocationNode addDisplacement(long displacement);
+
     @Override
     public void generate(LIRGeneratorTool generator) {
         // nothing to do...
     }
 
-    public Value generateLea(LIRGeneratorTool gen, ValueNode base) {
-        return gen.emitLea(gen.operand(base), displacement(), Value.ILLEGAL, 0);
-    }
-
-    public Value generateLoad(LIRGeneratorTool gen, ValueNode base, DeoptimizingNode deopting) {
-        return gen.emitLoad(getValueKind(), gen.operand(base), displacement(), Value.ILLEGAL, 0, deopting);
-    }
-
-    public void generateStore(LIRGeneratorTool gen, ValueNode base, ValueNode value, DeoptimizingNode deopting) {
-        gen.emitStore(getValueKind(), gen.operand(base), displacement(), Value.ILLEGAL, 0, gen.operand(value), deopting);
-    }
+    public abstract Value generateAddress(LIRGeneratorTool gen, Value base);
 }

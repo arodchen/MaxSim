@@ -23,14 +23,13 @@
 package com.oracle.truffle.api.codegen.test;
 
 import static com.oracle.truffle.api.codegen.test.TestHelper.*;
-import static junit.framework.Assert.*;
 
 import org.junit.*;
+import static org.junit.Assert.*;
 
 import com.oracle.truffle.api.codegen.*;
 import com.oracle.truffle.api.codegen.test.GuardsTestFactory.GlobalFlagGuardFactory;
 import com.oracle.truffle.api.codegen.test.GuardsTestFactory.InvocationGuardFactory;
-import com.oracle.truffle.api.codegen.test.TypeSystemTest.ChildrenNode;
 import com.oracle.truffle.api.codegen.test.TypeSystemTest.TestRootNode;
 import com.oracle.truffle.api.codegen.test.TypeSystemTest.ValueNode;
 
@@ -41,7 +40,7 @@ public class GuardsTest {
 
     @Test
     public void testGuardInvocations() {
-        TestRootNode<InvocationGuard> root = create(InvocationGuardFactory.getInstance());
+        TestRootNode<InvocationGuard> root = createRoot(InvocationGuardFactory.getInstance());
 
         assertEquals(Integer.MAX_VALUE, executeWith(root, Integer.MAX_VALUE - 1, 1));
         assertEquals(1, InvocationGuard.specializedInvocations);
@@ -52,18 +51,11 @@ public class GuardsTest {
         assertEquals(1, InvocationGuard.genericInvocations);
     }
 
-    public abstract static class InvocationGuard extends ChildrenNode {
+    @NodeChildren({@NodeChild("value0"), @NodeChild("value1")})
+    public abstract static class InvocationGuard extends ValueNode {
 
         static int specializedInvocations = 0;
         static int genericInvocations = 0;
-
-        public InvocationGuard(ValueNode... children) {
-            super(children);
-        }
-
-        public InvocationGuard(InvocationGuard node) {
-            super(node);
-        }
 
         boolean guard(int value0, int value1) {
             return value0 != Integer.MAX_VALUE;
@@ -84,7 +76,7 @@ public class GuardsTest {
 
     @Test
     public void testGuardGlobal() {
-        TestRootNode<GlobalFlagGuard> root = create(GlobalFlagGuardFactory.getInstance());
+        TestRootNode<GlobalFlagGuard> root = createRoot(GlobalFlagGuardFactory.getInstance());
 
         assertEquals(42, executeWith(root, NULL));
 
@@ -95,17 +87,10 @@ public class GuardsTest {
         assertEquals(42, executeWith(root, NULL));
     }
 
-    public abstract static class GlobalFlagGuard extends ChildrenNode {
+    @NodeChild("expression")
+    public abstract static class GlobalFlagGuard extends ValueNode {
 
         static boolean globalFlag = false;
-
-        public GlobalFlagGuard(ValueNode... children) {
-            super(children);
-        }
-
-        public GlobalFlagGuard(GlobalFlagGuard node) {
-            super(node);
-        }
 
         static boolean globalFlagGuard() {
             return globalFlag;

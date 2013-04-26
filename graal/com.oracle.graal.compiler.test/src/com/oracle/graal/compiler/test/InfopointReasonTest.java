@@ -34,6 +34,7 @@ import com.oracle.graal.api.code.CompilationResult.Infopoint;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.test.*;
 
 /**
@@ -57,7 +58,7 @@ public class InfopointReasonTest extends GraalCompilerTest {
         final Method method = getMethod("testMethod");
         final StructuredGraph graph = parse(method);
         final CompilationResult cr = GraalCompiler.compileMethod(runtime, replacements, backend, runtime.getTarget(), runtime.lookupJavaMethod(method), graph, null, getDefaultPhasePlan(),
-                        OptimisticOptimizations.ALL, new SpeculationLog());
+                        OptimisticOptimizations.ALL, new SpeculationLog(), Suites.createDefaultSuites());
         for (Infopoint sp : cr.getInfopoints()) {
             assertNotNull(sp.reason);
             if (sp instanceof Call) {
@@ -78,7 +79,7 @@ public class InfopointReasonTest extends GraalCompilerTest {
         }
         assertTrue(graphLineSPs > 0);
         final CompilationResult cr = GraalCompiler.compileMethod(runtime, replacements, backend, runtime.getTarget(), runtime.lookupJavaMethod(method), graph, null, getDefaultPhasePlan(true),
-                        OptimisticOptimizations.ALL, new SpeculationLog());
+                        OptimisticOptimizations.ALL, new SpeculationLog(), Suites.createDefaultSuites());
         int lineSPs = 0;
         for (Infopoint sp : cr.getInfopoints()) {
             assertNotNull(sp.reason);

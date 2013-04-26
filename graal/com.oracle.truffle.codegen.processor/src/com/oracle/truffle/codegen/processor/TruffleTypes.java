@@ -28,8 +28,8 @@ import javax.lang.model.element.*;
 import javax.lang.model.type.*;
 import javax.tools.Diagnostic.*;
 
+import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.intrinsics.*;
 import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.nodes.Node.Child;
 import com.oracle.truffle.api.nodes.Node.Children;
@@ -43,10 +43,11 @@ public final class TruffleTypes {
     private final TypeMirror nodeArray;
     private final TypeMirror unexpectedValueException;
     private final TypeMirror frame;
-    private final TypeMirror stableAnnotation;
-    private final TypeMirror contentStableAnnotation;
-    private final TypeMirror typeConversion;
-    private final TypeMirror truffleIntrinsics;
+    private final TypeMirror assumption;
+    private final TypeMirror invalidAssumption;
+    private final DeclaredType childAnnotation;
+    private final DeclaredType childrenAnnotation;
+    private final TypeMirror compilerDirectives;
 
     private final List<String> errors = new ArrayList<>();
 
@@ -55,10 +56,11 @@ public final class TruffleTypes {
         nodeArray = context.getEnvironment().getTypeUtils().getArrayType(node);
         unexpectedValueException = getRequired(context, UnexpectedResultException.class);
         frame = getRequired(context, VirtualFrame.class);
-        stableAnnotation = getRequired(context, Child.class);
-        contentStableAnnotation = getRequired(context, Children.class);
-        typeConversion = getRequired(context, TypeConversion.class);
-        truffleIntrinsics = getRequired(context, TruffleIntrinsics.class);
+        childAnnotation = getRequired(context, Child.class);
+        childrenAnnotation = getRequired(context, Children.class);
+        compilerDirectives = getRequired(context, CompilerDirectives.class);
+        assumption = getRequired(context, Assumption.class);
+        invalidAssumption = getRequired(context, InvalidAssumptionException.class);
     }
 
     public boolean verify(ProcessorContext context, Element element, AnnotationMirror mirror) {
@@ -73,20 +75,24 @@ public final class TruffleTypes {
         return false;
     }
 
-    private TypeMirror getRequired(ProcessorContext context, Class clazz) {
+    private DeclaredType getRequired(ProcessorContext context, Class clazz) {
         TypeMirror type = context.getType(clazz);
         if (type == null) {
             errors.add(String.format("Could not find required type: %s", clazz.getSimpleName()));
         }
-        return type;
+        return (DeclaredType) type;
     }
 
-    public TypeMirror getTruffleIntrinsics() {
-        return truffleIntrinsics;
+    public TypeMirror getInvalidAssumption() {
+        return invalidAssumption;
     }
 
-    public TypeMirror getTypeConversion() {
-        return typeConversion;
+    public TypeMirror getAssumption() {
+        return assumption;
+    }
+
+    public TypeMirror getCompilerDirectives() {
+        return compilerDirectives;
     }
 
     public TypeMirror getNode() {
@@ -105,11 +111,11 @@ public final class TruffleTypes {
         return unexpectedValueException;
     }
 
-    public TypeMirror getStableAnnotation() {
-        return stableAnnotation;
+    public DeclaredType getChildAnnotation() {
+        return childAnnotation;
     }
 
-    public TypeMirror getContentStableAnnotation() {
-        return contentStableAnnotation;
+    public DeclaredType getChildrenAnnotation() {
+        return childrenAnnotation;
     }
 }

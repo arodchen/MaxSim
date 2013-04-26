@@ -25,6 +25,7 @@ package com.oracle.graal.hotspot.bridge;
 
 import static com.oracle.graal.graph.UnsafeAccess.*;
 import static com.oracle.graal.hotspot.CompilationTask.*;
+import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.java.GraphBuilderPhase.*;
 import static com.oracle.graal.phases.common.InliningUtil.*;
 
@@ -155,7 +156,7 @@ public class VMToCompilerImpl implements VMToCompiler {
                 public void run() {
                     ServiceLoader<ReplacementsProvider> serviceLoader = ServiceLoader.loadInstalled(ReplacementsProvider.class);
                     for (ReplacementsProvider provider : serviceLoader) {
-                        provider.registerReplacements(replacements);
+                        provider.registerReplacements(runtime, replacements, runtime.getTarget());
                     }
                     runtime.registerReplacements(replacements);
                     if (GraalOptions.BootstrapReplacements) {
@@ -686,7 +687,7 @@ public class VMToCompilerImpl implements VMToCompiler {
     public HotSpotResolvedObjectType createResolvedJavaType(long metaspaceKlass, String name, String simpleName, Class javaMirror, int sizeOrSpecies) {
         HotSpotResolvedObjectType type = new HotSpotResolvedObjectType(metaspaceKlass, name, simpleName, javaMirror, sizeOrSpecies);
 
-        long offset = HotSpotGraalRuntime.getInstance().getConfig().graalMirrorInClassOffset;
+        long offset = graalRuntime().getConfig().graalMirrorInClassOffset;
         if (!unsafe.compareAndSwapObject(javaMirror, offset, null, type)) {
             // lost the race - return the existing value instead
             type = (HotSpotResolvedObjectType) unsafe.getObject(javaMirror, offset);
@@ -740,6 +741,10 @@ public class VMToCompilerImpl implements VMToCompiler {
             phasePlan.addPhase(PhasePosition.AFTER_PARSING, new OnStackReplacementPhase());
         }
         phasePlan.addPhase(PhasePosition.LOW_LEVEL, new WriteBarrierAdditionPhase());
+        if (GraalOptions.VerifyPhases) {
+            phasePlan.addPhase(PhasePosition.LOW_LEVEL, new WriteBarrierVerificationPhase());
+
+        }
         return phasePlan;
     }
 

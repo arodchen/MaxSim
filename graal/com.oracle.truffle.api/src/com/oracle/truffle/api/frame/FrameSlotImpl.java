@@ -20,28 +20,47 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.api.intrinsics;
+package com.oracle.truffle.api.frame;
 
-/**
- * Predefined Truffle intrinsics that allow direct influence of the generated machine code.
- */
-public final class TruffleIntrinsics {
+public final class FrameSlotImpl implements FrameSlot {
 
-    /**
-     * Specifies that the compiler should put a deoptimization point at this position that will
-     * continue execution in the interpreter. Should be used to cut off cold paths that should not
-     * be part of the compiled machine code.
-     */
-    public static void deoptimize() {
+    private final FrameDescriptor descriptor;
+    private final Object identifier;
+    private final int index;
+    private FrameSlotKind kind;
+
+    protected FrameSlotImpl(FrameDescriptor descriptor, Object identifier, int index, FrameSlotKind kind) {
+        this.descriptor = descriptor;
+        this.identifier = identifier;
+        this.index = index;
+        this.kind = kind;
     }
 
-    /**
-     * Checks whether the Thread has been interrupted in the interpreter in order to avoid endless
-     * loops. The compiled code may choose a more efficient implementation.
-     */
-    public static void checkThreadInterrupted() {
-        if (Thread.currentThread().isInterrupted()) {
-            throw new RuntimeException("Timeout");
-        }
+    public Object getIdentifier() {
+        return identifier;
+    }
+
+    public int getIndex() {
+        return index;
+    }
+
+    public FrameSlotKind getKind() {
+        return kind;
+    }
+
+    public void setKind(final FrameSlotKind kind) {
+        assert this.kind != kind;
+        this.kind = kind;
+        this.descriptor.updateVersion();
+    }
+
+    @Override
+    public String toString() {
+        return "[" + index + "," + identifier + "," + kind + "]";
+    }
+
+    @Override
+    public FrameDescriptor getFrameDescriptor() {
+        return this.descriptor;
     }
 }

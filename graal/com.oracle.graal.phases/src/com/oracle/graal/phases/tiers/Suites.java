@@ -31,6 +31,7 @@ public final class Suites {
 
     private final PhaseSuite<HighTierContext> highTier;
     private final PhaseSuite<MidTierContext> midTier;
+    private final PhaseSuite<LowTierContext> lowTier;
 
     private static final Map<String, CompilerConfiguration> configurations;
 
@@ -42,12 +43,16 @@ public final class Suites {
         return midTier;
     }
 
+    public PhaseSuite<LowTierContext> getLowTier() {
+        return lowTier;
+    }
+
     static {
         configurations = new HashMap<>();
         for (CompilerConfiguration config : ServiceLoader.loadInstalled(CompilerConfiguration.class)) {
             String name = config.getClass().getSimpleName();
-            if (name.endsWith("Configuration")) {
-                name = name.substring(0, name.length() - "Configuration".length());
+            if (name.endsWith("CompilerConfiguration")) {
+                name = name.substring(0, name.length() - "CompilerConfiguration".length());
             }
             configurations.put(name.toLowerCase(), config);
         }
@@ -56,6 +61,7 @@ public final class Suites {
     private Suites(CompilerConfiguration config) {
         highTier = config.createHighTier();
         midTier = config.createMidTier();
+        lowTier = config.createLowTier();
     }
 
     public static Suites createDefaultSuites() {

@@ -67,10 +67,11 @@ public class MacroNode extends AbstractStateSplit implements Lowerable {
     }
 
     @Override
-    public void lower(LoweringTool tool) {
+    public void lower(LoweringTool tool, LoweringType loweringType) {
         StructuredGraph snippetGraph = getSnippetGraph(tool);
 
         InvokeNode invoke = replaceWithInvoke();
+        assert invoke.verify();
 
         if (snippetGraph != null) {
             InliningUtil.inline(invoke, snippetGraph, false);

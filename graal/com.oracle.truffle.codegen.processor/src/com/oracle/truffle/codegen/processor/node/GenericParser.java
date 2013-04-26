@@ -40,12 +40,12 @@ public class GenericParser extends NodeMethodParser<SpecializationData> {
 
     @Override
     public MethodSpec createSpecification(ExecutableElement method, AnnotationMirror mirror) {
-        return createDefaultMethodSpec(method, mirror, null);
+        return createDefaultMethodSpec(method, mirror, true, null);
     }
 
     @Override
-    protected ParameterSpec createValueParameterSpec(String valueName, NodeData nodeData) {
-        List<ExecutableTypeData> execTypes = nodeData.findGenericExecutableTypes(getContext());
+    protected ParameterSpec createValueParameterSpec(String valueName, NodeData nodeData, int evaluatedCount) {
+        List<ExecutableTypeData> execTypes = nodeData.findGenericExecutableTypes(getContext(), evaluatedCount);
         List<TypeMirror> types = new ArrayList<>();
         for (ExecutableTypeData type : execTypes) {
             types.add(type.getType().getPrimitiveType());
@@ -57,7 +57,7 @@ public class GenericParser extends NodeMethodParser<SpecializationData> {
 
     @Override
     protected ParameterSpec createReturnParameterSpec() {
-        return super.createValueParameterSpec("returnValue", getNode());
+        return super.createValueParameterSpec("returnValue", getNode(), 0);
     }
 
     @Override

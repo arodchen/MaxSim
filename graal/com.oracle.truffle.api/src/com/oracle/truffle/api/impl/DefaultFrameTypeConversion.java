@@ -20,20 +20,28 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.compiler.phases;
+package com.oracle.truffle.api.impl;
 
-import com.oracle.graal.api.runtime.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.tiers.*;
+import com.oracle.truffle.api.frame.*;
 
-@ServiceProvider(CompilerConfiguration.class)
-public class BasicConfiguration implements CompilerConfiguration {
+/**
+ * Interface for defining type conversions for frame slot values.
+ */
+public class DefaultFrameTypeConversion implements FrameTypeConversion {
 
-    public PhaseSuite<HighTierContext> createHighTier() {
-        return new HighTier();
+    private static final DefaultFrameTypeConversion INSTANCE = new DefaultFrameTypeConversion();
+
+    @Override
+    public Object getDefaultValue() {
+        return null;
     }
 
-    public PhaseSuite<MidTierContext> createMidTier() {
-        return new MidTier();
+    @Override
+    public void updateFrameSlot(Frame frame, FrameSlot slot, Object value) {
+        FrameUtil.setObjectSafe(frame, slot, value);
+    }
+
+    public static DefaultFrameTypeConversion getInstance() {
+        return INSTANCE;
     }
 }

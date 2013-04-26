@@ -643,6 +643,8 @@ C2V_ENTRY(void, initializeConfiguration, (JNIEnv *env, jobject, jobject config))
   set_boolean("useAESIntrinsics", UseAESIntrinsics);
   set_boolean("useTLAB", UseTLAB);
   set_boolean("useG1GC", UseG1GC);
+  set_int("useSSE", UseSSE);
+  set_int("useAVX", UseAVX);
   set_int("codeEntryAlignment", CodeEntryAlignment);
   set_int("stackShadowPages", StackShadowPages);
   set_int("hubOffset", oopDesc::klass_offset_in_bytes());
@@ -771,6 +773,7 @@ C2V_ENTRY(void, initializeConfiguration, (JNIEnv *env, jobject, jobject config))
   set_stub("logPrimitiveStub", GraalRuntime::entry_for(GraalRuntime::log_primitive_id));
   set_stub("logObjectStub", GraalRuntime::entry_for(GraalRuntime::log_object_id));
   set_stub("logPrintfStub", GraalRuntime::entry_for(GraalRuntime::log_printf_id));
+  set_stub("stubPrintfStub", GraalRuntime::entry_for(GraalRuntime::stub_printf_id));
   set_stub("aescryptEncryptBlockStub", StubRoutines::aescrypt_encryptBlock());
   set_stub("aescryptDecryptBlockStub", StubRoutines::aescrypt_decryptBlock());
   set_stub("cipherBlockChainingEncryptAESCryptStub", StubRoutines::cipherBlockChaining_encryptAESCrypt());

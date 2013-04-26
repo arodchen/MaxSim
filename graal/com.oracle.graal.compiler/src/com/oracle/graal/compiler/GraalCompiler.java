@@ -38,9 +38,11 @@ import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.PhasePlan.PhasePosition;
 import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.graph.*;
 import com.oracle.graal.phases.schedule.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.virtual.phases.ea.*;
@@ -99,7 +101,7 @@ public class GraalCompiler {
      *
      * @param target
      */
-    public static LIR emitHIR(GraalCodeCacheProvider runtime, TargetDescription target, StructuredGraph graph, Replacements replacements, Assumptions assumptions, GraphCache cache, PhasePlan plan,
+    public static LIR emitHIR(GraalCodeCacheProvider runtime, TargetDescription target, final StructuredGraph graph, Replacements replacements, Assumptions assumptions, GraphCache cache, PhasePlan plan,
                     OptimisticOptimizations optimisticOpts, final SpeculationLog speculationLog, final Suites suites) {
 
         if (speculationLog != null) {
@@ -113,15 +115,11 @@ public class GraalCompiler {
             Debug.dump(graph, "initial state");
         }
 
-        if (GraalOptions.ProbabilityAnalysis && graph.start().probability() == 0) {
-            new ComputeProbabilityPhase().apply(graph);
-        }
-
         if (GraalOptions.OptCanonicalizer) {
             new CanonicalizerPhase.Instance(runtime, assumptions).apply(graph);
         }
 
-        HighTierContext highTierContext = new HighTierContext(runtime, assumptions);
+        HighTierContext highTierContext = new HighTierContext(runtime, assumptions, replacements);
 
         if (GraalOptions.Inline && !plan.isPhaseDisabled(InliningPhase.class)) {
             if (GraalOptions.IterativeInlining) {
@@ -141,25 +139,13 @@ public class GraalCompiler {
 
         suites.getHighTier().apply(graph, highTierContext);
 
-        new LoweringPhase(target, runtime, replacements, assumptions).apply(graph);
-
-        MidTierContext midTierContext = new MidTierContext(runtime, assumptions);
+        MidTierContext midTierContext = new MidTierContext(runtime, assumptions, replacements, target);
         suites.getMidTier().apply(graph, midTierContext);
-
-        plan.runPhases(PhasePosition.MID_LEVEL, graph);
-
-        // Add safepoints to loops
-        new SafepointInsertionPhase().apply(graph);
-
-        new GuardLoweringPhase(target).apply(graph);
 
         plan.runPhases(PhasePosition.LOW_LEVEL, graph);
 
-        new LoweringPhase(target, runtime, replacements, assumptions).apply(graph);
-
-        new FrameStateAssignmentPhase().apply(graph);
-
-        new DeadCodeEliminationPhase().apply(graph);
+        LowTierContext lowTierContext = new LowTierContext(runtime, assumptions, replacements, target);
+        suites.getLowTier().apply(graph, lowTierContext);
 
         final SchedulePhase schedule = new SchedulePhase();
         schedule.apply(graph);
@@ -170,14 +156,13 @@ public class GraalCompiler {
         assert startBlock != null;
         assert startBlock.getPredecessorCount() == 0;
 
-        new ComputeProbabilityPhase().apply(graph);
-
         return Debug.scope("ComputeLinearScanOrder", new Callable<LIR>() {
 
             @Override
             public LIR call() {
-                List<Block> codeEmittingOrder = ComputeBlockOrder.computeCodeEmittingOrder(blocks.length, startBlock);
-                List<Block> linearScanOrder = ComputeBlockOrder.computeLinearScanOrder(blocks.length, startBlock);
+                NodesToDoubles nodeProbabilities = new ComputeProbabilityClosure(graph).apply();
+                List<Block> codeEmittingOrder = ComputeBlockOrder.computeCodeEmittingOrder(blocks.length, startBlock, nodeProbabilities);
+                List<Block> linearScanOrder = ComputeBlockOrder.computeLinearScanOrder(blocks.length, startBlock, nodeProbabilities);
 
                 LIR lir = new LIR(schedule.getCFG(), schedule.getBlockToNodesMap(), linearScanOrder, codeEmittingOrder, speculationLog);
                 Debug.dump(lir, "After linear scan order");

@@ -44,7 +44,7 @@ public final class ReadNode extends FloatableAccessNode implements Node.Iterable
     }
 
     private ReadNode(ValueNode object, int displacement, Object locationIdentity, Kind kind) {
-        super(object, object.graph().add(new LocationNode(locationIdentity, kind, displacement)), StampFactory.forKind(kind));
+        super(object, ConstantLocationNode.create(locationIdentity, kind, displacement, object.graph()), StampFactory.forKind(kind));
     }
 
     private ReadNode(ValueNode object, ValueNode location, ValueNode dependency) {
@@ -57,7 +57,8 @@ public final class ReadNode extends FloatableAccessNode implements Node.Iterable
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        gen.setResult(this, location().generateLoad(gen, object(), this));
+        Value address = location().generateAddress(gen, gen.operand(object()));
+        gen.setResult(this, gen.emitLoad(location().getValueKind(), address, this));
     }
 
     @Override
@@ -73,8 +74,8 @@ public final class ReadNode extends FloatableAccessNode implements Node.Iterable
     public static ValueNode canonicalizeRead(ValueNode read, LocationNode location, ValueNode object, CanonicalizerTool tool) {
         MetaAccessProvider runtime = tool.runtime();
         if (runtime != null && object != null && object.isConstant()) {
-            if (location.locationIdentity() == LocationNode.FINAL_LOCATION && location.getClass() == LocationNode.class) {
-                long displacement = location.displacement();
+            if (location.locationIdentity() == LocationNode.FINAL_LOCATION && location instanceof ConstantLocationNode) {
+                long displacement = ((ConstantLocationNode) location).displacement();
                 Kind kind = location.getValueKind();
                 if (object.kind() == Kind.Object) {
                     Object base = object.asConstant().asObject();
@@ -103,11 +104,15 @@ public final class ReadNode extends FloatableAccessNode implements Node.Iterable
         Object locId = location().locationIdentity();
         if (locId instanceof ResolvedJavaField) {
             ResolvedJavaType fieldType = ((ResolvedJavaField) locId).getDeclaringClass();
-            ResolvedJavaType beforePiType = parent.object().objectStamp().type();
+            ValueNode piValueStamp = parent.object();
+            ResolvedJavaType beforePiType = piValueStamp.objectStamp().type();
 
             if (beforePiType != null && fieldType.isAssignableFrom(beforePiType)) {
-                replaceFirstInput(parent, parent.object());
-                return true;
+                ObjectStamp piStamp = parent.objectStamp();
+                if (piStamp.nonNull() == piValueStamp.objectStamp().nonNull() && piStamp.alwaysNull() == piValueStamp.objectStamp().alwaysNull()) {
+                    replaceFirstInput(parent, piValueStamp);
+                    return true;
+                }
             }
         }
         return false;

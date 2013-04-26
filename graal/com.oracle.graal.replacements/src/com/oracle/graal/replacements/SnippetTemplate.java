@@ -28,6 +28,7 @@ import java.util.concurrent.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.loop.*;
@@ -268,7 +269,7 @@ public class SnippetTemplate {
     /**
      * Base class for snippet classes. It provides a cache for {@link SnippetTemplate}s.
      */
-    public abstract static class AbstractTemplates {
+    public abstract static class AbstractTemplates implements SnippetTemplateCache {
 
         protected final MetaAccessProvider runtime;
         protected final Replacements replacements;
@@ -377,7 +378,7 @@ public class SnippetTemplate {
 
             new CanonicalizerPhase.Instance(runtime, replacements.getAssumptions(), 0, null).apply(snippetCopy);
         }
-        assert NodeIntrinsificationVerificationPhase.verify(snippetCopy);
+        NodeIntrinsificationVerificationPhase.verify(snippetCopy);
 
         // Gather the template parameters
         parameters = new Object[parameterCount];

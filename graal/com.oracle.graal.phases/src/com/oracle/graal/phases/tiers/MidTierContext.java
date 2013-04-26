@@ -24,10 +24,18 @@ package com.oracle.graal.phases.tiers;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.nodes.spi.*;
 
 public class MidTierContext extends PhaseContext {
 
-    public MidTierContext(MetaAccessProvider runtime, Assumptions assumptions) {
-        super(runtime, assumptions);
+    private final TargetDescription target;
+
+    public MidTierContext(MetaAccessProvider runtime, Assumptions assumptions, Replacements replacements, TargetDescription target) {
+        super(runtime, assumptions, replacements);
+        this.target = target;
+    }
+
+    public TargetDescription getTarget() {
+        return target;
     }
 }

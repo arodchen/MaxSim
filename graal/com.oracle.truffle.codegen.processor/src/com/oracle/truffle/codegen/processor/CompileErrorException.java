@@ -20,22 +20,14 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.api.frame;
+package com.oracle.truffle.codegen.processor;
 
-/**
- * Represents a specific version of a frame.
- */
-public interface FrameVersion {
+public class CompileErrorException extends RuntimeException {
 
-    FrameVersion getNext();
+    private static final long serialVersionUID = 1L;
 
-    public interface Resize {
-
-        int getNewSize();
+    public CompileErrorException(String message) {
+        super(message);
     }
 
-    public interface TypeChange {
-
-        void applyTransformation(Frame frame);
-    }
 }

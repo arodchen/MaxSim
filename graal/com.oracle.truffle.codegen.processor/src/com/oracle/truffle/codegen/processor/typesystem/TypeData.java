@@ -110,4 +110,21 @@ public class TypeData extends MessageContainer {
         return Utils.typeEquals(boxedType, actualTypeData.boxedType);
     }
 
+    public boolean needsCastTo(ProcessorContext context, TypeData targetType) {
+        if (this.equals(targetType)) {
+            return false;
+        } else if (targetType.isGeneric()) {
+            return false;
+        } else if (targetType.isVoid()) {
+            return false;
+        } else if (Utils.isAssignable(context, getPrimitiveType(), targetType.getPrimitiveType())) {
+            return false;
+        }
+        return true;
+    }
+
+    public boolean isPrimitive() {
+        return Utils.isPrimitive(getPrimitiveType());
+    }
+
 }

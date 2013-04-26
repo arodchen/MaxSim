@@ -37,8 +37,10 @@ The organizing principle of mx is a project suite. A suite is a directory
 containing one or more projects. It's not coincidental that this closely
 matches the layout of one or more projects in a Mercurial repository.
 The configuration information for a suite lives in an 'mx' sub-directory
-at the top level of the suite. A suite is given a name taken from the basename
-of the directory. An 'mx' subdirectory can be named as plain 'mx' or 'mxbasename'.
+at the top level of the suite. A suite is given a name by a 'suite=name'
+property in the 'mx/projects' file (if omitted the name is suite directory).
+An 'mx' subdirectory can be named as plain 'mx' or 'mxbasename', where
+'basename' is the os.path.basename of the suite directory.
 The latter is useful to avoid clashes in IDE project names.
 
 When launched, mx treats the current working directory as a suite.
@@ -464,9 +466,8 @@ class Library(Dependency):
             cp.append(path)
 
 class Suite:
-    def __init__(self, name, dirPath, mxDir, primary):
-        self.name = name;
-        self.dir = dirPath
+    def __init__(self, d, mxDir, primary):
+        self.dir = d
         self.mxDir = mxDir
         self.projects = []
         self.libs = []
@@ -477,7 +478,11 @@ class Suite:
         self._load_env(mxDir)
         self._load_commands(mxDir)
         self._load_includes(mxDir)
+        self.name = d # re-initialized in _load_projects
 
+    def __str__(self):
+        return self.name
+    
     def _load_projects(self, mxDir):
         libsMap = dict()
         projsMap = dict()
@@ -493,8 +498,11 @@ class Suite:
 
                     parts = key.split('@')
 
-                    if len(parts) == 2:
-                        pass
+                    if len(parts) == 1:
+                        if parts[0] != 'suite':
+                            abort('Single part property must be "suite": ' + key)
+                        self.name = value
+                        continue
                     if len(parts) != 3:
                         abort('Property name does not have 3 parts separated by "@": ' + key)
                     kind, name, attr = parts
@@ -557,6 +565,9 @@ class Suite:
             d = Distribution(self, name, path, deps)
             d.__dict__.update(attrs)
             self.dists.append(d)
+            
+        if self.name is None:
+            abort('Missing "suite=<name>" in ' + projectsFile)
 
     def _load_commands(self, mxDir):
         commands = join(mxDir, 'commands.py')
@@ -565,7 +576,8 @@ class Suite:
             sys.path.insert(0, mxDir)
             mod = __import__('commands')
             
-            sys.modules[join(mxDir, 'commands')] = sys.modules.pop('commands')
+            self.commands = sys.modules.pop('commands')
+            sys.modules[join(mxDir, 'commands')] = self.commands
 
             # revert the Python path
             del sys.path[0]
@@ -585,7 +597,7 @@ class Suite:
                 for line in f:
                     include = expandvars_in_property(line.strip())
                     self.includes.append(include)
-                    _loadSuite(include, False)
+                    _loadSuite(os.path.abspath(include), False)
 
     def _load_env(self, mxDir):
         e = join(mxDir, 'env')
@@ -599,6 +611,7 @@ class Suite:
 
     def _post_init(self, opts):
         self._load_projects(self.mxDir)
+        _suites[self.name] = self
         for p in self.projects:
             existing = _projects.get(p.name)
             if existing is not None:
@@ -707,22 +720,25 @@ def get_os():
         abort('Unknown operating system ' + sys.platform)
 
 def _loadSuite(d, primary=False):
+    """
+    Load a suite from the 'mx' or 'mxbbb' subdirectory of d, where 'bbb' is basename of d
+    """
+    mxDefaultDir = join(d, 'mx')
     name = os.path.basename(d)
-    mxBaseDir = join(d, 'mx')
-    mxTaggedDir = mxBaseDir + name
+    mxTaggedDir = mxDefaultDir + name
     mxDir = None
     if exists(mxTaggedDir) and isdir(mxTaggedDir):
         mxDir = mxTaggedDir
     else:
-        if exists(mxBaseDir) and isdir(mxBaseDir):
-            mxDir = mxBaseDir
+        if exists(mxDefaultDir) and isdir(mxDefaultDir):
+            mxDir = mxDefaultDir
         
     if mxDir is None:
         return None
     
     if not _suites.has_key(name):
-        suite = Suite(name, d, mxDir, primary)
-        _suites[name] = suite
+        suite = Suite(d, mxDir, primary)
+        _suites[d] = suite
         return suite
 
 def suites():
@@ -731,11 +747,12 @@ def suites():
     """
     return _suites.values()
 
-def suite(name):
-    """Get the suite named 'name'
+def suite(name, fatalIfMissing=True):
+    """
+    Get the suite for a given name.
     """
     s = _suites.get(name)
-    if s is None:
+    if s is None and fatalIfMissing:
         abort('suite named ' + name + ' not found')
     return s
 
@@ -995,11 +1012,14 @@ def run(args, nonZeroIsFatal=True, out=None, err=None, cwd=None, timeout=None, e
     for arg in args:
         assert isinstance(arg, types.StringTypes), 'argument is not a string: ' + str(arg)
 
+    if env is None:
+        env = os.environ
+        
     if _opts.verbose:
         if _opts.very_verbose:
             log('Environment variables:')
-            for key in sorted(os.environ.keys()):
-                log('    ' + key + '=' + os.environ[key])
+            for key in sorted(env.keys()):
+                log('    ' + key + '=' + env[key])
         log(' '.join(args))
 
     if timeout is None and _opts.ptimeout != 0:
