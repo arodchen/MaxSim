@@ -39,14 +39,10 @@ public final class GraphOrder implements Iterable<Node> {
 
         NodeBitMap visited = graph.createNodeBitMap();
 
-        for (ReturnNode node : graph.getNodes(ReturnNode.class)) {
-            result.visitForward(visited, node);
-        }
-        for (UnwindNode node : graph.getNodes(UnwindNode.class)) {
-            result.visitForward(visited, node);
-        }
-        for (DeoptimizeNode node : graph.getNodes(DeoptimizeNode.class)) {
-            result.visitForward(visited, node);
+        for (Node node : graph.getNodes()) {
+            if (node instanceof ControlSinkNode) {
+                result.visitForward(visited, node);
+            }
         }
         return result;
     }
