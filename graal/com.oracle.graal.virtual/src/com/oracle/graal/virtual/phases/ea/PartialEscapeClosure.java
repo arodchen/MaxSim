@@ -34,6 +34,7 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.PhiNode.PhiType;
 import com.oracle.graal.nodes.VirtualState.NodeClosure;
 import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.nodes.extended.LocationNode.LocationIdentity;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
@@ -58,9 +59,6 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
     public static final DebugMetric METRIC_MATERIALIZATIONS_LOOP_END = Debug.metric("MaterializationsLoopEnd");
     public static final DebugMetric METRIC_ALLOCATION_REMOVED = Debug.metric("AllocationsRemoved");
 
-    public static final DebugMetric METRIC_STOREFIELD_RECORDED = Debug.metric("StoreFieldRecorded");
-    public static final DebugMetric METRIC_LOADFIELD_ELIMINATED = Debug.metric("LoadFieldEliminated");
-    public static final DebugMetric METRIC_LOADFIELD_NOT_ELIMINATED = Debug.metric("LoadFieldNotEliminated");
     public static final DebugMetric METRIC_MEMORYCHECKOINT = Debug.metric("MemoryCheckpoint");
 
     private final NodeBitMap usages;
@@ -91,7 +89,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
 
     public List<Node> applyEffects(final StructuredGraph graph) {
         final ArrayList<Node> obsoleteNodes = new ArrayList<>();
-        BlockIteratorClosure<Object> closure = new BlockIteratorClosure<Object>() {
+        BlockIteratorClosure<Void> closure = new BlockIteratorClosure<Void>() {
 
             private void apply(GraphEffectList effects, Object context) {
                 if (!effects.isEmpty()) {
@@ -106,28 +104,29 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
             }
 
             @Override
-            protected void processBlock(Block block, Object currentState) {
+            protected Void processBlock(Block block, Void currentState) {
                 apply(blockEffects.get(block), block);
+                return currentState;
             }
 
             @Override
-            protected Object merge(Block merge, List<Object> states) {
-                return new Object();
+            protected Void merge(Block merge, List<Void> states) {
+                return null;
             }
 
             @Override
-            protected Object cloneState(Object oldState) {
+            protected Void cloneState(Void oldState) {
                 return oldState;
             }
 
             @Override
-            protected List<Object> processLoop(Loop loop, Object initialState) {
-                LoopInfo<Object> info = ReentrantBlockIterator.processLoop(this, loop, initialState);
+            protected List<Void> processLoop(Loop loop, Void initialState) {
+                LoopInfo<Void> info = ReentrantBlockIterator.processLoop(this, loop, initialState);
                 apply(loopMergeEffects.get(loop), loop);
                 return info.exitStates;
             }
         };
-        ReentrantBlockIterator.apply(closure, schedule.getCFG().getStartBlock(), new Object(), null);
+        ReentrantBlockIterator.apply(closure, schedule.getCFG().getStartBlock(), null, null);
         return obsoleteNodes;
     }
 
@@ -136,7 +135,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
     }
 
     @Override
-    protected void processBlock(Block block, BlockState state) {
+    protected BlockState processBlock(Block block, BlockState state) {
         GraphEffectList effects = blockEffects.get(block);
         tool.setEffects(effects);
 
@@ -146,44 +145,24 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
         FixedWithNextNode lastFixedNode = null;
         for (Node node : nodeList) {
             boolean deleted;
-            if (usages.isMarked(node) || node instanceof VirtualizableAllocation) {
+            boolean isMarked = usages.isMarked(node);
+            if (isMarked || node instanceof VirtualizableRoot) {
                 trace("[[%s]] ", node);
-                deleted = processNode((ValueNode) node, lastFixedNode == null ? null : lastFixedNode.next(), state, effects);
+                FixedNode nextFixedNode = lastFixedNode == null ? null : lastFixedNode.next();
+                deleted = processNode((ValueNode) node, nextFixedNode, state, effects, isMarked);
             } else {
                 trace("%s ", node);
                 deleted = false;
             }
             if (GraalOptions.OptEarlyReadElimination) {
-                if (!deleted) {
-                    if (node instanceof StoreFieldNode) {
-                        METRIC_STOREFIELD_RECORDED.increment();
-                        StoreFieldNode store = (StoreFieldNode) node;
-                        ValueNode cachedValue = state.getReadCache(store.object(), store.field());
-                        state.killReadCache(store.field());
-
-                        if (cachedValue == store.value()) {
-                            effects.deleteFixedNode(store);
-                            changed = true;
-                        } else {
-                            state.addReadCache(store.object(), store.field(), store.value());
-                        }
-                    } else if (node instanceof LoadFieldNode) {
-                        LoadFieldNode load = (LoadFieldNode) node;
-                        ValueNode cachedValue = state.getReadCache(load.object(), load.field());
-                        if (cachedValue != null) {
-                            METRIC_LOADFIELD_ELIMINATED.increment();
-                            effects.replaceAtUsages(load, cachedValue);
-                            state.addScalarAlias(load, cachedValue);
-                            changed = true;
-                        } else {
-                            METRIC_LOADFIELD_NOT_ELIMINATED.increment();
-                            state.addReadCache(load.object(), load.field(), load);
-                        }
-                    } else if (node instanceof MemoryCheckpoint) {
-                        METRIC_MEMORYCHECKOINT.increment();
-                        MemoryCheckpoint checkpoint = (MemoryCheckpoint) node;
-                        for (Object identity : checkpoint.getLocationIdentities()) {
-                            state.killReadCache(identity);
+                if (!deleted && node instanceof MemoryCheckpoint) {
+                    METRIC_MEMORYCHECKOINT.increment();
+                    MemoryCheckpoint checkpoint = (MemoryCheckpoint) node;
+                    for (LocationIdentity identity : checkpoint.getLocationIdentities()) {
+                        if (identity instanceof ResolvedJavaField) {
+                            state.killReadCache((ResolvedJavaField) identity);
+                        } else if (identity == LocationNode.ANY_LOCATION) {
+                            state.killReadCache();
                         }
                     }
                 }
@@ -193,105 +172,105 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
             }
         }
         trace(")\n    end state: %s\n", state);
+        return state;
     }
 
-    private boolean processNode(final ValueNode node, FixedNode insertBefore, final BlockState state, final GraphEffectList effects) {
-        tool.reset(state, node);
+    private boolean processNode(final ValueNode node, FixedNode insertBefore, final BlockState state, final GraphEffectList effects, boolean isMarked) {
+        tool.reset(state, node, insertBefore);
         if (node instanceof Virtualizable) {
             ((Virtualizable) node).virtualize(tool);
         }
         if (tool.isDeleted()) {
-            if (tool.isCustomAction() || !(node instanceof VirtualizableAllocation || node instanceof CyclicMaterializeStoreNode)) {
+            if (!(node instanceof CommitAllocationNode || node instanceof AllocatedObjectNode)) {
                 changed = true;
             }
             return true;
         }
-        if (node instanceof StateSplit) {
-            StateSplit split = (StateSplit) node;
-            FrameState stateAfter = split.stateAfter();
-            if (stateAfter != null) {
-                if (stateAfter.usages().count() > 1) {
-                    stateAfter = (FrameState) stateAfter.copyWithInputs();
-                    split.setStateAfter(stateAfter);
-                }
-                final HashSet<ObjectState> virtual = new HashSet<>();
-                stateAfter.applyToNonVirtual(new NodeClosure<ValueNode>() {
+        if (isMarked) {
+            if (node instanceof StateSplit) {
+                StateSplit split = (StateSplit) node;
+                FrameState stateAfter = split.stateAfter();
+                if (stateAfter != null) {
+                    if (stateAfter.usages().count() > 1) {
+                        stateAfter = (FrameState) stateAfter.copyWithInputs();
+                        split.setStateAfter(stateAfter);
+                    }
+                    final HashSet<ObjectState> virtual = new HashSet<>();
+                    stateAfter.applyToNonVirtual(new NodeClosure<ValueNode>() {
 
-                    @Override
-                    public void apply(Node usage, ValueNode value) {
-                        ObjectState valueObj = state.getObjectState(value);
-                        if (valueObj != null) {
-                            virtual.add(valueObj);
-                            effects.replaceFirstInput(usage, value, valueObj.virtual);
-                        } else if (value instanceof VirtualObjectNode) {
-                            ObjectState virtualObj = null;
-                            for (ObjectState obj : state.getStates()) {
-                                if (value == obj.virtual) {
-                                    virtualObj = obj;
-                                    break;
-                                }
-                            }
-                            if (virtualObj != null) {
-                                virtual.add(virtualObj);
-                            }
-                        }
-                    }
-                });
-                for (ObjectState obj : state.getStates()) {
-                    if (obj.isVirtual() && obj.getLockCount() > 0) {
-                        virtual.add(obj);
-                    }
-                }
-
-                ArrayDeque<ObjectState> queue = new ArrayDeque<>(virtual);
-                while (!queue.isEmpty()) {
-                    ObjectState obj = queue.removeLast();
-                    if (obj.isVirtual()) {
-                        for (ValueNode field : obj.getEntries()) {
-                            ObjectState fieldObj = state.getObjectState(field);
-                            if (fieldObj != null) {
-                                if (fieldObj.isVirtual() && !virtual.contains(fieldObj)) {
-                                    virtual.add(fieldObj);
-                                    queue.addLast(fieldObj);
-                                }
-                            }
-                        }
-                    }
-                }
-                for (ObjectState obj : virtual) {
-                    EscapeObjectState v;
-                    if (obj.isVirtual()) {
-                        ValueNode[] fieldState = obj.getEntries().clone();
-                        for (int i = 0; i < fieldState.length; i++) {
-                            ObjectState valueObj = state.getObjectState(fieldState[i]);
+                        @Override
+                        public void apply(Node usage, ValueNode value) {
+                            ObjectState valueObj = state.getObjectState(value);
                             if (valueObj != null) {
-                                if (valueObj.isVirtual()) {
-                                    fieldState[i] = valueObj.virtual;
-                                } else {
-                                    fieldState[i] = valueObj.getMaterializedValue();
+                                virtual.add(valueObj);
+                                effects.replaceFirstInput(usage, value, valueObj.virtual);
+                            } else if (value instanceof VirtualObjectNode) {
+                                ObjectState virtualObj = null;
+                                for (ObjectState obj : state.getStates()) {
+                                    if (value == obj.virtual) {
+                                        virtualObj = obj;
+                                        break;
+                                    }
+                                }
+                                if (virtualObj != null) {
+                                    virtual.add(virtualObj);
                                 }
                             }
                         }
-                        v = new VirtualObjectState(obj.virtual, fieldState);
-                    } else {
-                        v = new MaterializedObjectState(obj.virtual, obj.getMaterializedValue());
+                    });
+                    for (ObjectState obj : state.getStates()) {
+                        if (obj.isVirtual() && obj.hasLocks()) {
+                            virtual.add(obj);
+                        }
                     }
-                    effects.addVirtualMapping(stateAfter, v);
+
+                    ArrayDeque<ObjectState> queue = new ArrayDeque<>(virtual);
+                    while (!queue.isEmpty()) {
+                        ObjectState obj = queue.removeLast();
+                        if (obj.isVirtual()) {
+                            for (ValueNode field : obj.getEntries()) {
+                                ObjectState fieldObj = state.getObjectState(field);
+                                if (fieldObj != null) {
+                                    if (fieldObj.isVirtual() && !virtual.contains(fieldObj)) {
+                                        virtual.add(fieldObj);
+                                        queue.addLast(fieldObj);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    for (ObjectState obj : virtual) {
+                        EscapeObjectState v;
+                        if (obj.isVirtual()) {
+                            ValueNode[] fieldState = obj.getEntries().clone();
+                            for (int i = 0; i < fieldState.length; i++) {
+                                ObjectState valueObj = state.getObjectState(fieldState[i]);
+                                if (valueObj != null) {
+                                    if (valueObj.isVirtual()) {
+                                        fieldState[i] = valueObj.virtual;
+                                    } else {
+                                        fieldState[i] = valueObj.getMaterializedValue();
+                                    }
+                                }
+                            }
+                            v = new VirtualObjectState(obj.virtual, fieldState);
+                        } else {
+                            v = new MaterializedObjectState(obj.virtual, obj.getMaterializedValue());
+                        }
+                        effects.addVirtualMapping(stateAfter, v);
+                    }
                 }
             }
-        }
-        if (tool.isCustomAction()) {
-            return false;
-        }
-        for (ValueNode input : node.inputs().filter(ValueNode.class)) {
-            ObjectState obj = state.getObjectState(input);
-            if (obj != null) {
-                if (obj.isVirtual() && node instanceof MethodCallTargetNode) {
-                    Invoke invoke = ((MethodCallTargetNode) node).invoke();
-                    hints.put(invoke, 5d);
+            for (ValueNode input : node.inputs().filter(ValueNode.class)) {
+                ObjectState obj = state.getObjectState(input);
+                if (obj != null) {
+                    if (obj.isVirtual() && node instanceof MethodCallTargetNode) {
+                        Invoke invoke = ((MethodCallTargetNode) node).invoke();
+                        hints.put(invoke, 5d);
+                    }
+                    trace("replacing input %s at %s: %s", input, node, obj);
+                    replaceWithMaterialized(input, node, insertBefore, state, obj, effects, METRIC_MATERIALIZATIONS_UNHANDLED);
                 }
-                trace("replacing input %s at %s: %s", input, node, obj);
-                replaceWithMaterialized(input, node, insertBefore, state, obj, effects, METRIC_MATERIALIZATIONS_UNHANDLED);
             }
         }
         return false;
@@ -502,7 +481,6 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                     }
                     int virtual = 0;
                     ObjectState startObj = objStates[0];
-                    int lockCount = startObj.getLockCount();
                     boolean locksMatch = true;
                     ValueNode singleValue = startObj.isVirtual() ? null : startObj.getMaterializedValue();
                     for (ObjectState obj : objStates) {
@@ -514,7 +492,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                                 singleValue = null;
                             }
                         }
-                        locksMatch &= obj.getLockCount() == lockCount;
+                        locksMatch &= obj.locksEqual(startObj);
                     }
 
                     assert virtual < states.size() || locksMatch : "mismatching lock counts at " + merge;
@@ -531,9 +509,9 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                                 ensureMaterialized(state, obj, predecessor.getEndNode(), blockEffects.get(predecessor), METRIC_MATERIALIZATIONS_MERGE);
                                 afterMergeEffects.addPhiInput(materializedValuePhi, obj.getMaterializedValue());
                             }
-                            newState.addObject(object, new ObjectState(object, materializedValuePhi, EscapeState.Global, lockCount));
+                            newState.addObject(object, new ObjectState(object, materializedValuePhi, EscapeState.Global, null));
                         } else {
-                            newState.addObject(object, new ObjectState(object, singleValue, EscapeState.Global, lockCount));
+                            newState.addObject(object, new ObjectState(object, singleValue, EscapeState.Global, null));
                         }
                     } else {
                         assert virtual == states.size();
@@ -567,7 +545,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                                 values[index] = phis[index];
                             }
                         }
-                        newState.addObject(object, new ObjectState(object, values, EscapeState.Virtual, lockCount));
+                        newState.addObject(object, new ObjectState(object, values, EscapeState.Virtual, startObj.getLocks()));
                     }
                 }
 
@@ -638,7 +616,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                             }
                         }
                         mergeEffects.addFloatingNode(virtual, "valueObjectNode");
-                        newState.addObject(virtual, new ObjectState(virtual, Arrays.copyOf(phis, phis.length, ValueNode[].class), EscapeState.Virtual, 0));
+                        newState.addObject(virtual, new ObjectState(virtual, Arrays.copyOf(phis, phis.length, ValueNode[].class), EscapeState.Virtual, null));
                         newState.addAndMarkAlias(virtual, virtual, usages);
                         newState.addAndMarkAlias(virtual, phi, usages);
                     } else {
@@ -704,7 +682,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
             }
         }
 
-        private void mergeReadCachePhi(PhiNode phi, Object identity, List<BlockState> states) {
+        private void mergeReadCachePhi(PhiNode phi, ResolvedJavaField identity, List<BlockState> states) {
             ValueNode[] values = new ValueNode[phi.valueCount()];
             for (int i = 0; i < phi.valueCount(); i++) {
                 ValueNode value = states.get(i).getReadCache(phi.valueAt(i), identity);

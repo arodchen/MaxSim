@@ -34,9 +34,13 @@ public final class GraalOptions {
     private static final boolean ____ = false;
     // Checkstyle: resume
 
-    public static int     Threads                            = 4;
+    public static int     Threads;
+    static {
+        Threads = Runtime.getRuntime().availableProcessors();
+    }
 
     public static String  CompilerConfiguration              = "basic";
+    public static String  GraalRuntime                       = "basic";
 
     // inlining settings
     public static boolean Inline                             = true;
@@ -44,23 +48,19 @@ public final class GraalOptions {
     public static boolean Intrinsify                         = true;
            static boolean InlineMonomorphicCalls             = true;
            static boolean InlinePolymorphicCalls             = true;
-           static boolean InlineMegamorphicCalls             = ____;
+           static boolean InlineMegamorphicCalls             = true;
+    public static double  MegamorphicInliningMinMethodProbability = 0.33;
     public static int     MaximumDesiredSize                 = 5000;
     public static int     MaximumRecursiveInlining           = 1;
     public static float   BoostInliningForEscapeAnalysis     = 2f;
     public static float   RelevanceCapForInlining            = 1f;
+    public static float   CapInheritedRelevance              = 1f;
     public static boolean IterativeInlining                  = ____;
 
-    public static int     TrivialBytecodeSize                = 10;
-    public static int     NormalBytecodeSize                 = 150;
-    public static int     MaximumBytecodeSize                = 500;
-    public static int     TrivialComplexity                  = 10;
-    public static int     NormalComplexity                   = 60;
-    public static int     MaximumComplexity                  = 400;
-    public static int     TrivialCompiledCodeSize            = 150;
-    public static int     NormalCompiledCodeSize             = 750;
-    public static int     MaximumCompiledCodeSize            = 4000;
-    public static int     SmallCompiledCodeSize              = 1000;
+    public static int     TrivialInliningSize                = 10;
+    public static int     MaximumInliningSize                = 300;
+    public static int     SmallCompiledLowLevelGraphSize     = 300;
+    public static double  LimitInlinedInvokes                = 5.0;
 
     // escape analysis settings
     public static boolean PartialEscapeAnalysis              = true;
@@ -105,6 +105,7 @@ public final class GraalOptions {
     public static int     LoopMaxUnswitch                    = 3;
     public static int     LoopUnswitchMaxIncrease            = 50;
     public static int     LoopUnswitchUncertaintyBoost       = 5;
+    public static boolean UseLoopLimitChecks                 = true;
 
     // debugging settings
     public static boolean ZapStackOnMethodEntry              = ____;
@@ -221,6 +222,7 @@ public final class GraalOptions {
     public static boolean IntrinsifyUnsafeMethods            = true;
     public static boolean IntrinsifyMathMethods              = true;
     public static boolean IntrinsifyAESMethods               = true;
+    public static boolean IntrinsifyReflectionMethods        = true;
     public static boolean IntrinsifyInstalledCodeMethods     = true;
     public static boolean IntrinsifyCallSiteTarget           = true;
     /**

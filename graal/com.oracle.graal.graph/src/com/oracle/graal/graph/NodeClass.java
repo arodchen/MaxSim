@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -37,13 +37,22 @@ public class NodeClass extends FieldIntrospection {
             return clazz;
         }
 
-        // We can have a race of multiple threads creating the LIRInstructionClass at the same time.
-        // However, only one will be put into the map, and this is the one returned by all threads.
-        clazz = new NodeClass(c);
-        NodeClass oldClazz = (NodeClass) allClasses.putIfAbsent(c, clazz);
-        if (oldClazz != null) {
-            return oldClazz;
-        } else {
+        /*
+         * Using putIfAbsent doesn't work here, because the creation of NodeClass needs to be
+         * serialized. (the NodeClass constructor looks at allClasses, and it also uses the static
+         * field nextIterableId)
+         * 
+         * The fact that ConcurrentHashMap.put and .get are used should make the double-checked
+         * locking idiom work, since it internally uses volatile.
+         */
+
+        synchronized (allClasses) {
+            clazz = (NodeClass) allClasses.get(c);
+            if (clazz == null) {
+                clazz = new NodeClass(c);
+                NodeClass oldClass = (NodeClass) allClasses.putIfAbsent(c, clazz);
+                assert oldClass == null;
+            }
             return clazz;
         }
     }
@@ -190,9 +199,13 @@ public class NodeClass extends FieldIntrospection {
             if (field.isAnnotationPresent(Node.Input.class)) {
                 assert !field.isAnnotationPresent(Node.Successor.class) : "field cannot be both input and successor";
                 if (INPUT_LIST_CLASS.isAssignableFrom(type)) {
+                    assert Modifier.isFinal(field.getModifiers()) : "NodeInputList input field " + field + " should be final";
+                    assert !Modifier.isPublic(field.getModifiers()) : "NodeInputList input field " + field + " should not be public";
                     inputListOffsets.add(offset);
                 } else {
-                    assert NODE_CLASS.isAssignableFrom(type) : "invalid input type: " + type;
+                    assert NODE_CLASS.isAssignableFrom(type) || type.isInterface() : "invalid input type: " + type;
+                    assert !Modifier.isFinal(field.getModifiers()) : "Node input field " + field + " should not be final";
+                    assert Modifier.isPrivate(field.getModifiers()) : "Node input field " + field + " should be private";
                     inputOffsets.add(offset);
                 }
                 if (field.getAnnotation(Node.Input.class).notDataflow()) {
@@ -200,9 +213,13 @@ public class NodeClass extends FieldIntrospection {
                 }
             } else if (field.isAnnotationPresent(Node.Successor.class)) {
                 if (SUCCESSOR_LIST_CLASS.isAssignableFrom(type)) {
+                    assert Modifier.isFinal(field.getModifiers()) : "NodeSuccessorList successor field " + field + " should be final";
+                    assert !Modifier.isPublic(field.getModifiers()) : "NodeSuccessorList successor field " + field + " should not be public";
                     successorListOffsets.add(offset);
                 } else {
                     assert NODE_CLASS.isAssignableFrom(type) : "invalid successor type: " + type;
+                    assert !Modifier.isFinal(field.getModifiers()) : "Node successor field " + field + " should not be final";
+                    assert Modifier.isPrivate(field.getModifiers()) : "Node successor field " + field + " should be private";
                     successorOffsets.add(offset);
                 }
             } else {
@@ -760,8 +777,11 @@ public class NodeClass extends FieldIntrospection {
     }
 
     public boolean edgesEqual(Node node, Node other) {
-        assert node.getClass() == clazz && other.getClass() == clazz;
+        return inputsEqual(node, other) && successorsEqual(node, other);
+    }
 
+    public boolean inputsEqual(Node node, Node other) {
+        assert node.getClass() == clazz && other.getClass() == clazz;
         int index = 0;
         while (index < directInputCount) {
             if (getNode(other, inputOffsets[index]) != getNode(node, inputOffsets[index])) {
@@ -776,8 +796,12 @@ public class NodeClass extends FieldIntrospection {
             }
             index++;
         }
+        return true;
+    }
 
-        index = 0;
+    public boolean successorsEqual(Node node, Node other) {
+        assert node.getClass() == clazz && other.getClass() == clazz;
+        int index = 0;
         while (index < directSuccessorCount) {
             if (getNode(other, successorOffsets[index]) != getNode(node, successorOffsets[index])) {
                 return false;

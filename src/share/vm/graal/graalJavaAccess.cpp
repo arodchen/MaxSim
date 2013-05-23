@@ -31,21 +31,15 @@
 void compute_offset(int &dest_offset, Klass* klass, const char* name, const char* signature, bool static_field) {
   Symbol* name_symbol = SymbolTable::probe(name, (int)strlen(name));
   Symbol* signature_symbol = SymbolTable::probe(signature, (int)strlen(signature));
-#ifndef PRODUCT
-  if (name_symbol == NULL) {
-    tty->print_cr("symbol with name %s was not found in symbol table (klass=%s)", name, klass->name()->as_C_string());
-  }
-#endif
   if (name_symbol == NULL || signature_symbol == NULL) {
-    guarantee(false, err_msg("symbol not found - class layout of %s changed?", klass->name()->as_C_string()));
+    guarantee(false, err_msg("symbol with name %s and signature %s was not found in symbol table (klass=%s)", name, signature, klass->name()->as_C_string()));
   }
 
   InstanceKlass* ik = InstanceKlass::cast(klass);
   fieldDescriptor fd;
   if (!ik->find_field(name_symbol, signature_symbol, &fd)) {
     ResourceMark rm;
-    tty->print_cr("Invalid layout of %s at %s", name_symbol->as_C_string(), ik->external_name());
-    fatal("Invalid layout of preloaded class");
+    fatal(err_msg("Invalid layout of %s at %s", name_symbol->as_C_string(), ik->external_name()));
   }
   guarantee(fd.is_static() == static_field, "static/instance mismatch");
   dest_offset = fd.offset();

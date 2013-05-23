@@ -68,16 +68,16 @@ VMReg get_hotspot_reg(jint graal_reg) {
 
 const int MapWordBits = 64;
 
-static bool is_bit_set(oop bit_map, int i) {
-  jint extra_idx = i / MapWordBits;
-  arrayOop extra = (arrayOop) GraalBitMap::words(bit_map);
-  assert(extra_idx >= 0 && extra_idx < extra->length(), "unexpected index");
-  jlong word = ((jlong*) extra->base(T_LONG))[extra_idx];
+static bool is_bit_set(oop bitset, int i) {
+  jint words_idx = i / MapWordBits;
+  arrayOop words = (arrayOop) BitSet::words(bitset);
+  assert(words_idx >= 0 && words_idx < words->length(), "unexpected index");
+  jlong word = ((jlong*) words->base(T_LONG))[words_idx];
   return (word & (1LL << (i % MapWordBits))) != 0;
 }
 
-static int bitmap_size(oop bit_map) {
-  arrayOop arr = (arrayOop) GraalBitMap::words(bit_map);
+static int bitset_size(oop bitset) {
+  arrayOop arr = (arrayOop) BitSet::words(bitset);
   return arr->length() * MapWordBits;
 }
 
@@ -86,27 +86,48 @@ static OopMap* create_oop_map(jint total_frame_size, jint parameter_count, oop d
   OopMap* map = new OopMap(total_frame_size, parameter_count);
   oop register_map = (oop) DebugInfo::registerRefMap(debug_info);
   oop frame_map = (oop) DebugInfo::frameRefMap(debug_info);
+  oop callee_save_info = (oop) DebugInfo::calleeSaveInfo(debug_info);
 
   if (register_map != NULL) {
     for (jint i = 0; i < RegisterImpl::number_of_registers; i++) {
       bool is_oop = is_bit_set(register_map, i);
-      VMReg reg = get_hotspot_reg(i);
+      VMReg hotspot_reg = get_hotspot_reg(i);
       if (is_oop) {
-        map->set_oop(reg);
+        map->set_oop(hotspot_reg);
       } else {
-        map->set_value(reg);
+        map->set_value(hotspot_reg);
       }
     }
   }
 
-  for (jint i = 0; i < bitmap_size(frame_map); i++) {
+  for (jint i = 0; i < bitset_size(frame_map); i++) {
     bool is_oop = is_bit_set(frame_map, i);
     // HotSpot stack slots are 4 bytes
-    VMReg reg = VMRegImpl::stack2reg(i * 2);
+    VMReg reg = VMRegImpl::stack2reg(i * VMRegImpl::slots_per_word);
     if (is_oop) {
       map->set_oop(reg);
     } else {
       map->set_value(reg);
+    }
+  }
+
+  if (callee_save_info != NULL) {
+    objArrayOop registers = (objArrayOop) RegisterSaveLayout::registers(callee_save_info);
+    arrayOop slots = (arrayOop) RegisterSaveLayout::slots(callee_save_info);
+    for (jint i = 0; i < slots->length(); i++) {
+      oop graal_reg = registers->obj_at(i);
+      jint graal_reg_number = code_Register::number(graal_reg);
+      VMReg hotspot_reg = get_hotspot_reg(graal_reg_number);
+      // HotSpot stack slots are 4 bytes
+      jint graal_slot = ((jint*) slots->base(T_INT))[i];
+      jint hotspot_slot = graal_slot * VMRegImpl::slots_per_word;
+      VMReg hotspot_slot_as_reg = VMRegImpl::stack2reg(hotspot_slot);
+      map->set_callee_saved(hotspot_slot_as_reg, hotspot_reg);
+#ifdef _LP64
+      // (copied from generate_oop_map() in c1_Runtime1_x86.cpp)
+      VMReg hotspot_slot_hi_as_reg = VMRegImpl::stack2reg(hotspot_slot + 1);
+      map->set_callee_saved(hotspot_slot_hi_as_reg, hotspot_reg->next());
+#endif
     }
   }
 
@@ -282,10 +303,10 @@ static MonitorValue* get_monitor_value(oop value, int total_frame_size, Growable
   return new MonitorValue(owner_value, lock_data_loc, eliminated);
 }
 
-void CodeInstaller::initialize_assumptions(oop target_method) {
+void CodeInstaller::initialize_assumptions(oop compiled_code) {
   _oop_recorder = new OopRecorder(&_arena);
   _dependencies = new Dependencies(&_arena, _oop_recorder);
-  Handle assumptions_handle = CompilationResult::assumptions(HotSpotCompilationResult::comp(target_method));
+  Handle assumptions_handle = CompilationResult::assumptions(HotSpotCompiledCode::comp(compiled_code));
   if (!assumptions_handle.is_null()) {
     objArrayHandle assumptions(Thread::current(), (objArrayOop)Assumptions::list(assumptions_handle()));
     int length = assumptions->length();
@@ -311,8 +332,8 @@ void CodeInstaller::initialize_assumptions(oop target_method) {
   }
 }
 
-GrowableArray<jlong>* get_leaf_graph_ids(Handle& comp_result) {
-  arrayOop leafGraphArray = (arrayOop) CompilationResult::leafGraphIds(HotSpotCompilationResult::comp(comp_result));
+GrowableArray<jlong>* get_leaf_graph_ids(Handle& compiled_code) {
+  arrayOop leafGraphArray = (arrayOop) CompilationResult::leafGraphIds(HotSpotCompiledCode::comp(compiled_code));
 
   jint length;
   if (leafGraphArray == NULL) {
@@ -330,42 +351,62 @@ GrowableArray<jlong>* get_leaf_graph_ids(Handle& comp_result) {
 }
 
 // constructor used to create a method
-CodeInstaller::CodeInstaller(Handle& comp_result, methodHandle method, GraalEnv::CodeInstallResult& result, nmethod*& nm, Handle installed_code, Handle triggered_deoptimizations) {
+CodeInstaller::CodeInstaller(Handle& compiled_code, GraalEnv::CodeInstallResult& result, CodeBlob*& cb, Handle installed_code, Handle triggered_deoptimizations) {
   GraalCompiler::initialize_buffer_blob();
   CodeBuffer buffer(JavaThread::current()->get_buffer_blob());
-  jobject comp_result_obj = JNIHandles::make_local(comp_result());
-  jint entry_bci = HotSpotCompilationResult::entryBCI(comp_result);
-  initialize_assumptions(JNIHandles::resolve(comp_result_obj));
+  jobject compiled_code_obj = JNIHandles::make_local(compiled_code());
+  initialize_assumptions(JNIHandles::resolve(compiled_code_obj));
 
   {
     No_Safepoint_Verifier no_safepoint;
-    initialize_fields(JNIHandles::resolve(comp_result_obj), method);
+    initialize_fields(JNIHandles::resolve(compiled_code_obj));
     initialize_buffer(buffer);
     process_exception_handlers();
   }
 
   int stack_slots = _total_frame_size / HeapWordSize; // conversion to words
-  GrowableArray<jlong>* leaf_graph_ids = get_leaf_graph_ids(comp_result);
+  GrowableArray<jlong>* leaf_graph_ids = get_leaf_graph_ids(compiled_code);
 
-  result = GraalEnv::register_method(method, nm, entry_bci, &_offsets, _custom_stack_area_offset, &buffer, stack_slots, _debug_recorder->_oopmaps, &_exception_handler_table,
-    GraalCompiler::instance(), _debug_recorder, _dependencies, NULL, -1, false, leaf_graph_ids, installed_code, triggered_deoptimizations);
+  if (compiled_code->is_a(HotSpotCompiledRuntimeStub::klass())) {
+    oop stubName = HotSpotCompiledRuntimeStub::stubName(compiled_code);
+    char* name = strdup(java_lang_String::as_utf8_string(stubName));
+    cb = RuntimeStub::new_runtime_stub(name,
+                                       &buffer,
+                                       CodeOffsets::frame_never_safe,
+                                       stack_slots,
+                                       _debug_recorder->_oopmaps,
+                                       false);
+    result = GraalEnv::ok;
+  } else {
+    nmethod* nm = NULL;
+    methodHandle method = getMethodFromHotSpotMethod(HotSpotCompiledNmethod::method(compiled_code));
+    jint entry_bci = HotSpotCompiledNmethod::entryBCI(compiled_code);
+    result = GraalEnv::register_method(method, nm, entry_bci, &_offsets, _custom_stack_area_offset, &buffer, stack_slots, _debug_recorder->_oopmaps, &_exception_handler_table,
+        GraalCompiler::instance(), _debug_recorder, _dependencies, NULL, -1, false, leaf_graph_ids, installed_code, triggered_deoptimizations);
+    cb = nm;
+  }
 }
 
-void CodeInstaller::initialize_fields(oop comp_result, methodHandle method) {
-  _comp_result = HotSpotCompilationResult::comp(comp_result);
-  if (!method.is_null()) {
+void CodeInstaller::initialize_fields(oop compiled_code) {
+  oop comp_result = HotSpotCompiledCode::comp(compiled_code);
+  if (compiled_code->is_a(HotSpotCompiledNmethod::klass())) {
+    oop hotspotJavaMethod = HotSpotCompiledNmethod::method(compiled_code);
+    methodHandle method = getMethodFromHotSpotMethod(hotspotJavaMethod);
     _parameter_count = method->size_of_parameters();
     TRACE_graal_1("installing code for %s", method->name_and_sig_as_C_string());
+  } else {
+    assert(compiled_code->is_a(HotSpotCompiledRuntimeStub::klass()), "CCE");
+    // TODO (ds) not sure if this is correct - only used in OopMap constructor for non-product builds
+    _parameter_count = 0;
   }
-  _name = HotSpotCompilationResult::name(comp_result);
-  _sites = (arrayOop) HotSpotCompilationResult::sites(comp_result);
-  _exception_handlers = (arrayOop) HotSpotCompilationResult::exceptionHandlers(comp_result);
+  _sites = (arrayOop) HotSpotCompiledCode::sites(compiled_code);
+  _exception_handlers = (arrayOop) HotSpotCompiledCode::exceptionHandlers(compiled_code);
 
-  _code = (arrayOop) CompilationResult::targetCode(_comp_result);
-  _code_size = CompilationResult::targetCodeSize(_comp_result);
+  _code = (arrayOop) CompilationResult::targetCode(comp_result);
+  _code_size = CompilationResult::targetCodeSize(comp_result);
   // The frame size we get from the target method does not include the return address, so add one word for it here.
-  _total_frame_size = CompilationResult::frameSize(_comp_result) + HeapWordSize;
-  _custom_stack_area_offset = CompilationResult::customStackAreaOffset(_comp_result);
+  _total_frame_size = CompilationResult::frameSize(comp_result) + HeapWordSize;
+  _custom_stack_area_offset = CompilationResult::customStackAreaOffset(comp_result);
 
   // (very) conservative estimate: each site needs a constant section entry
   _constants_size = _sites->length() * (BytesPerLong*2);
@@ -606,17 +647,17 @@ void CodeInstaller::site_Call(CodeBuffer& buffer, jint pc_offset, oop site) {
   InstanceKlass* target_klass = InstanceKlass::cast(target->klass());
 
   oop hotspot_method = NULL; // JavaMethod
-  oop global_stub = NULL;
+  oop foreign_call = NULL;
 
-  if (target_klass->is_subclass_of(SystemDictionary::HotSpotRuntimeCallTarget_klass())) {
-    global_stub = target;
+  if (target_klass->is_subclass_of(SystemDictionary::HotSpotForeignCallLinkage_klass())) {
+    foreign_call = target;
   } else {
     hotspot_method = target;
   }
 
   oop debug_info = CompilationResult_Call::debugInfo(site);
 
-  assert((hotspot_method ? 1 : 0) + (global_stub ? 1 : 0) == 1, "Call site needs exactly one type");
+  assert((hotspot_method ? 1 : 0) + (foreign_call ? 1 : 0) == 1, "Call site needs exactly one type");
 
   NativeInstruction* inst = nativeInstruction_at(_instructions->start() + pc_offset);
   jint next_pc_offset = 0x0;
@@ -640,8 +681,14 @@ void CodeInstaller::site_Call(CodeBuffer& buffer, jint pc_offset, oop site) {
   if (target->is_a(SystemDictionary::HotSpotInstalledCode_klass())) {
     assert(inst->is_jump(), "jump expected");
 
-    nmethod* nm = (nmethod*) HotSpotInstalledCode::nmethod(target);
-    nativeJump_at((address)inst)->set_jump_destination(nm->verified_entry_point());
+    CodeBlob* cb = (CodeBlob*) (address) HotSpotInstalledCode::codeBlob(target);
+    assert(cb != NULL, "npe");
+    if (cb->is_nmethod()) {
+      nmethod* nm = (nmethod*) cb;
+      nativeJump_at((address)inst)->set_jump_destination(nm->verified_entry_point());
+    } else {
+      nativeJump_at((address)inst)->set_jump_destination(cb->code_begin());
+    }
     _instructions->relocate((address)inst, runtime_call_Relocation::spec(), Assembler::call32_operand);
 
     return;
@@ -657,24 +704,24 @@ void CodeInstaller::site_Call(CodeBuffer& buffer, jint pc_offset, oop site) {
     }
   }
 
-  if (global_stub != NULL) {
-    jlong global_stub_destination = HotSpotRuntimeCallTarget::address(global_stub);
+  if (foreign_call != NULL) {
+    jlong foreign_call_destination = HotSpotForeignCallLinkage::address(foreign_call);
     if (inst->is_call()) {
       // NOTE: for call without a mov, the offset must fit a 32-bit immediate
       //       see also CompilerToVM.getMaxCallTargetOffset()
       NativeCall* call = nativeCall_at((address) (inst));
-      call->set_destination((address) global_stub_destination);
+      call->set_destination((address) foreign_call_destination);
       _instructions->relocate(call->instruction_address(), runtime_call_Relocation::spec(), Assembler::call32_operand);
     } else if (inst->is_mov_literal64()) {
       NativeMovConstReg* mov = nativeMovConstReg_at((address) (inst));
-      mov->set_data((intptr_t) global_stub_destination);
+      mov->set_data((intptr_t) foreign_call_destination);
       _instructions->relocate(mov->instruction_address(), runtime_call_Relocation::spec(), Assembler::imm_operand);
     } else {
       NativeJump* jump = nativeJump_at((address) (inst));
-      jump->set_jump_destination((address) global_stub_destination);
+      jump->set_jump_destination((address) foreign_call_destination);
       _instructions->relocate((address)inst, runtime_call_Relocation::spec(), Assembler::call32_operand);
     }
-    TRACE_graal_3("relocating (stub)  at %p", inst);
+    TRACE_graal_3("relocating (foreign call)  at %p", inst);
   } else { // method != NULL
     assert(hotspot_method != NULL, "unexpected JavaMethod");
 #ifdef ASSERT

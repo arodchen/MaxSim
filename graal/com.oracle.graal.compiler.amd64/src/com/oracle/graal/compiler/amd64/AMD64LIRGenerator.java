@@ -31,7 +31,6 @@ import static com.oracle.graal.lir.amd64.AMD64MathIntrinsicOp.IntrinsicOpcode.*;
 
 import com.oracle.graal.amd64.*;
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.amd64.AMD64Address.Scale;
@@ -48,6 +47,7 @@ import com.oracle.graal.lir.amd64.AMD64Arithmetic.BinaryRegReg;
 import com.oracle.graal.lir.amd64.AMD64Arithmetic.BinaryRegStack;
 import com.oracle.graal.lir.amd64.AMD64Arithmetic.BinaryRegStackConst;
 import com.oracle.graal.lir.amd64.AMD64Arithmetic.DivRemOp;
+import com.oracle.graal.lir.amd64.AMD64Arithmetic.FPDivRemOp;
 import com.oracle.graal.lir.amd64.AMD64Arithmetic.Unary1Op;
 import com.oracle.graal.lir.amd64.AMD64Arithmetic.Unary2Op;
 import com.oracle.graal.lir.amd64.AMD64Compare.CompareOp;
@@ -78,25 +78,22 @@ import com.oracle.graal.phases.util.*;
  */
 public abstract class AMD64LIRGenerator extends LIRGenerator {
 
-    public static final Descriptor ARITHMETIC_FREM = new Descriptor("arithmeticFrem", false, float.class, float.class, float.class);
-    public static final Descriptor ARITHMETIC_DREM = new Descriptor("arithmeticDrem", false, double.class, double.class, double.class);
-
     private static final RegisterValue RAX_I = AMD64.rax.asValue(Kind.Int);
     private static final RegisterValue RAX_L = AMD64.rax.asValue(Kind.Long);
     private static final RegisterValue RDX_I = AMD64.rdx.asValue(Kind.Int);
     private static final RegisterValue RDX_L = AMD64.rdx.asValue(Kind.Long);
     private static final RegisterValue RCX_I = AMD64.rcx.asValue(Kind.Int);
 
-    public static class AMD64SpillMoveFactory implements LIR.SpillMoveFactory {
+    private class AMD64SpillMoveFactory implements LIR.SpillMoveFactory {
 
         @Override
         public LIRInstruction createMove(AllocatableValue result, Value input) {
-            return AMD64LIRGenerator.createMove(result, input);
+            return AMD64LIRGenerator.this.createMove(result, input);
         }
     }
 
-    public AMD64LIRGenerator(StructuredGraph graph, CodeCacheProvider runtime, TargetDescription target, FrameMap frameMap, ResolvedJavaMethod method, LIR lir) {
-        super(graph, runtime, target, frameMap, method, lir);
+    public AMD64LIRGenerator(StructuredGraph graph, CodeCacheProvider runtime, TargetDescription target, FrameMap frameMap, CallingConvention cc, LIR lir) {
+        super(graph, runtime, target, frameMap, cc, lir);
         lir.spillMoveFactory = new AMD64SpillMoveFactory();
     }
 
@@ -138,12 +135,12 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitMove(Value input) {
-        Variable result = newVariable(input.getKind());
+        Variable result = newVariable(input.getPlatformKind());
         emitMove(result, input);
         return result;
     }
 
-    private static AMD64LIRInstruction createMove(AllocatableValue dst, Value src) {
+    protected AMD64LIRInstruction createMove(AllocatableValue dst, Value src) {
         if (src instanceof AMD64AddressValue) {
             return new LeaOp(dst, (AMD64AddressValue) src);
         } else if (isRegister(src) || isStackSlot(dst)) {
@@ -177,7 +174,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
         AllocatableValue indexRegister;
         Scale scaleEnum;
-        if (index != Value.ILLEGAL && scale != 0) {
+        if (!index.equals(Value.ILLEGAL) && scale != 0) {
             scaleEnum = Scale.fromInt(scale);
             if (isConstant(index)) {
                 finalDisp += asConstant(index).asLong() * scale;
@@ -196,7 +193,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         } else {
             displacementInt = 0;
             AllocatableValue displacementRegister = load(Constant.forLong(finalDisp));
-            if (baseRegister == Value.ILLEGAL) {
+            if (baseRegister.equals(Value.ILLEGAL)) {
                 baseRegister = displacementRegister;
             } else if (indexRegister == Value.ILLEGAL) {
                 indexRegister = displacementRegister;
@@ -209,7 +206,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         return new AMD64AddressValue(target().wordKind, baseRegister, indexRegister, scaleEnum, displacementInt);
     }
 
-    private AMD64AddressValue asAddress(Value address) {
+    protected AMD64AddressValue asAddressValue(Value address) {
         if (address instanceof AMD64AddressValue) {
             return (AMD64AddressValue) address;
         } else {
@@ -219,7 +216,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitLoad(Kind kind, Value address, DeoptimizingNode deopting) {
-        AMD64AddressValue loadAddress = asAddress(address);
+        AMD64AddressValue loadAddress = asAddressValue(address);
         Variable result = newVariable(kind);
         append(new LoadOp(kind, result, loadAddress, deopting != null ? state(deopting) : null));
         return result;
@@ -227,7 +224,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     public void emitStore(Kind kind, Value address, Value inputVal, DeoptimizingNode deopting) {
-        AMD64AddressValue storeAddress = asAddress(address);
+        AMD64AddressValue storeAddress = asAddressValue(address);
         LIRFrameState state = deopting != null ? state(deopting) : null;
 
         if (isConstant(inputVal)) {
@@ -369,9 +366,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     @Override
     public void emitNullCheck(ValueNode v, DeoptimizingNode deoping) {
         assert v.kind() == Kind.Object;
-        Variable obj = newVariable(Kind.Object);
-        emitMove(obj, operand(v));
-        append(new AMD64Move.NullCheckOp(obj, state(deoping)));
+        append(new AMD64Move.NullCheckOp(load(operand(v)), state(deoping)));
     }
 
     @Override
@@ -525,7 +520,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     private void emitDivRem(AMD64Arithmetic op, Value a, Value b, LIRFrameState state) {
-        AllocatableValue rax = AMD64.rax.asValue(a.getKind());
+        AllocatableValue rax = AMD64.rax.asValue(a.getPlatformKind());
         emitMove(rax, a);
         append(new DivRemOp(op, rax, asAllocatable(b), state));
     }
@@ -554,12 +549,12 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
                 emitDivRem(LDIV, a, b, state(deopting));
                 return emitMove(RAX_L);
             case Float: {
-                Variable result = newVariable(a.getKind());
+                Variable result = newVariable(a.getPlatformKind());
                 append(new BinaryRegStack(FDIV, result, asAllocatable(a), asAllocatable(b)));
                 return result;
             }
             case Double: {
-                Variable result = newVariable(a.getKind());
+                Variable result = newVariable(a.getPlatformKind());
                 append(new BinaryRegStack(DDIV, result, asAllocatable(a), asAllocatable(b)));
                 return result;
             }
@@ -578,12 +573,14 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
                 emitDivRem(LREM, a, b, state(deopting));
                 return emitMove(RDX_L);
             case Float: {
-                RuntimeCallTarget stub = runtime.lookupRuntimeCall(ARITHMETIC_FREM);
-                return emitCall(stub, stub.getCallingConvention(), null, a, b);
+                Variable result = newVariable(a.getPlatformKind());
+                append(new FPDivRemOp(FREM, result, load(a), load(b)));
+                return result;
             }
             case Double: {
-                RuntimeCallTarget stub = runtime.lookupRuntimeCall(ARITHMETIC_DREM);
-                return emitCall(stub, stub.getCallingConvention(), null, a, b);
+                Variable result = newVariable(a.getPlatformKind());
+                append(new FPDivRemOp(DREM, result, load(a), load(b)));
+                return result;
             }
             default:
                 throw GraalInternalError.shouldNotReachHere();
@@ -657,7 +654,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     private Variable emitShift(AMD64Arithmetic op, Value a, Value b) {
-        Variable result = newVariable(a.getKind());
+        Variable result = newVariable(a.getPlatformKind());
         AllocatableValue input = asAllocatable(a);
         if (isConstant(b)) {
             append(new BinaryRegConst(op, result, input, asConstant(b)));
@@ -787,13 +784,12 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    protected void emitCall(RuntimeCallTarget callTarget, Value result, Value[] arguments, Value[] temps, LIRFrameState info) {
-
-        long maxOffset = callTarget.getMaxCallTargetOffset();
+    protected void emitForeignCall(ForeignCallLinkage linkage, Value result, Value[] arguments, Value[] temps, LIRFrameState info) {
+        long maxOffset = linkage.getMaxCallTargetOffset();
         if (maxOffset != (int) maxOffset) {
-            append(new AMD64Call.DirectFarRuntimeCallOp(this, callTarget, result, arguments, temps, info));
+            append(new AMD64Call.DirectFarForeignCallOp(this, linkage, result, arguments, temps, info));
         } else {
-            append(new AMD64Call.DirectNearRuntimeCallOp(callTarget, result, arguments, temps, info));
+            append(new AMD64Call.DirectNearForeignCallOp(linkage, result, arguments, temps, info));
         }
     }
 
@@ -915,13 +911,12 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     public void visitBreakpointNode(BreakpointNode node) {
-        JavaType[] sig = new JavaType[node.arguments.size()];
+        JavaType[] sig = new JavaType[node.arguments().size()];
         for (int i = 0; i < sig.length; i++) {
-            sig[i] = node.arguments.get(i).stamp().javaType(runtime);
+            sig[i] = node.arguments().get(i).stamp().javaType(runtime);
         }
 
-        CallingConvention cc = frameMap.registerConfig.getCallingConvention(CallingConvention.Type.JavaCall, null, sig, target(), false);
-        Value[] parameters = visitInvokeArguments(cc, node.arguments);
+        Value[] parameters = visitInvokeArguments(frameMap.registerConfig.getCallingConvention(CallingConvention.Type.JavaCall, null, sig, target(), false), node.arguments());
         append(new AMD64BreakpointOp(parameters));
     }
 

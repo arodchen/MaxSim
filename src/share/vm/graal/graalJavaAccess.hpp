@@ -58,6 +58,10 @@ void graal_compute_offsets();
     long_field(HotSpotResolvedJavaMethod, metaspaceMethod)                                                                                                     \
     int_field(HotSpotResolvedJavaMethod, codeSize)                                                                                                             \
     int_field(HotSpotResolvedJavaMethod, exceptionHandlerCount)                                                                                                \
+    boolean_field(HotSpotResolvedJavaMethod, callerSensitive)                                                                                                  \
+    boolean_field(HotSpotResolvedJavaMethod, forceInline)                                                                                                      \
+    boolean_field(HotSpotResolvedJavaMethod, dontInline)                                                                                                       \
+    boolean_field(HotSpotResolvedJavaMethod, ignoredBySecurityStackWalk)                                                                                       \
   end_class                                                                                                                                                    \
   start_class(HotSpotMethodData)                                                                                                                               \
     long_field(HotSpotMethodData, metaspaceMethodData)                                                                                                         \
@@ -73,21 +77,26 @@ void graal_compute_offsets();
     int_field(HotSpotResolvedJavaField, flags)                                                                                                                 \
   end_class                                                                                                                                                    \
   start_class(HotSpotInstalledCode)                                                                                                                            \
-    long_field(HotSpotInstalledCode, nmethod)                                                                                                                  \
-    oop_field(HotSpotInstalledCode, method, "Lcom/oracle/graal/hotspot/meta/HotSpotResolvedJavaMethod;")                                                       \
+    long_field(HotSpotInstalledCode, codeBlob)                                                                                                                 \
     long_field(HotSpotInstalledCode, start)                                                                                                                    \
-    boolean_field(HotSpotInstalledCode, isDefault)                                                                                                             \
   end_class                                                                                                                                                    \
-  start_class(HotSpotCompilationResult)                                                                                                                        \
-    oop_field(HotSpotCompilationResult, comp, "Lcom/oracle/graal/api/code/CompilationResult;")                                                                 \
-    oop_field(HotSpotCompilationResult, method, "Lcom/oracle/graal/hotspot/meta/HotSpotResolvedJavaMethod;")                                                   \
-    oop_field(HotSpotCompilationResult, name, "Ljava/lang/String;")                                                                                            \
-    int_field(HotSpotCompilationResult, entryBCI)                                                                                                              \
-    oop_field(HotSpotCompilationResult, sites, "[Lcom/oracle/graal/api/code/CompilationResult$Site;")                                                          \
-    oop_field(HotSpotCompilationResult, exceptionHandlers, "[Lcom/oracle/graal/api/code/CompilationResult$ExceptionHandler;")                                  \
+  start_class(HotSpotNmethod)                                                                                                                                  \
+    boolean_field(HotSpotNmethod, isDefault)                                                                                                                   \
   end_class                                                                                                                                                    \
-  start_class(HotSpotRuntimeCallTarget)                                                                                                                        \
-    long_field(HotSpotRuntimeCallTarget, address)                                                                                                              \
+  start_class(HotSpotCompiledCode)                                                                                                                             \
+    oop_field(HotSpotCompiledCode, comp, "Lcom/oracle/graal/api/code/CompilationResult;")                                                                      \
+    oop_field(HotSpotCompiledCode, sites, "[Lcom/oracle/graal/api/code/CompilationResult$Site;")                                                               \
+    oop_field(HotSpotCompiledCode, exceptionHandlers, "[Lcom/oracle/graal/api/code/CompilationResult$ExceptionHandler;")                                       \
+  end_class                                                                                                                                                    \
+  start_class(HotSpotCompiledNmethod)                                                                                                                          \
+    oop_field(HotSpotCompiledNmethod, method, "Lcom/oracle/graal/hotspot/meta/HotSpotResolvedJavaMethod;")                                                     \
+    int_field(HotSpotCompiledNmethod, entryBCI)                                                                                                                \
+  end_class                                                                                                                                                    \
+  start_class(HotSpotCompiledRuntimeStub)                                                                                                                      \
+    oop_field(HotSpotCompiledRuntimeStub, stubName, "Ljava/lang/String;")                                                                                      \
+  end_class                                                                                                                                                    \
+  start_class(HotSpotForeignCallLinkage)                                                                                                                        \
+    long_field(HotSpotForeignCallLinkage, address)                                                                                                              \
   end_class                                                                                                                                                    \
   start_class(ExceptionHandler)                                                                                                                                \
     int_field(ExceptionHandler, startBCI)                                                                                                                      \
@@ -162,9 +171,14 @@ void graal_compute_offsets();
     oop_field(DebugInfo, bytecodePosition, "Lcom/oracle/graal/api/code/BytecodePosition;")                                                                     \
     oop_field(DebugInfo, registerRefMap, "Ljava/util/BitSet;")                                                                                                 \
     oop_field(DebugInfo, frameRefMap, "Ljava/util/BitSet;")                                                                                                    \
+    oop_field(DebugInfo, calleeSaveInfo, "Lcom/oracle/graal/api/code/RegisterSaveLayout;")                                                                     \
   end_class                                                                                                                                                    \
-  start_class(GraalBitMap)                                                                                                                                     \
-    oop_field(GraalBitMap, words, "[J")                                                                                                                        \
+  start_class(RegisterSaveLayout)                                                                                                                              \
+    oop_field(RegisterSaveLayout, registers, "[Lcom/oracle/graal/api/code/Register;")                                                                          \
+    oop_field(RegisterSaveLayout, slots, "[I")                                                                                                                 \
+  end_class                                                                                                                                                    \
+  start_class(BitSet)                                                                                                                                          \
+    oop_field(BitSet, words, "[J")                                                                                                                             \
   end_class                                                                                                                                                    \
   start_class(BytecodeFrame)                                                                                                                                   \
     oop_field(BytecodeFrame, values, "[Lcom/oracle/graal/api/meta/Value;")                                                                                     \

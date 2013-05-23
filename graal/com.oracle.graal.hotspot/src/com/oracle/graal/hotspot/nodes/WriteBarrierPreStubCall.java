@@ -23,19 +23,19 @@
 package com.oracle.graal.hotspot.nodes;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
- * Node implementing a call to HotSpot's {@code graal_monitorenter} stub.
+ * A call to {@code GraalRuntime::write_barrier_pre}.
  */
 public class WriteBarrierPreStubCall extends FixedWithNextNode implements LIRGenLowerable {
 
     @Input private ValueNode object;
-    public static final Descriptor WBPRECALL = new Descriptor("wbprecall", true, void.class, Object.class);
+    public static final ForeignCallDescriptor WRITE_BARRIER_PRE = new ForeignCallDescriptor("writeBarrierPre", void.class, Object.class);
 
     public WriteBarrierPreStubCall(ValueNode object) {
         super(StampFactory.forVoid());
@@ -44,8 +44,8 @@ public class WriteBarrierPreStubCall extends FixedWithNextNode implements LIRGen
 
     @Override
     public void generate(LIRGenerator gen) {
-        RuntimeCallTarget stub = gen.getRuntime().lookupRuntimeCall(WriteBarrierPreStubCall.WBPRECALL);
-        gen.emitCall(stub, stub.getCallingConvention(), null, gen.operand(object));
+        ForeignCallLinkage linkage = gen.getRuntime().lookupForeignCall(WriteBarrierPreStubCall.WRITE_BARRIER_PRE);
+        gen.emitForeignCall(linkage, null, gen.operand(object));
     }
 
     @NodeIntrinsic

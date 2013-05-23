@@ -23,7 +23,7 @@
 package com.oracle.graal.hotspot.meta;
 
 import static com.oracle.graal.api.meta.MetaUtil.*;
-import static com.oracle.graal.graph.FieldIntrospection.*;
+import static com.oracle.graal.graph.UnsafeAccess.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 
 import java.lang.annotation.*;
@@ -34,7 +34,7 @@ import java.util.concurrent.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.meta.ProfilingInfo.TriState;
-import com.oracle.graal.bytecode.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.debug.*;
 import com.oracle.graal.phases.*;
@@ -54,14 +54,46 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
     private final HotSpotResolvedObjectType holder;
     private/* final */int codeSize;
     private/* final */int exceptionHandlerCount;
+    private boolean callerSensitive;
+    private boolean forceInline;
+    private boolean dontInline;
+    private boolean ignoredBySecurityStackWalk;
     private HotSpotSignature signature;
     private Boolean hasBalancedMonitors;
     private Map<Object, Object> compilerStorage;
     private HotSpotMethodData methodData;
     private byte[] code;
-    private int compilationComplexity;
     private CompilationTask currentTask;
     private SpeculationLog speculationLog;
+
+    /**
+     * Gets the holder of a HotSpot metaspace method native object.
+     * 
+     * @param metaspaceMethod a metaspace Method object
+     * @return the {@link ResolvedJavaType} corresponding to the holder of the
+     *         {@code metaspaceMethod}
+     */
+    public static HotSpotResolvedObjectType getHolder(long metaspaceMethod) {
+        HotSpotVMConfig config = graalRuntime().getConfig();
+        long constMethod = unsafe.getLong(metaspaceMethod + config.methodConstMethodOffset);
+        assert constMethod != 0;
+        long constantPool = unsafe.getLong(constMethod + config.constMethodConstantsOffset);
+        assert constantPool != 0;
+        long holder = unsafe.getLong(constantPool + config.constantPoolHolderOffset);
+        assert holder != 0;
+        return (HotSpotResolvedObjectType) HotSpotResolvedObjectType.fromMetaspaceKlass(holder);
+    }
+
+    /**
+     * Gets the {@link ResolvedJavaMethod} for a HotSpot metaspace method native object.
+     * 
+     * @param metaspaceMethod a metaspace Method object
+     * @return the {@link ResolvedJavaMethod} corresponding to {@code metaspaceMethod}
+     */
+    public static HotSpotResolvedJavaMethod fromMetaspace(long metaspaceMethod) {
+        HotSpotResolvedObjectType holder = getHolder(metaspaceMethod);
+        return holder.createMethod(metaspaceMethod);
+    }
 
     HotSpotResolvedJavaMethod(HotSpotResolvedObjectType holder, long metaspaceMethod) {
         this.metaspaceMethod = metaspaceMethod;
@@ -83,6 +115,11 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
      */
     public Constant getMetaspaceMethodConstant() {
         return Constant.forIntegerKind(graalRuntime().getTarget().wordKind, metaspaceMethod, this);
+    }
+
+    @Override
+    public Constant getEncoding() {
+        return getMetaspaceMethodConstant();
     }
 
     @Override
@@ -124,6 +161,43 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
             handlers[i] = new ExceptionHandler(-1, -1, -1, -1, null);
         }
         return graalRuntime().getCompilerToVM().initializeExceptionHandlers(metaspaceMethod, handlers);
+    }
+
+    /**
+     * Returns true if this method has a CallerSensitive annotation.
+     * 
+     * @return true if CallerSensitive annotation present, false otherwise
+     */
+    public boolean isCallerSensitive() {
+        return callerSensitive;
+    }
+
+    /**
+     * Returns true if this method has a ForceInline annotation.
+     * 
+     * @return true if ForceInline annotation present, false otherwise
+     */
+    public boolean isForceInline() {
+        return forceInline;
+    }
+
+    /**
+     * Returns true if this method has a DontInline annotation.
+     * 
+     * @return true if DontInline annotation present, false otherwise
+     */
+    public boolean isDontInline() {
+        return dontInline;
+    }
+
+    /**
+     * Returns true if this method is one of the special methods that is ignored by security stack
+     * walks.
+     * 
+     * @return true if special method ignored by security stack walks, false otherwise
+     */
+    public boolean ignoredBySecurityStackWalk() {
+        return ignoredBySecurityStackWalk;
     }
 
     public boolean hasBalancedMonitors() {
@@ -196,22 +270,6 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
 
     public int invocationCount() {
         return graalRuntime().getCompilerToVM().getInvocationCount(metaspaceMethod);
-    }
-
-    @Override
-    public int getCompilationComplexity() {
-        if (compilationComplexity <= 0 && getCodeSize() > 0) {
-            BytecodeStream s = new BytecodeStream(getCode());
-            int result = 0;
-            int currentBC;
-            while ((currentBC = s.currentBC()) != Bytecodes.END) {
-                result += Bytecodes.compilationComplexity(currentBC);
-                s.next();
-            }
-            assert result > 0;
-            compilationComplexity = result;
-        }
-        return compilationComplexity;
     }
 
     @Override
@@ -311,6 +369,9 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
 
     @Override
     public boolean canBeInlined() {
+        if (dontInline) {
+            return false;
+        }
         return graalRuntime().getCompilerToVM().isMethodCompilable(metaspaceMethod);
     }
 
@@ -336,16 +397,21 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
     }
 
     /**
-     * Returns the offset of this method into the v-table. If the holder is not initialized, returns
-     * -1
+     * Returns the offset of this method into the v-table. The method must have a v-table entry has
+     * indicated by {@link #isInVirtualMethodTable()}, otherwise an exception is thrown.
      * 
      * @return the offset of this method into the v-table
      */
     public int vtableEntryOffset() {
-        if (!holder.isInitialized()) {
-            return -1;
+        if (!isInVirtualMethodTable() || !holder.isInitialized()) {
+            throw new GraalInternalError("%s does not have a vtable entry", this);
         }
         return graalRuntime().getCompilerToVM().getVtableEntryOffset(metaspaceMethod);
+    }
+
+    @Override
+    public boolean isInVirtualMethodTable() {
+        return graalRuntime().getCompilerToVM().hasVtableEntry(metaspaceMethod);
     }
 
     public void setCurrentTask(CompilationTask task) {

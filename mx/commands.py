@@ -752,7 +752,7 @@ def vm(args, vm=None, nonZeroIsFatal=True, out=None, err=None, cwd=None, timeout
             excludes += _find_classes_with_annotations(p, None, ['@Snippet', '@ClassSubstitution', '@Test'], includeInnerClasses=True).keys()
             excludes += p.find_classes_with_matching_source_line(None, lambda line: 'JaCoCo Exclude' in line, includeInnerClasses=True).keys()
             
-        includes = ['com.oracle.graal.*', 'com.oracle.max.*']
+        includes = ['com.oracle.graal.*']
         agentOptions = {
                         'append' : 'true' if _jacoco == 'append' else 'false',
                         'bootclasspath' : 'true',
@@ -766,6 +766,12 @@ def vm(args, vm=None, nonZeroIsFatal=True, out=None, err=None, cwd=None, timeout
 
     exe = join(jdk, 'bin', mx.exe_suffix('java'))
     dbg = _native_dbg.split() if _native_dbg is not None else []
+    
+    if '-version' in args:
+        ignoredArgs = args[args.index('-version')+1:]
+        if  len(ignoredArgs) > 0:
+            mx.log("Warning: The following options will be ignored by the vm because they come after the '-version' argument: " + ' '.join(ignoredArgs))
+    
     return mx.run(dbg + [exe, '-' + vm] + args, nonZeroIsFatal=nonZeroIsFatal, out=out, err=err, cwd=cwd, timeout=timeout)
 
 def _find_classes_with_annotations(p, pkgRoot, annotations, includeInnerClasses=False):
@@ -791,6 +797,8 @@ def _run_tests(args, harness, annotations, testfile):
 
     classes = []
     for p in mx.projects():
+        if mx.java().javaCompliance < p.javaCompliance:
+            continue
         classes += _find_classes_with_annotations(p, None, annotations).keys()
 
         if len(pos) != 0:
@@ -798,7 +806,7 @@ def _run_tests(args, harness, annotations, testfile):
         if len(neg) != 0:
             classes = [c for c in classes if not containsAny(c, neg)]
 
-    projectscp = mx.classpath([pcp.name for pcp in mx.projects()])
+    projectscp = mx.classpath([pcp.name for pcp in mx.projects() if pcp.javaCompliance <= mx.java().javaCompliance])
 
     if len(classes) != 0:
         f_testfile = open(testfile, 'w')
@@ -832,30 +840,47 @@ def _unittest(args, annotations):
         if os.environ.get('MX_TESTFILE') is None:
             os.remove(testfile)
 
-def unittest(args):
-    """run the JUnit tests (all testcases)
+_unittestHelpSuffix = """
 
     If filters are supplied, only tests whose fully qualified name
-    include a filter as a substring are run. Negative filters are
-    those with a '-' prefix. VM args should have a @ prefix."""
+    includes a filter as a substring are run. Negative filters are
+    those with a '-' prefix.
+    
+    Options with a '@' prefix are passed to the VM.
+    
+    For example, this command line:
+    
+       mx unittest BC_aload @-G:Dump= @-G:MethodFilter=BC_aload.* @-G:+PrintCFG
+    
+    will run all JUnit test classes that contain 'BC_aload' in their
+    fully qualified name and will pass these options to the VM: 
+    
+        -G:Dump= -G:MethodFilter=BC_aload.* -G:+PrintCFG
+
+    To get around command line length limitations on some OSes, the
+    JUnit class names to be executed are written to a file that a
+    custom JUnit wrapper reads and passes onto JUnit proper. The
+    MX_TESTFILE environment variable can be set to specify a
+    file which will not be deleted once the unittests are done
+    (unlike the temporary file otherwise used).
+
+    As with all other commands, using the global '-v' before 'unittest'
+    command will cause mx to show the complete shell command line
+    it uses to run the VM.
+""" 
+
+def unittest(args):
+    """run the JUnit tests (all testcases){0}"""
 
     _unittest(args, ['@Test', '@LongTest'])
 
 def shortunittest(args):
-    """run the JUnit tests (short testcases only)
-
-    If filters are supplied, only tests whose fully qualified name
-    include a filter as a substring are run. Negative filters are
-    those with a '-' prefix. VM args should have a @ prefix."""
+    """run the JUnit tests (short testcases only){0}"""
 
     _unittest(args, ['@Test'])
 
 def longunittest(args):
-    """run the JUnit tests (long testcases only)
-
-    If filters are supplied, only tests whose fully qualified name
-    include a filter as a substring are run. Negative filters are
-    those with a '-' prefix. VM args should have a @ prefix."""
+    """run the JUnit tests (long testcases only){0}"""
 
     _unittest(args, ['@LongTest'])
 
@@ -1344,9 +1369,9 @@ def mx_init(suite):
         'gate' : [gate, '[-options]'],
         'gv' : [gv, ''],
         'bench' : [bench, '[-resultfile file] [all(default)|dacapo|specjvm2008|bootstrap]'],
-        'unittest' : [unittest, '[filters...]'],
-        'longunittest' : [longunittest, '[filters...]'],
-        'shortunittest' : [shortunittest, '[filters...]'],
+        'unittest' : [unittest, '[filters...|@VM options]', _unittestHelpSuffix],
+        'longunittest' : [longunittest, '[filters...|@VM options]', _unittestHelpSuffix],
+        'shortunittest' : [shortunittest, '[filters...|@VM options]', _unittestHelpSuffix],
         'jacocoreport' : [jacocoreport, '[output directory]'],
         'site' : [site, '[-options]'],
         'vm': [vm, '[-options] class [args...]'],
