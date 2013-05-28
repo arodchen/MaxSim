@@ -97,6 +97,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
     public static final ForeignCallDescriptor OSR_MIGRATION_END = new ForeignCallDescriptor("OSR_migration_end", void.class, long.class);
     public static final ForeignCallDescriptor IDENTITY_HASHCODE = new ForeignCallDescriptor("identity_hashcode", int.class, Object.class);
     public static final ForeignCallDescriptor VERIFY_OOP = new ForeignCallDescriptor("verify_oop", Object.class, Object.class);
+    public static final ForeignCallDescriptor LOAD_AND_CLEAR_EXCEPTION = new ForeignCallDescriptor("load_and_clear_exception", Object.class, Word.class);
 
     public final HotSpotVMConfig config;
 
@@ -213,7 +214,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
     protected HotSpotForeignCallLinkage registerForeignCall(ForeignCallDescriptor descriptor, long address, CallingConvention.Type ccType, RegisterEffect effect, Transition transition,
                     boolean reexecutable, LocationIdentity... killedLocations) {
         Class<?> resultType = descriptor.getResultType();
-        assert resultType.isPrimitive() || Word.class.isAssignableFrom(resultType) : "foreign calls must return objects in thread local storage: " + descriptor;
+        assert transition == LEAF || resultType.isPrimitive() || Word.class.isAssignableFrom(resultType) : "non-leaf foreign calls must return objects in thread local storage: " + descriptor;
         return register(HotSpotForeignCallLinkage.create(descriptor, address, effect, ccType, transition, reexecutable, killedLocations));
     }
 
@@ -263,6 +264,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         registerForeignCall(ARITHMETIC_SIN, c.arithmeticSinAddress, NativeCall, DESTROYS_REGISTERS, LEAF, REEXECUTABLE, NO_LOCATIONS);
         registerForeignCall(ARITHMETIC_COS, c.arithmeticCosAddress, NativeCall, DESTROYS_REGISTERS, LEAF, REEXECUTABLE, NO_LOCATIONS);
         registerForeignCall(ARITHMETIC_TAN, c.arithmeticTanAddress, NativeCall, DESTROYS_REGISTERS, LEAF, REEXECUTABLE, NO_LOCATIONS);
+        registerForeignCall(LOAD_AND_CLEAR_EXCEPTION, c.loadAndClearExceptionAddress, NativeCall, DESTROYS_REGISTERS, LEAF, NOT_REEXECUTABLE, ANY_LOCATION);
 
         registerForeignCall(EXCEPTION_HANDLER_FOR_PC, c.exceptionHandlerForPcAddress, NativeCall, DESTROYS_REGISTERS, NOT_LEAF, REEXECUTABLE, ANY_LOCATION);
         registerForeignCall(EXCEPTION_HANDLER_FOR_RETURN_ADDRESS, c.exceptionHandlerForReturnAddressAddress, NativeCall, DESTROYS_REGISTERS, NOT_LEAF, REEXECUTABLE, ANY_LOCATION);
@@ -996,7 +998,11 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         return foreignCalls.get(descriptor).isReexecutable();
     }
 
-    public LocationIdentity[] getKilledLocationIdentities(ForeignCallDescriptor descriptor) {
+    public boolean canDeoptimize(ForeignCallDescriptor descriptor) {
+        return !foreignCalls.get(descriptor).isLeaf();
+    }
+
+    public LocationIdentity[] getKilledLocations(ForeignCallDescriptor descriptor) {
         return foreignCalls.get(descriptor).getKilledLocations();
     }
 

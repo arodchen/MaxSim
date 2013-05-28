@@ -179,8 +179,9 @@ public abstract class Stub {
                             if (Debug.isDumpEnabled()) {
                                 Debug.dump(new Object[]{compResult, installedCode}, "After code installation");
                             }
-                            // TTY.println(stub.toString());
-                            // TTY.println(runtime.disassemble(installedCode));
+                            if (Debug.isLogEnabled()) {
+                                Debug.log("%s", runtime.disassemble(installedCode));
+                            }
                             return installedCode;
                         }
                     });
