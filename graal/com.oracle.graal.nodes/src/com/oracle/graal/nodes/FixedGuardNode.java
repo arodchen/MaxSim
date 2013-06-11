@@ -25,12 +25,13 @@ package com.oracle.graal.nodes;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 
 @NodeInfo(nameTemplate = "FixedGuard(!={p#negated}) {p#reason/s}")
-public class FixedGuardNode extends FixedWithNextNode implements Simplifiable, Lowerable, Node.IterableNodeType, Negatable {
+public class FixedGuardNode extends FixedWithNextNode implements Simplifiable, Lowerable, Node.IterableNodeType, Negatable, GuardingNode {
 
     @Input private LogicNode condition;
     private final DeoptimizationReason reason;
@@ -51,7 +52,7 @@ public class FixedGuardNode extends FixedWithNextNode implements Simplifiable, L
     }
 
     public FixedGuardNode(LogicNode condition, DeoptimizationReason deoptReason, DeoptimizationAction action, boolean negated) {
-        super(StampFactory.forVoid());
+        super(StampFactory.dependency());
         this.action = action;
         this.negated = negated;
         this.condition = condition;
@@ -84,6 +85,7 @@ public class FixedGuardNode extends FixedWithNextNode implements Simplifiable, L
         if (condition instanceof LogicConstantNode) {
             LogicConstantNode c = (LogicConstantNode) condition;
             if (c.getValue() != negated) {
+                this.replaceAtUsages(BeginNode.prevBegin(this));
                 graph().removeFixed(this);
             } else {
                 FixedNode next = this.next();
@@ -119,6 +121,11 @@ public class FixedGuardNode extends FixedWithNextNode implements Simplifiable, L
     public Negatable negate(LogicNode cond) {
         assert cond == condition();
         negated = !negated;
+        return this;
+    }
+
+    @Override
+    public FixedGuardNode asNode() {
         return this;
     }
 }

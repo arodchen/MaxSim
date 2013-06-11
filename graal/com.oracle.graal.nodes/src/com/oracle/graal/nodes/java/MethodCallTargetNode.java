@@ -56,7 +56,7 @@ public class MethodCallTargetNode extends CallTargetNode implements Node.Iterabl
 
     /**
      * Gets the target method for this invocation instruction.
-     *
+     * 
      * @return the target method
      */
     public ResolvedJavaMethod targetMethod() {
@@ -85,7 +85,7 @@ public class MethodCallTargetNode extends CallTargetNode implements Node.Iterabl
 
     /**
      * Gets the instruction that produces the receiver object for this invocation, if any.
-     *
+     * 
      * @return the instruction that produces the receiver object for this invocation if any,
      *         {@code null} if this invocation does not take a receiver object
      */
@@ -95,7 +95,7 @@ public class MethodCallTargetNode extends CallTargetNode implements Node.Iterabl
 
     /**
      * Checks whether this is an invocation of a static method.
-     *
+     * 
      * @return {@code true} if the invocation is a static invocation
      */
     public boolean isStatic() {
@@ -143,7 +143,7 @@ public class MethodCallTargetNode extends CallTargetNode implements Node.Iterabl
         if (!isStatic()) {
             ValueNode receiver = receiver();
             if (receiver != null && receiver.objectStamp().isExactType()) {
-                if (invokeKind == InvokeKind.Interface || invokeKind == InvokeKind.Virtual) {
+                if (invokeKind == InvokeKind.Interface || invokeKind == InvokeKind.Virtual && isResolved()) {
                     ResolvedJavaMethod method = receiver.objectStamp().type().resolveMethod(targetMethod());
                     if (method != null) {
                         invokeKind = InvokeKind.Special;
