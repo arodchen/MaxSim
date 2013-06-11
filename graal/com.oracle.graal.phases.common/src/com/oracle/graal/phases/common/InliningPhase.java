@@ -23,6 +23,7 @@
 package com.oracle.graal.phases.common;
 
 import static com.oracle.graal.phases.GraalOptions.*;
+import static com.oracle.graal.phases.common.InliningPhase.Options.*;
 
 import java.util.*;
 import java.util.concurrent.*;
@@ -48,10 +49,13 @@ import com.oracle.graal.phases.graph.*;
 
 public class InliningPhase extends Phase {
 
-    // @formatter:off
-    @Option(help = "Unconditionally inline intrinsics")
-    public static final OptionValue<Boolean> AlwaysInlineIntrinsics = new OptionValue<>(false);
-    // @formatter:on
+    public static class Options {
+
+        // @formatter:off
+        @Option(help = "Unconditionally inline intrinsics")
+        public static final OptionValue<Boolean> AlwaysInlineIntrinsics = new OptionValue<>(false);
+        // @formatter:on
+    }
 
     private final PhasePlan plan;
     private final MetaAccessProvider runtime;
@@ -151,19 +155,16 @@ public class InliningPhase extends Phase {
         if (info != null) {
             double invokeProbability = graphInfo.invokeProbability(invoke);
             double invokeRelevance = graphInfo.invokeRelevance(invoke);
+            MethodInvocation calleeInvocation = data.pushInvocation(info, parentAssumptions, invokeProbability, invokeRelevance);
 
-            if (inliningPolicy.isWorthInlining(info, data.inliningDepth(), invokeProbability, invokeRelevance, false)) {
-                MethodInvocation calleeInvocation = data.pushInvocation(info, parentAssumptions, invokeProbability, invokeRelevance);
-
-                for (int i = 0; i < info.numberOfMethods(); i++) {
-                    Inlineable elem = getInlineableElement(info.methodAt(i), info.invoke(), calleeInvocation.assumptions());
-                    info.setInlinableElement(i, elem);
-                    if (elem instanceof InlineableGraph) {
-                        data.pushGraph(((InlineableGraph) elem).getGraph(), invokeProbability * info.probabilityAt(i), invokeRelevance * info.relevanceAt(i));
-                    } else {
-                        assert elem instanceof InlineableMacroNode;
-                        data.pushDummyGraph();
-                    }
+            for (int i = 0; i < info.numberOfMethods(); i++) {
+                Inlineable elem = getInlineableElement(info.methodAt(i), info.invoke(), calleeInvocation.assumptions());
+                info.setInlinableElement(i, elem);
+                if (elem instanceof InlineableGraph) {
+                    data.pushGraph(((InlineableGraph) elem).getGraph(), invokeProbability * info.probabilityAt(i), invokeRelevance * info.relevanceAt(i));
+                } else {
+                    assert elem instanceof InlineableMacroNode;
+                    data.pushDummyGraph();
                 }
             }
         }

@@ -42,7 +42,6 @@ import com.oracle.graal.lir.StandardOp.MoveOp;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.tiers.*;
 
 public class AllocatorTest extends GraalCompilerTest {
 
@@ -120,7 +119,7 @@ public class AllocatorTest extends GraalCompilerTest {
 
             @Override
             public LIR call() {
-                return GraalCompiler.emitHIR(runtime, backend.target, graph, replacements, assumptions, null, phasePlan, OptimisticOptimizations.NONE, new SpeculationLog(), Suites.createDefaultSuites());
+                return GraalCompiler.emitHIR(runtime, backend.target, graph, replacements, assumptions, null, phasePlan, OptimisticOptimizations.NONE, new SpeculationLog(), suites);
             }
         });
 

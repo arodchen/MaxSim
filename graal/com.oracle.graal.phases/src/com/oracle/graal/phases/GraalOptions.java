@@ -86,8 +86,6 @@ public final class GraalOptions {
     // profiling information
     @Option(help = "")
     public static final OptionValue<Integer> DeoptsToDisableOptimisticOptimization = new OptionValue<>(40);
-    @Option(help = "")
-    public static final OptionValue<Integer> MatureProfilingInformationThreshold = new OptionValue<>(100);
 
     // comilation queue
     @Option(help = "")
@@ -256,8 +254,6 @@ public final class GraalOptions {
     public static final OptionValue<Boolean> OptConvertDeoptsToGuards = new OptionValue<>(true);
     @Option(help = "")
     public static final OptionValue<Boolean> OptReadElimination = new OptionValue<>(true);
-    @Option(help = "")
-    public static final OptionValue<Boolean> OptEarlyReadElimination = new OptionValue<>(true);
     @Option(help = "")
     public static final OptionValue<Boolean> OptCanonicalizer = new OptionValue<>(true);
     @Option(help = "")

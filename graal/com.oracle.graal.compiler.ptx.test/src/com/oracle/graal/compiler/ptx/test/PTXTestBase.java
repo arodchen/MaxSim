@@ -58,6 +58,12 @@ public abstract class PTXTestBase extends GraalCompilerTest {
         phasePlan.addPhase(PhasePosition.AFTER_PARSING, new PTXPhase());
         new PTXPhase().apply(graph);
         CallingConvention cc = getCallingConvention(runtime, Type.JavaCallee, graph.method(), false);
+        /*
+         * Use Suites.createDefaultSuites() instead of GraalCompilerTest.suites. The
+         * GraalCompilerTest.suites variable contains the Suites for the HotSpotRuntime. This code
+         * will not run on hotspot, so it should use the plain Graal default suites, without hotspot
+         * specific phases.
+         */
         CompilationResult result = GraalCompiler.compileGraph(graph, cc, graph.method(), runtime, graalRuntime().getReplacements(), ptxBackend, target, null, phasePlan, OptimisticOptimizations.NONE,
                         new SpeculationLog(), Suites.createDefaultSuites());
         return result;

@@ -38,6 +38,7 @@ import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.options.*;
@@ -64,7 +65,7 @@ public class GraalCompiler {
 
     /**
      * Requests compilation of a given graph.
-     *
+     * 
      * @param graph the graph to be compiled
      * @param cc the calling convention for calls to the code compiled for {@code graph}
      * @param installedCodeOwner the method the compiled code will be
@@ -117,13 +118,13 @@ public class GraalCompiler {
 
     /**
      * Builds the graph, optimizes it.
-     *
+     * 
      * @param runtime
-     *
+     * 
      * @param target
      */
-    public static LIR emitHIR(GraalCodeCacheProvider runtime, TargetDescription target, final StructuredGraph graph, Replacements replacements, Assumptions assumptions, GraphCache cache, PhasePlan plan,
-                    OptimisticOptimizations optimisticOpts, final SpeculationLog speculationLog, final Suites suites) {
+    public static LIR emitHIR(GraalCodeCacheProvider runtime, TargetDescription target, final StructuredGraph graph, Replacements replacements, Assumptions assumptions, GraphCache cache,
+                    PhasePlan plan, OptimisticOptimizations optimisticOpts, final SpeculationLog speculationLog, final Suites suites) {
 
         if (speculationLog != null) {
             speculationLog.snapshot();
@@ -149,7 +150,7 @@ public class GraalCompiler {
 
         if (Inline.getValue() && !plan.isPhaseDisabled(InliningPhase.class)) {
             if (IterativeInlining.getValue()) {
-                new IterativeInliningPhase(replacements, cache, plan, optimisticOpts, OptEarlyReadElimination.getValue(), canonicalizer).apply(graph, highTierContext);
+                new IterativeInliningPhase(cache, plan, optimisticOpts, canonicalizer).apply(graph, highTierContext);
             } else {
                 new InliningPhase(runtime, null, replacements, assumptions, cache, plan, optimisticOpts).apply(graph);
                 new DeadCodeEliminationPhase().apply(graph);
@@ -163,17 +164,19 @@ public class GraalCompiler {
         TypeProfileProxyNode.cleanFromGraph(graph);
 
         plan.runPhases(PhasePosition.HIGH_LEVEL, graph);
-
         suites.getHighTier().apply(graph, highTierContext);
 
         MidTierContext midTierContext = new MidTierContext(runtime, assumptions, replacements, target, optimisticOpts);
         suites.getMidTier().apply(graph, midTierContext);
 
-        plan.runPhases(PhasePosition.LOW_LEVEL, graph);
-
         LowTierContext lowTierContext = new LowTierContext(runtime, assumptions, replacements, target);
         suites.getLowTier().apply(graph, lowTierContext);
-        InliningPhase.storeStatisticsAfterLowTier(graph);
+
+        // we do not want to store statistics about OSR compilations because it may prevent inlining
+        boolean isOSRCompilation = graph.start() instanceof OSRStartNode;
+        if (!isOSRCompilation) {
+            InliningPhase.storeStatisticsAfterLowTier(graph);
+        }
 
         final SchedulePhase schedule = new SchedulePhase();
         schedule.apply(graph);

@@ -24,9 +24,9 @@ package com.oracle.graal.phases.graph;
 
 import java.util.*;
 
+import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.util.*;
 
 /**
@@ -102,7 +102,10 @@ public class ComputeProbabilityClosure {
 
             for (Node pred : currentNode.cfgPredecessors()) {
                 FixedNode fixedPred = (FixedNode) pred;
-                if (allSuxVisited(fixedPred, visitedNodes) || fixedPred instanceof InvokeWithExceptionNode) {
+                if (visitedNodes.isMarked(fixedPred) && allPredsVisited(fixedPred, visitedNodes)) {
+                    DebugScope.dump(n.graph(), "ComputeProbabilityClosure");
+                    GraalInternalError.shouldNotReachHere(String.format("Endless loop because %s was already visited", fixedPred));
+                } else if (allSuxVisited(fixedPred, visitedNodes)) {
                     nodes.push(fixedPred);
                 } else {
                     assert fixedPred instanceof ControlSplitNode : "only control splits can have more than one sux";
@@ -112,34 +115,25 @@ public class ComputeProbabilityClosure {
         } while (!nodes.isEmpty());
     }
 
-    private static void modifyProbabilities(ControlSplitNode node, NodeBitMap visitedNodes) {
-        if (node instanceof IfNode) {
-            IfNode ifNode = (IfNode) node;
-            assert visitedNodes.isMarked(ifNode.falseSuccessor()) ^ visitedNodes.isMarked(ifNode.trueSuccessor());
-
-            if (visitedNodes.isMarked(ifNode.trueSuccessor())) {
-                if (ifNode.probability(ifNode.trueSuccessor()) > 0) {
-                    ifNode.setTrueSuccessorProbability(0);
-                }
-            } else {
-                if (ifNode.probability(ifNode.trueSuccessor()) < 1) {
-                    ifNode.setTrueSuccessorProbability(1);
-                }
+    private static void modifyProbabilities(ControlSplitNode controlSplit, NodeBitMap visitedNodes) {
+        assert !allSuxVisited(controlSplit, visitedNodes);
+        for (Node sux : controlSplit.successors()) {
+            if (visitedNodes.isMarked(sux)) {
+                controlSplit.setProbability((AbstractBeginNode) sux, 0);
             }
-        } else if (node instanceof SwitchNode) {
-            SwitchNode switchNode = (SwitchNode) node;
-            for (Node sux : switchNode.successors()) {
-                if (visitedNodes.isMarked(sux)) {
-                    switchNode.setProbability(sux, 0);
-                }
-            }
-        } else {
-            GraalInternalError.shouldNotReachHere();
         }
     }
 
-    private static boolean allSuxVisited(FixedNode fixedPred, NodeBitMap visitedNodes) {
-        for (Node sux : fixedPred.successors()) {
+    private static boolean allSuxVisited(FixedNode node, NodeBitMap visitedNodes) {
+        return allVisited(node.successors(), visitedNodes);
+    }
+
+    private static boolean allPredsVisited(FixedNode node, NodeBitMap visitedNodes) {
+        return allVisited(node.cfgPredecessors(), visitedNodes);
+    }
+
+    private static boolean allVisited(Iterable<? extends Node> nodes, NodeBitMap visitedNodes) {
+        for (Node sux : nodes) {
             if (!visitedNodes.contains(sux)) {
                 return false;
             }

@@ -39,7 +39,6 @@ import com.oracle.graal.nodes.spi.GraalCodeCacheProvider;
 import com.oracle.graal.phases.OptimisticOptimizations;
 import com.oracle.graal.phases.PhasePlan;
 import com.oracle.graal.phases.PhasePlan.PhasePosition;
-import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.sparc.SPARC;
 
 public abstract class SPARCTestBase extends GraalCompilerTest {
@@ -57,7 +56,7 @@ public abstract class SPARCTestBase extends GraalCompilerTest {
         phasePlan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
         CallingConvention cc = getCallingConvention(runtime, Type.JavaCallee, graph.method(), false);
         CompilationResult result = GraalCompiler.compileGraph(graph, cc, graph.method(), runtime, graalRuntime().getReplacements(), sparcBackend, target, null, phasePlan,
-                        OptimisticOptimizations.NONE, new SpeculationLog(), Suites.createDefaultSuites());
+                        OptimisticOptimizations.NONE, new SpeculationLog(), suites);
         return result;
     }
 

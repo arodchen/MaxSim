@@ -591,11 +591,11 @@ C2V_VMENTRY(jobject, getInstanceFields, (JNIEnv *, jobject, jobject klass))
 
   for (AllFieldStream fs(k()); !fs.done(); fs.next()) {
     if (!fs.access_flags().is_static()) {
-      Handle type = GraalCompiler::get_JavaTypeFromSignature(fs.signature(), k, Thread::current());
+      Handle type = GraalCompiler::get_JavaTypeFromSignature(fs.signature(), k, THREAD);
       int flags = fs.access_flags().as_int();
       bool internal = fs.access_flags().is_internal();
-      Handle name = java_lang_String::create_from_symbol(fs.name(), Thread::current());
-      Handle field = VMToCompiler::createJavaField(JNIHandles::resolve(klass), name, type, fs.offset(), flags, internal, Thread::current());
+      Handle name = java_lang_String::create_from_symbol(fs.name(), THREAD);
+      Handle field = VMToCompiler::createJavaField(JNIHandles::resolve(klass), name, type, fs.offset(), flags, internal, THREAD);
       fields.append(field());
     }
   }
@@ -603,7 +603,28 @@ C2V_VMENTRY(jobject, getInstanceFields, (JNIEnv *, jobject, jobject klass))
   for (int i = 0; i < fields.length(); ++i) {
     field_array->obj_at_put(i, fields.at(i)());
   }
-  return JNIHandles::make_local(field_array());
+  return JNIHandles::make_local(THREAD, field_array());
+C2V_END
+
+C2V_VMENTRY(jobject, getMethods, (JNIEnv *, jobject, jobject klass))
+  ResourceMark rm;
+
+  instanceKlassHandle k(THREAD, java_lang_Class::as_Klass(HotSpotResolvedObjectType::javaMirror(klass)));
+  Array<Method*>* methods = k->methods();
+  int methods_length = methods->length();
+
+  // Allocate result
+  objArrayOop r = oopFactory::new_objArray(SystemDictionary::HotSpotResolvedJavaMethod_klass(), methods_length, CHECK_NULL);
+  objArrayHandle result (THREAD, r);
+
+  for (int i = 0; i < methods_length; i++) {
+    methodHandle method(THREAD, methods->at(i));
+    Handle holder = JNIHandles::resolve(klass);
+    oop m = VMToCompiler::createResolvedJavaMethod(holder, method(), THREAD);
+    result->obj_at_put(i, m);
+  }
+
+  return JNIHandles::make_local(THREAD, result());
 C2V_END
 
 C2V_VMENTRY(jlong, getMaxCallTargetOffset, (JNIEnv *env, jobject, jlong addr))
@@ -658,8 +679,10 @@ C2V_ENTRY(void, initializeConfiguration, (JNIEnv *env, jobject, jobject config))
   set_boolean("useAESIntrinsics", UseAESIntrinsics);
   set_boolean("useTLAB", UseTLAB);
   set_boolean("useG1GC", UseG1GC);
+#ifdef TARGET_ARCH_x86
   set_int("useSSE", UseSSE);
   set_int("useAVX", UseAVX);
+#endif
   set_int("codeEntryAlignment", CodeEntryAlignment);
   set_int("stackShadowPages", StackShadowPages);
   set_int("hubOffset", oopDesc::klass_offset_in_bytes());
@@ -695,9 +718,11 @@ C2V_ENTRY(void, initializeConfiguration, (JNIEnv *env, jobject, jobject config))
   set_int("klassHasFinalizerFlag", JVM_ACC_HAS_FINALIZER);
   set_int("threadExceptionOopOffset", in_bytes(JavaThread::exception_oop_offset()));
   set_int("threadExceptionPcOffset", in_bytes(JavaThread::exception_pc_offset()));
+#ifdef TARGET_ARCH_x86
   set_boolean("isPollingPageFar", Assembler::is_polling_page_far());
-  set_int("classMirrorOffset", in_bytes(Klass::java_mirror_offset()));
   set_int("runtimeCallStackSize", (jint)frame::arg_reg_save_area_bytes);
+#endif
+  set_int("classMirrorOffset", in_bytes(Klass::java_mirror_offset()));
   set_int("klassModifierFlagsOffset", in_bytes(Klass::modifier_flags_offset()));
   set_int("klassAccessFlagsOffset", in_bytes(Klass::access_flags_offset()));
   set_int("klassOffset", java_lang_Class::klass_offset_in_bytes());
@@ -734,8 +759,6 @@ C2V_ENTRY(void, initializeConfiguration, (JNIEnv *env, jobject, jobject config))
   set_int("typeProfileWidth", TypeProfileWidth);
   set_int("methodProfileWidth", MethodProfileWidth);
 
-  set_int("interpreterProfilingThreshold", InvocationCounter::get_ProfileLimit());
-
   set_int("tlabAlignmentReserve", (int32_t)ThreadLocalAllocBuffer::alignment_reserve());
   set_long("tlabIntArrayMarkWord", (intptr_t)markOopDesc::prototype()->copy_set_hash(0x2));
   set_long("heapTopAddress", (jlong)(address) Universe::heap()->top_addr());
@@ -744,7 +767,9 @@ C2V_ENTRY(void, initializeConfiguration, (JNIEnv *env, jobject, jobject config))
   set_int("threadTlabSizeOffset", in_bytes(JavaThread::tlab_size_offset()));
   set_int("threadAllocatedBytesOffset", in_bytes(JavaThread::allocated_bytes_offset()));
   set_int("threadLastJavaSpOffset", in_bytes(JavaThread::last_Java_sp_offset()));
+#ifdef TARGET_ARCH_x86
   set_int("threadLastJavaFpOffset", in_bytes(JavaThread::last_Java_fp_offset()));
+#endif
   set_int("threadLastJavaPcOffset", in_bytes(JavaThread::last_Java_pc_offset()));
   set_int("threadObjectResultOffset", in_bytes(JavaThread::vm_result_offset()));
   set_int("tlabSlowAllocationsOffset", in_bytes(JavaThread::tlab_slow_allocations_offset()));
@@ -1203,6 +1228,7 @@ JNINativeMethod CompilerToVM_methods[] = {
   {CC"lookupFieldInPool",             CC"("HS_RESOLVED_TYPE"IB)"FIELD,                                  FN_PTR(lookupFieldInPool)},
   {CC"resolveMethod",                 CC"("HS_RESOLVED_TYPE STRING STRING")"METHOD,                     FN_PTR(resolveMethod)},
   {CC"getInstanceFields",             CC"("HS_RESOLVED_TYPE")["HS_RESOLVED_FIELD,                       FN_PTR(getInstanceFields)},
+  {CC"getMethods",                    CC"("HS_RESOLVED_TYPE")["HS_RESOLVED_METHOD,                      FN_PTR(getMethods)},
   {CC"isTypeInitialized",             CC"("HS_RESOLVED_TYPE")Z",                                        FN_PTR(isTypeInitialized)},
   {CC"hasFinalizableSubclass",        CC"("HS_RESOLVED_TYPE")Z",                                        FN_PTR(hasFinalizableSubclass)},
   {CC"initializeType",                CC"("HS_RESOLVED_TYPE")V",                                        FN_PTR(initializeType)},

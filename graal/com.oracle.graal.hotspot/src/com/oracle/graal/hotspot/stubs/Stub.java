@@ -43,7 +43,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.PhasePlan.PhasePosition;
-import com.oracle.graal.phases.tiers.*;
 
 //JaCoCo Exclude
 
@@ -76,7 +75,6 @@ public abstract class Stub {
     }
 
     /**
-<<<<<<< local
      * Gets the registers defined by this stub. These are the temporaries of this stub and must thus
      * be caller saved by a callers of this stub.
      */
@@ -99,11 +97,7 @@ public abstract class Stub {
 
     /**
      * Creates a new stub.
-     *
-=======
-     * Creates a new stub container..
-     *
->>>>>>> other
+     * 
      * @param linkage linkage details for a call to the stub
      */
     public Stub(HotSpotRuntime runtime, Replacements replacements, HotSpotForeignCallLinkage linkage) {
@@ -162,7 +156,7 @@ public abstract class Stub {
                     phasePlan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
                     CallingConvention cc = linkage.getCallingConvention();
                     final CompilationResult compResult = GraalCompiler.compileGraph(graph, cc, getInstalledCodeOwner(), runtime, replacements, backend, runtime.getTarget(), null, phasePlan,
-                                    OptimisticOptimizations.ALL, new SpeculationLog(), Suites.createDefaultSuites());
+                                    OptimisticOptimizations.ALL, new SpeculationLog(), runtime.getDefaultSuites());
 
                     assert destroyedRegisters != null;
                     code = Debug.scope("CodeInstall", new Callable<InstalledCode>() {
