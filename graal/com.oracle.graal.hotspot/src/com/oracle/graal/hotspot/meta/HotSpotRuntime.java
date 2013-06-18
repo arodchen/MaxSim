@@ -37,8 +37,6 @@ import static com.oracle.graal.hotspot.nodes.NewArrayStubCall.*;
 import static com.oracle.graal.hotspot.nodes.NewInstanceStubCall.*;
 import static com.oracle.graal.hotspot.nodes.NewMultiArrayStubCall.*;
 import static com.oracle.graal.hotspot.nodes.VMErrorNode.*;
-import static com.oracle.graal.hotspot.nodes.WriteBarrierPostStubCall.*;
-import static com.oracle.graal.hotspot.nodes.WriteBarrierPreStubCall.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 import static com.oracle.graal.hotspot.replacements.MonitorSnippets.*;
 import static com.oracle.graal.hotspot.replacements.SystemSubstitutions.*;
@@ -289,8 +287,6 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         linkForeignCall(r, CREATE_OUT_OF_BOUNDS_EXCEPTION, c.createOutOfBoundsExceptionAddress, PREPEND_THREAD, REEXECUTABLE, ANY_LOCATION);
         linkForeignCall(r, MONITORENTER, c.monitorenterAddress, PREPEND_THREAD, NOT_REEXECUTABLE, ANY_LOCATION);
         linkForeignCall(r, MONITOREXIT, c.monitorexitAddress, PREPEND_THREAD, NOT_REEXECUTABLE, ANY_LOCATION);
-        linkForeignCall(r, WRITE_BARRIER_PRE, c.writeBarrierPreAddress, PREPEND_THREAD, NOT_REEXECUTABLE, ANY_LOCATION);
-        linkForeignCall(r, WRITE_BARRIER_POST, c.writeBarrierPostAddress, PREPEND_THREAD, NOT_REEXECUTABLE, ANY_LOCATION);
         linkForeignCall(r, NEW_MULTI_ARRAY, c.newMultiArrayAddress, PREPEND_THREAD, NOT_REEXECUTABLE, ANY_LOCATION);
         linkForeignCall(r, LOG_PRINTF, c.logPrintfAddress, PREPEND_THREAD, REEXECUTABLE, NO_LOCATIONS);
         linkForeignCall(r, LOG_OBJECT, c.logObjectAddress, PREPEND_THREAD, REEXECUTABLE, NO_LOCATIONS);
@@ -768,6 +764,10 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
             if (tool.getLoweringType() == LoweringType.AFTER_GUARDS) {
                 newObjectSnippets.lower((NewArrayNode) n);
             }
+        } else if (n instanceof DynamicNewArrayNode) {
+            if (tool.getLoweringType() == LoweringType.AFTER_GUARDS) {
+                newObjectSnippets.lower((DynamicNewArrayNode) n);
+            }
         } else if (n instanceof MonitorEnterNode) {
             if (tool.getLoweringType() == LoweringType.AFTER_GUARDS) {
                 monitorSnippets.lower((MonitorEnterNode) n, tool);
@@ -922,8 +922,8 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
         return graalRuntime.getCompilerToVM().getJavaField(reflectionField);
     }
 
-    public HotSpotInstalledCode installMethod(HotSpotResolvedJavaMethod method, Graph graph, int entryBCI, CompilationResult compResult) {
-        HotSpotInstalledCode installedCode = new HotSpotNmethod(method, graph, true);
+    public HotSpotInstalledCode installMethod(HotSpotResolvedJavaMethod method, int entryBCI, CompilationResult compResult) {
+        HotSpotInstalledCode installedCode = new HotSpotNmethod(method, true, null);
         graalRuntime.getCompilerToVM().installCode(new HotSpotCompiledNmethod(method, entryBCI, compResult), installedCode, method.getSpeculationLog());
         return installedCode;
     }
@@ -936,7 +936,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
     @Override
     public InstalledCode addMethod(ResolvedJavaMethod method, CompilationResult compResult, Graph graph) {
         HotSpotResolvedJavaMethod hotspotMethod = (HotSpotResolvedJavaMethod) method;
-        HotSpotInstalledCode code = new HotSpotNmethod(hotspotMethod, graph, false);
+        HotSpotInstalledCode code = new HotSpotNmethod(hotspotMethod, false, graph);
         CodeInstallResult result = graalRuntime.getCompilerToVM().installCode(new HotSpotCompiledNmethod(hotspotMethod, -1, compResult), code, null);
         if (result != CodeInstallResult.OK) {
             return null;
@@ -1073,9 +1073,17 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
     public Suites createSuites() {
         Suites ret = Suites.createDefaultSuites();
 
-        ret.getMidTier().addPhase(new WriteBarrierAdditionPhase());
+        if (AOTCompilation.getValue()) {
+            // lowering introduces class constants, therefore it must be after lowering
+            ret.getHighTier().appendPhase(new LoadJavaMirrorWithKlassPhase());
+            if (VerifyPhases.getValue()) {
+                ret.getHighTier().appendPhase(new AheadOfTimeVerifcationPhase());
+            }
+        }
+
+        ret.getMidTier().appendPhase(new WriteBarrierAdditionPhase());
         if (VerifyPhases.getValue()) {
-            ret.getMidTier().addPhase(new WriteBarrierVerificationPhase());
+            ret.getMidTier().appendPhase(new WriteBarrierVerificationPhase());
         }
 
         return ret;

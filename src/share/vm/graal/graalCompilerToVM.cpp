@@ -668,6 +668,7 @@ C2V_ENTRY(void, initializeConfiguration, (JNIEnv *env, jobject, jobject config))
   set_boolean("cAssertions", DEBUG_ONLY(true) NOT_DEBUG(false));
   set_boolean("verifyOops", VerifyOops);
   set_boolean("ciTime", CITime);
+  set_int("compileThreshold", CompileThreshold);
   set_boolean("compileTheWorld", CompileTheWorld);
   set_int("compileTheWorldStartAt", CompileTheWorldStartAt);
   set_int("compileTheWorldStopAt", CompileTheWorldStopAt);
@@ -714,6 +715,7 @@ C2V_ENTRY(void, initializeConfiguration, (JNIEnv *env, jobject, jobject config))
   set_int("constantPoolHolderOffset", ConstantPool::pool_holder_offset_in_bytes());
   set_int("extraStackEntries", Method::extra_stack_entries());
   set_int("methodAccessFlagsOffset", in_bytes(Method::access_flags_offset()));
+  set_int("methodQueuedForCompilationBit", (int) JVM_ACC_QUEUED);
   set_int("methodIntrinsicIdOffset", Method::intrinsic_id_offset_in_bytes());
   set_int("klassHasFinalizerFlag", JVM_ACC_HAS_FINALIZER);
   set_int("threadExceptionOopOffset", in_bytes(JavaThread::exception_oop_offset()));
@@ -726,6 +728,7 @@ C2V_ENTRY(void, initializeConfiguration, (JNIEnv *env, jobject, jobject config))
   set_int("klassModifierFlagsOffset", in_bytes(Klass::modifier_flags_offset()));
   set_int("klassAccessFlagsOffset", in_bytes(Klass::access_flags_offset()));
   set_int("klassOffset", java_lang_Class::klass_offset_in_bytes());
+  set_int("arrayKlassOffset", java_lang_Class::array_klass_offset_in_bytes());
   set_int("graalMirrorInClassOffset", java_lang_Class::graal_mirror_offset_in_bytes());
   set_int("klassLayoutHelperOffset", in_bytes(Klass::layout_helper_offset()));
   set_int("klassSuperKlassOffset", in_bytes(Klass::super_offset()));
@@ -823,8 +826,6 @@ C2V_ENTRY(void, initializeConfiguration, (JNIEnv *env, jobject, jobject config))
   set_address("logPrintfAddress", GraalRuntime::log_printf);
   set_address("vmErrorAddress", GraalRuntime::vm_error);
   set_address("loadAndClearExceptionAddress", GraalRuntime::load_and_clear_exception);
-  set_address("writeBarrierPreAddress", GraalRuntime::write_barrier_pre);
-  set_address("writeBarrierPostAddress", GraalRuntime::write_barrier_post);
   set_address("javaTimeMillisAddress", CAST_FROM_FN_PTR(address, os::javaTimeMillis));
   set_address("javaTimeNanosAddress", CAST_FROM_FN_PTR(address, os::javaTimeNanos));
   set_address("arithmeticSinAddress", CAST_FROM_FN_PTR(address, SharedRuntime::dsin));
@@ -938,11 +939,6 @@ C2V_VMENTRY(jint, installCode0, (JNIEnv *jniEnv, jobject, jobject compiled_code,
     }
   }
   return result;
-C2V_END
-
-C2V_VMENTRY(void, clearQueuedForCompilation, (JNIEnv *jniEnv, jobject, jobject resolvedMethod))
-  methodHandle method = getMethodFromHotSpotMethod(JNIHandles::resolve(resolvedMethod));
-  method->clear_queued_for_compilation();
 C2V_END
 
 C2V_VMENTRY(jobject, getCode, (JNIEnv *jniEnv, jobject,  jlong codeBlob))
@@ -1246,7 +1242,6 @@ JNINativeMethod CompilerToVM_methods[] = {
   {CC"getLineNumberTable",            CC"("HS_RESOLVED_METHOD")[J",                                     FN_PTR(getLineNumberTable)},
   {CC"getLocalVariableTable",         CC"("HS_RESOLVED_METHOD")["LOCAL,                                 FN_PTR(getLocalVariableTable)},
   {CC"getFileName",                   CC"("HS_RESOLVED_JAVA_TYPE")"STRING,                              FN_PTR(getFileName)},
-  {CC"clearQueuedForCompilation",     CC"("HS_RESOLVED_METHOD")V",                                      FN_PTR(clearQueuedForCompilation)},
   {CC"reprofile",                     CC"("METASPACE_METHOD")V",                                        FN_PTR(reprofile)},
   {CC"invalidateInstalledCode",       CC"(J)V",                                                         FN_PTR(invalidateInstalledCode)},
   {CC"isInstalledCodeValid",          CC"(J)Z",                                                         FN_PTR(isInstalledCodeValid)},

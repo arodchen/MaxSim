@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.hotspot.meta;
 
-import static com.oracle.graal.api.meta.MetaUtil.*;
 import static com.oracle.graal.graph.UnsafeAccess.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.phases.GraalOptions.*;
@@ -257,11 +256,6 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
             signature = new HotSpotSignature(graalRuntime().getCompilerToVM().getSignature(metaspaceMethod));
         }
         return signature;
-    }
-
-    @Override
-    public String toString() {
-        return format("HotSpotMethod<%H.%n(%p)>", this);
     }
 
     public int getCompiledCodeSize() {
@@ -509,5 +503,44 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
         } catch (IllegalAccessException | InvocationTargetException | InstantiationException ex) {
             throw new IllegalArgumentException(ex);
         }
+    }
+
+    public boolean tryToQueueForCompilation() {
+        // other threads may update certain bits of the access flags field concurrently. So, the
+        // loop ensures that this method only returns false when another thread has set the
+        // queuedForCompilation bit.
+        do {
+            long address = getAccessFlagsAddress();
+            int actualValue = unsafe.getInt(address);
+            int expectedValue = actualValue & ~graalRuntime().getConfig().methodQueuedForCompilationBit;
+            if (actualValue != expectedValue) {
+                return false;
+            } else {
+                int newValue = expectedValue | graalRuntime().getConfig().methodQueuedForCompilationBit;
+                boolean success = unsafe.compareAndSwapInt(null, address, expectedValue, newValue);
+                if (success) {
+                    return true;
+                }
+            }
+        } while (true);
+    }
+
+    public void clearQueuedForCompilation() {
+        long address = getAccessFlagsAddress();
+        boolean success;
+        do {
+            int actualValue = unsafe.getInt(address);
+            int newValue = actualValue & ~graalRuntime().getConfig().methodQueuedForCompilationBit;
+            assert isQueuedForCompilation() : "queued for compilation must be set";
+            success = unsafe.compareAndSwapInt(null, address, actualValue, newValue);
+        } while (!success);
+    }
+
+    public boolean isQueuedForCompilation() {
+        return (unsafe.getInt(getAccessFlagsAddress()) & graalRuntime().getConfig().methodQueuedForCompilationBit) != 0;
+    }
+
+    private long getAccessFlagsAddress() {
+        return metaspaceMethod + graalRuntime().getConfig().methodAccessFlagsOffset;
     }
 }

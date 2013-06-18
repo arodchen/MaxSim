@@ -34,40 +34,36 @@ import com.oracle.graal.virtual.phases.ea.*;
 public class HighTier extends PhaseSuite<HighTierContext> {
 
     public HighTier() {
-        CanonicalizerPhase canonicalizer = new CanonicalizerPhase(OptCanonicalizeReads.getValue());
+        CanonicalizerPhase canonicalizer = new CanonicalizerPhase(!AOTCompilation.getValue());
 
         if (FullUnroll.getValue()) {
-            addPhase(new LoopFullUnrollPhase(OptCanonicalizeReads.getValue()));
+            appendPhase(new LoopFullUnrollPhase(!AOTCompilation.getValue()));
         }
 
         if (OptTailDuplication.getValue()) {
-            addPhase(new TailDuplicationPhase());
+            appendPhase(new TailDuplicationPhase());
         }
 
         if (PartialEscapeAnalysis.getValue()) {
-            addPhase(new PartialEscapePhase(true, canonicalizer));
+            appendPhase(new PartialEscapePhase(true, canonicalizer));
         }
 
         if (OptConvertDeoptsToGuards.getValue()) {
-            addPhase(new ConvertDeoptimizeToGuardPhase());
+            appendPhase(new ConvertDeoptimizeToGuardPhase());
         }
 
-        addPhase(new LockEliminationPhase());
+        appendPhase(new LockEliminationPhase());
 
         if (OptLoopTransform.getValue()) {
-            addPhase(new LoopTransformHighPhase());
-            addPhase(new LoopTransformLowPhase());
+            appendPhase(new LoopTransformHighPhase());
+            appendPhase(new LoopTransformLowPhase());
         }
-        addPhase(new RemoveValueProxyPhase());
-
-        if (CullFrameStates.getValue()) {
-            addPhase(new CullFrameStatesPhase());
-        }
+        appendPhase(new RemoveValueProxyPhase());
 
         if (OptCanonicalizer.getValue()) {
-            addPhase(canonicalizer);
+            appendPhase(canonicalizer);
         }
 
-        addPhase(new LoweringPhase(LoweringType.BEFORE_GUARDS));
+        appendPhase(new LoweringPhase(LoweringType.BEFORE_GUARDS));
     }
 }

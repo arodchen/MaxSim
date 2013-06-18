@@ -25,14 +25,19 @@ package com.oracle.graal.hotspot.meta;
 
 import static com.oracle.graal.api.meta.MetaUtil.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.lang.annotation.*;
 import java.lang.reflect.*;
+import java.util.*;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.options.*;
 import com.oracle.graal.replacements.*;
+import com.oracle.graal.replacements.Snippet.SnippetInliningPolicy;
+import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 
 /**
  * Represents a field in a HotSpot type.
@@ -75,14 +80,92 @@ public class HotSpotResolvedJavaField extends CompilerObject implements Resolved
         return (flags & FIELD_INTERNAL_FLAG) != 0;
     }
 
+    /**
+     * If the compiler is configured for AOT mode, {@link #readConstantValue(Constant)} should be
+     * only called for snippets or replacements.
+     */
+    private static boolean isCalledForSnippets() {
+        HotSpotRuntime runtime = graalRuntime().getRuntime();
+
+        ResolvedJavaMethod makeGraphMethod = null;
+        ResolvedJavaMethod initMethod = null;
+        try {
+            Class<?> rjm = ResolvedJavaMethod.class;
+            makeGraphMethod = runtime.lookupJavaMethod(ReplacementsImpl.class.getDeclaredMethod("makeGraph", rjm, rjm, SnippetInliningPolicy.class));
+            initMethod = runtime.lookupJavaMethod(SnippetTemplate.AbstractTemplates.class.getDeclaredMethod("template", Arguments.class));
+        } catch (NoSuchMethodException | SecurityException e) {
+            throw new GraalInternalError(e);
+        }
+        StackTraceElement makeGraphSTE = makeGraphMethod.asStackTraceElement(1);
+        StackTraceElement initSTE = initMethod.asStackTraceElement(30);
+
+        for (StackTraceElement element : new Exception().getStackTrace()) {
+            if (makeGraphSTE.equals(element) || initSTE.equals(element)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static final Set<ResolvedJavaField> notEmbeddable = new HashSet<>();
+
+    private static void addResolvedToSet(Field field) {
+        HotSpotRuntime runtime = graalRuntime().getRuntime();
+        notEmbeddable.add(runtime.lookupJavaField(field));
+    }
+
+    static {
+        try {
+            addResolvedToSet(Boolean.class.getDeclaredField("TRUE"));
+            addResolvedToSet(Boolean.class.getDeclaredField("FALSE"));
+
+            Class<?> characterCacheClass = Character.class.getDeclaredClasses()[0];
+            assert "java.lang.Character$CharacterCache".equals(characterCacheClass.getName());
+            addResolvedToSet(characterCacheClass.getDeclaredField("cache"));
+
+            Class<?> byteCacheClass = Byte.class.getDeclaredClasses()[0];
+            assert "java.lang.Byte$ByteCache".equals(byteCacheClass.getName());
+            addResolvedToSet(byteCacheClass.getDeclaredField("cache"));
+
+            Class<?> shortCacheClass = Short.class.getDeclaredClasses()[0];
+            assert "java.lang.Short$ShortCache".equals(shortCacheClass.getName());
+            addResolvedToSet(shortCacheClass.getDeclaredField("cache"));
+
+            Class<?> integerCacheClass = Integer.class.getDeclaredClasses()[0];
+            assert "java.lang.Integer$IntegerCache".equals(integerCacheClass.getName());
+            addResolvedToSet(integerCacheClass.getDeclaredField("cache"));
+
+            Class<?> longCacheClass = Long.class.getDeclaredClasses()[0];
+            assert "java.lang.Long$LongCache".equals(longCacheClass.getName());
+            addResolvedToSet(longCacheClass.getDeclaredField("cache"));
+
+            addResolvedToSet(Throwable.class.getDeclaredField("UNASSIGNED_STACK"));
+            addResolvedToSet(Throwable.class.getDeclaredField("SUPPRESSED_SENTINEL"));
+        } catch (SecurityException | NoSuchFieldException e) {
+            throw new GraalInternalError(e);
+        }
+    }
+
+    /**
+     * in AOT mode, some fields should never be embedded even for snippets/replacements.
+     */
+    private boolean isEmbeddable() {
+        if (AOTCompilation.getValue() && notEmbeddable.contains(this)) {
+            return false;
+        }
+        return true;
+    }
+
     private static final String SystemClassName = MetaUtil.toInternalName(System.class.getName());
 
     @Override
     public Constant readConstantValue(Constant receiver) {
+        assert !AOTCompilation.getValue() || isCalledForSnippets();
+
         if (receiver == null) {
             assert Modifier.isStatic(flags);
             if (constant == null) {
-                if (holder.isInitialized() && !holder.getName().equals(SystemClassName)) {
+                if (holder.isInitialized() && !holder.getName().equals(SystemClassName) && isEmbeddable()) {
                     if (Modifier.isFinal(getModifiers())) {
                         constant = readValue(receiver);
                     }
