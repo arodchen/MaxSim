@@ -651,6 +651,12 @@ oop java_lang_Class::create_basic_type_mirror(const char* basic_type_name, Basic
   return java_class;
 }
 
+#ifdef GRAAL
+oop java_lang_Class::graal_mirror(oop java_class) {
+  assert(_graal_mirror_offset != 0, "must be set");
+  return java_class->obj_field(_graal_mirror_offset);
+}
+#endif
 
 Klass* java_lang_Class::as_Klass(oop java_class) {
   //%note memory_2
@@ -2975,6 +2981,9 @@ int java_lang_Class::_static_oop_field_count_offset;
 int java_lang_Class::_protection_domain_offset;
 int java_lang_Class::_init_lock_offset;
 int java_lang_Class::_signers_offset;
+#ifdef GRAAL
+int java_lang_Class::_graal_mirror_offset;
+#endif
 GrowableArray<Klass*>* java_lang_Class::_fixup_mirror_list = NULL;
 int java_lang_Throwable::backtrace_offset;
 int java_lang_Throwable::detailMessage_offset;

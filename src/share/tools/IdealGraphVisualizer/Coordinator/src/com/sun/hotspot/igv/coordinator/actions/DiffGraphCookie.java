@@ -21,12 +21,13 @@
  * questions.
  *
  */
-
 package com.sun.hotspot.igv.coordinator.actions;
 
 import com.sun.hotspot.igv.data.InputGraph;
 import com.sun.hotspot.igv.data.services.GraphViewer;
+import com.sun.hotspot.igv.data.services.InputGraphProvider;
 import com.sun.hotspot.igv.difference.Difference;
+import com.sun.hotspot.igv.util.LookupHistory;
 import org.openide.nodes.Node;
 import org.openide.util.Lookup;
 
@@ -36,21 +37,30 @@ import org.openide.util.Lookup;
  */
 public class DiffGraphCookie implements Node.Cookie {
 
-    private InputGraph a;
-    private InputGraph b;
+    private InputGraph graph;
 
-    public DiffGraphCookie(InputGraph a, InputGraph b) {
-        this.a = a;
-        this.b = b;
+    public DiffGraphCookie(InputGraph graph) {
+        this.graph = graph;
+    }
+
+    private InputGraph getCurrentGraph() {
+        InputGraphProvider graphProvider = LookupHistory.getLast(InputGraphProvider.class);
+        if (graphProvider != null) {
+            return graphProvider.getGraph();
+        }
+        return null;
+    }
+
+    public boolean isPossible() {
+        return getCurrentGraph() != null;
     }
 
     public void openDiff() {
-
+        InputGraph other = getCurrentGraph();
         final GraphViewer viewer = Lookup.getDefault().lookup(GraphViewer.class);
-
-        if(viewer != null) {
-            InputGraph diffGraph = Difference.createDiffGraph(a, b);
-            viewer.view(diffGraph);
+        if (viewer != null) {
+            InputGraph diffGraph = Difference.createDiffGraph(other, graph);
+            viewer.view(diffGraph, true);
         }
     }
 }

@@ -461,7 +461,11 @@ protected:
   enum {
     // null_seen:
     //  saw a null operand (cast/aastore/instanceof)
-    null_seen_flag              = DataLayout::first_flag + 0
+      null_seen_flag              = DataLayout::first_flag + 0
+#ifdef GRAAL
+    // bytecode threw any exception
+    , exception_seen_flag         = null_seen_flag + 1
+#endif
   };
   enum { bit_cell_count = 0 };  // no additional data fields needed.
 public:
@@ -484,7 +488,11 @@ public:
   // Consulting it allows the compiler to avoid setting up null_check traps.
   bool null_seen()     { return flag_at(null_seen_flag); }
   void set_null_seen()    { set_flag_at(null_seen_flag); }
-
+#ifdef GRAAL
+  // true if an exception was thrown at the specific BCI
+  bool exception_seen() { return flag_at(exception_seen_flag); }
+  void set_exception_seen() { set_flag_at(exception_seen_flag); }
+#endif
 
   // Code generation support
   static int null_seen_byte_constant() {
@@ -626,7 +634,22 @@ public:
 class ReceiverTypeData : public CounterData {
 protected:
   enum {
+#ifdef GRAAL
+    // Description of the different counters
+    // ReceiverTypeData for instanceof/checkcast/aastore:
+    //   C1/C2: count is incremented on type overflow and decremented for failed type checks
+    //   Graal: count decremented for failed type checks and nonprofiled_count is incremented on type overflow
+    //          TODO (chaeubl): in fact, Graal should also increment the count for failed type checks to mimic the C1/C2 behavior
+    // VirtualCallData for invokevirtual/invokeinterface:
+    //   C1/C2: count is incremented on type overflow
+    //   Graal: count is incremented on type overflow, nonprofiled_count is increment on method overflow
+
+    // Graal is interested in knowing the percentage of type checks involving a type not explicitly in the profile
+    nonprofiled_count_off_set = counter_cell_count,
+    receiver0_offset,
+#else
     receiver0_offset = counter_cell_count,
+#endif
     count0_offset,
     receiver_type_row_cell_count = (count0_offset + 1) - receiver0_offset
   };
@@ -640,7 +663,7 @@ public:
   virtual bool is_ReceiverTypeData() { return true; }
 
   static int static_cell_count() {
-    return counter_cell_count + (uint) TypeProfileWidth * receiver_type_row_cell_count;
+    return counter_cell_count + (uint) TypeProfileWidth * receiver_type_row_cell_count GRAAL_ONLY(+ 1);
   }
 
   virtual int cell_count() {
@@ -702,6 +725,13 @@ public:
     set_count(0);
     set_receiver(row, NULL);
     set_receiver_count(row, 0);
+#ifdef GRAAL
+    if (!this->is_VirtualCallData()) {
+      // if this is a ReceiverTypeData for Graal, the nonprofiled_count
+      // must also be reset (see "Description of the different counters" above)
+      set_nonprofiled_count(0);
+    }
+#endif
   }
 
   // Code generation support
@@ -711,6 +741,14 @@ public:
   static ByteSize receiver_count_offset(uint row) {
     return cell_offset(receiver_count_cell_index(row));
   }
+#ifdef GRAAL
+  static ByteSize nonprofiled_receiver_count_offset() {
+    return cell_offset(nonprofiled_count_off_set);
+  }
+  void set_nonprofiled_count(uint count) {
+    set_uint_at(nonprofiled_count_off_set, count);
+  }
+#endif
   static ByteSize receiver_type_data_size() {
     return cell_offset(static_cell_count());
   }
@@ -739,7 +777,7 @@ public:
   static int static_cell_count() {
     // At this point we could add more profile state, e.g., for arguments.
     // But for now it's the same size as the base record type.
-    return ReceiverTypeData::static_cell_count();
+    return ReceiverTypeData::static_cell_count() GRAAL_ONLY(+ (uint) MethodProfileWidth * receiver_type_row_cell_count);
   }
 
   virtual int cell_count() {
@@ -750,6 +788,53 @@ public:
   static ByteSize virtual_call_data_size() {
     return cell_offset(static_cell_count());
   }
+
+#ifdef GRAAL
+  static ByteSize method_offset(uint row) {
+    return cell_offset(method_cell_index(row));
+  }
+  static ByteSize method_count_offset(uint row) {
+    return cell_offset(method_count_cell_index(row));
+  }
+  static int method_cell_index(uint row) {
+    return receiver0_offset + (row + TypeProfileWidth) * receiver_type_row_cell_count;
+  }
+  static int method_count_cell_index(uint row) {
+    return count0_offset + (row + TypeProfileWidth) * receiver_type_row_cell_count;
+  }
+  static uint method_row_limit() {
+    return MethodProfileWidth;
+  }
+
+  Method* method(uint row) {
+    assert(row < method_row_limit(), "oob");
+
+    Method* method = (Method*)intptr_at(method_cell_index(row));
+    assert(method == NULL || method->is_method(), "must be");
+    return method;
+  }
+
+  void set_method(uint row, Method* m) {
+    assert((uint)row < method_row_limit(), "oob");
+    set_intptr_at(method_cell_index(row), (uintptr_t)m);
+  }
+
+  void set_method_count(uint row, uint count) {
+    assert(row < method_row_limit(), "oob");
+    set_uint_at(method_count_cell_index(row), count);
+  }
+
+  void clear_method_row(uint row) {
+    assert(row < method_row_limit(), "oob");
+    // Clear total count - indicator of polymorphic call site (see comment for clear_row() in ReceiverTypeData).
+    set_nonprofiled_count(0);
+    set_method(row, NULL);
+    set_method_count(row, 0);
+  }
+
+  // GC support
+  virtual void clean_weak_klass_links(BoolObjectClosure* is_alive_closure);
+#endif
 
 #ifndef PRODUCT
   void print_data_on(outputStream* st);
@@ -1166,6 +1251,7 @@ public:
   MethodData() {}; // For ciMethodData
 
   bool is_methodData() const volatile { return true; }
+  void initialize();
 
   // Whole-method sticky bits and flags
   enum {
@@ -1350,6 +1436,7 @@ public:
 
   bool is_mature() const;  // consult mileage and ProfileMaturityPercentage
   static int mileage_of(Method* m);
+  static bool is_empty_data(int size, Bytecodes::Code code);
 
   // Support for interprocedural escape analysis, from Thomas Kotzmann.
   enum EscapeFlag {
@@ -1441,17 +1528,13 @@ public:
   uint inc_trap_count(int reason) {
     // Count another trap, anywhere in this method.
     assert(reason >= 0, "must be single trap");
-    if ((uint)reason < _trap_hist_limit) {
-      uint cnt1 = 1 + _trap_hist._array[reason];
-      if ((cnt1 & _trap_hist_mask) != 0) {  // if no counter overflow...
-        _trap_hist._array[reason] = cnt1;
-        return cnt1;
-      } else {
-        return _trap_hist_mask + (++_nof_overflow_traps);
-      }
+    assert((uint)reason < _trap_hist_limit, "oob");
+    uint cnt1 = 1 + _trap_hist._array[reason];
+    if ((cnt1 & _trap_hist_mask) != 0) {  // if no counter overflow...
+      _trap_hist._array[reason] = cnt1;
+      return cnt1;
     } else {
-      // Could not represent the count in the histogram.
-      return (++_nof_overflow_traps);
+      return _trap_hist_mask + (++_nof_overflow_traps);
     }
   }
 
@@ -1477,6 +1560,10 @@ public:
   // Support for code generation
   static ByteSize data_offset() {
     return byte_offset_of(MethodData, _data[0]);
+  }
+
+  static ByteSize trap_history_offset() {
+    return byte_offset_of(MethodData, _trap_hist._array);
   }
 
   static ByteSize invocation_counter_offset() {

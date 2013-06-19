@@ -117,6 +117,9 @@ CFLAGS += $(DEBUG_CFLAGS/BYFILE)
 # Linker mapfiles
 MAPFILE = $(GAMMADIR)/make/solaris/makefiles/mapfile-vers \
 	  $(GAMMADIR)/make/solaris/makefiles/mapfile-vers-debug
+#ifdef GRAAL
+MAPFILE += $(GAMMADIR)/make/solaris/makefiles/mapfile-vers-GRAAL
+#endif
 
 # This mapfile is only needed when compiling with dtrace support,
 # and mustn't be otherwise.

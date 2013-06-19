@@ -242,7 +242,9 @@ flags.make: $(BUILDTREE_MAKE) ../shared_dirs.lst
 	echo "$(call gamma-path,altsrc,os/$(OS_FAMILY)/vm) \\"; \
 	echo "$(call gamma-path,commonsrc,os/$(OS_FAMILY)/vm) \\"; \
 	echo "$(call gamma-path,altsrc,os/posix/vm) \\"; \
-	echo "$(call gamma-path,commonsrc,os/posix/vm)"; \
+	echo "$(call gamma-path,commonsrc,os/posix/vm) \\"; \
+	echo "$(call gamma-path,altsrc,gpu/ptx) \\"; \
+	echo "$(call gamma-path,commonsrc,gpu/ptx)"; \
 	echo; \
 	echo "Src_Dirs_I = \\"; \
 	echo "$(call gamma-path,altsrc,share/vm/prims) \\"; \
@@ -258,7 +260,9 @@ flags.make: $(BUILDTREE_MAKE) ../shared_dirs.lst
 	echo "$(call gamma-path,altsrc,os/$(OS_FAMILY)/vm) \\"; \
 	echo "$(call gamma-path,commonsrc,os/$(OS_FAMILY)/vm) \\"; \
 	echo "$(call gamma-path,altsrc,os/posix/vm) \\"; \
-	echo "$(call gamma-path,commonsrc,os/posix/vm)"; \
+	echo "$(call gamma-path,commonsrc,os/posix/vm) \\"; \
+	echo "$(call gamma-path,altsrc,gpu) \\"; \
+	echo "$(call gamma-path,commonsrc,gpu)"; \
 	[ -n "$(CFLAGS_BROWSE)" ] && \
 	    echo && echo "CFLAGS_BROWSE = $(CFLAGS_BROWSE)"; \
 	[ -n "$(HOTSPOT_EXTRA_SYSDEFS)" ] && \
@@ -357,10 +361,27 @@ dtrace.make: $(BUILDTREE_MAKE)
 	@echo Creating $@ ...
 	$(QUIETLY) ( \
 	$(BUILDTREE_COMMENT); \
-	echo; \
-	echo include flags.make; \
-	echo; \
-	echo "include \$$(GAMMADIR)/make/$(OS_FAMILY)/makefiles/$(@F)"; \
+	{ echo "JAVA_HOME=$(JDK_IMPORT_PATH)"; }; \
+	{ \
+	echo "CLASSPATH=$${CLASSPATH:+$$CLASSPATH:}.:\$${JAVA_HOME}/jre/lib/rt.jar:\$${JAVA_HOME}/jre/lib/i18n.jar"; \
+	} | sed s:$${JAVA_HOME:--------}:\$${JAVA_HOME}:g; \
+	echo "HOTSPOT_BUILD_USER=\"$${LOGNAME:-$$USER} in `basename $(GAMMADIR)`\""; \
+	echo "export JAVA_HOME CLASSPATH HOTSPOT_BUILD_USER"; \
+	) > $@
+
+env.csh: env.sh
+	@echo Creating $@ ...
+	$(QUIETLY) ( \
+	$(BUILDTREE_COMMENT); \
+	{ echo "setenv JAVA_HOME \"$(JDK_IMPORT_PATH)\""; }; \
+	sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=/setenv \1 /p' $?; \
+	) > $@
+
+jdkpath.sh: $(BUILDTREE_MAKE)
+	@echo Creating $@ ...
+	$(QUIETLY) ( \
+	$(BUILDTREE_COMMENT); \
+	echo "JDK=${JAVA_HOME}"; \
 	) > $@
 
 FORCE:
