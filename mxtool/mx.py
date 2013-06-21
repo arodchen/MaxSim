@@ -759,7 +759,7 @@ def _loadSuite(d, primary=False):
 
     if len([s for s in _suites.itervalues() if s.dir == d]) == 0:
         s = Suite(d, mxDir, primary)
-        _suites[s.name] = s
+        _suites[name] = s
         return s
 
 def suites():
