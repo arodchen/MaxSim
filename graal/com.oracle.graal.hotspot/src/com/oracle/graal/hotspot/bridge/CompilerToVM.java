@@ -144,7 +144,7 @@ public interface CompilerToVM {
 
     // Must be kept in sync with enum in graalEnv.hpp
     public enum CodeInstallResult {
-        OK, DEPENDENCIES_FAILED, CACHE_FULL
+        OK, DEPENDENCIES_FAILED, CACHE_FULL, CODE_TOO_LARGE
     }
 
     /**
@@ -221,6 +221,8 @@ public interface CompilerToVM {
     Local[] getLocalVariableTable(HotSpotResolvedJavaMethod method);
 
     String getFileName(HotSpotResolvedJavaType method);
+
+    Object readUnsafeUncompressedPointer(Object o, long displacement);
 
     /**
      * Invalidates the profiling information and restarts profiling upon the next invocation.
