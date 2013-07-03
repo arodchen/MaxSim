@@ -329,13 +329,18 @@ public class ReplacementsImpl implements Replacements {
             return graph;
         }
 
+        protected Object beforeInline(@SuppressWarnings("unused") MethodCallTargetNode callTarget, @SuppressWarnings("unused") StructuredGraph callee) {
+            return null;
+        }
+
         /**
          * Called after a graph is inlined.
          * 
          * @param caller the graph into which {@code callee} was inlined
          * @param callee the graph that was inlined into {@code caller}
+         * @param beforeInlineData value returned by {@link #beforeInline}.
          */
-        protected void afterInline(StructuredGraph caller, StructuredGraph callee) {
+        protected void afterInline(StructuredGraph caller, StructuredGraph callee, Object beforeInlineData) {
             if (OptCanonicalizer.getValue()) {
                 new WordTypeRewriterPhase(runtime, target.wordKind).apply(caller);
                 new CanonicalizerPhase.Instance(runtime, assumptions, true).apply(caller);
@@ -368,7 +373,7 @@ public class ReplacementsImpl implements Replacements {
                     InliningUtil.inline(callTarget.invoke(), originalGraph, true);
 
                     Debug.dump(graph, "after inlining %s", callee);
-                    afterInline(graph, originalGraph);
+                    afterInline(graph, originalGraph, null);
                     substituteCallsOriginal = true;
                 } else {
                     StructuredGraph intrinsicGraph = InliningUtil.getIntrinsicGraph(ReplacementsImpl.this, callee);
@@ -385,9 +390,10 @@ public class ReplacementsImpl implements Replacements {
                             }
                             targetGraph = parseGraph(callee, policy);
                         }
+                        Object beforeInlineData = beforeInline(callTarget, targetGraph);
                         InliningUtil.inline(callTarget.invoke(), targetGraph, true);
                         Debug.dump(graph, "after inlining %s", callee);
-                        afterInline(graph, targetGraph);
+                        afterInline(graph, targetGraph, beforeInlineData);
                     }
                 }
             }
