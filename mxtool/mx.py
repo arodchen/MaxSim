@@ -2371,7 +2371,7 @@ def eclipseinit(args, suite=None, buildProcessorJars=True):
         if not exists(settingsDir):
             os.mkdir(settingsDir)
 
-        eclipseSettingsDir = join(suite.dir, 'mx', 'eclipse-settings')
+        eclipseSettingsDir = join(suite.mxDir, 'eclipse-settings')
         if exists(eclipseSettingsDir):
             for name in os.listdir(eclipseSettingsDir):
                 if name == "org.eclipse.jdt.apt.core.prefs" and not len(p.annotation_processors()) > 0:
