@@ -93,7 +93,7 @@ public class NodeIntrinsificationPhase extends Phase {
 
             // Clean up checkcast instructions inserted by javac if the return type is generic.
             cleanUpReturnList.add(newInstance);
-        } else if (target.getAnnotation(Fold.class) != null) {
+        } else if (isFoldable(target)) {
             ResolvedJavaType[] parameterTypes = MetaUtil.resolveJavaTypes(MetaUtil.signatureToTypes(target), declaringClass);
 
             // Prepare the arguments for the reflective method call
@@ -124,6 +124,13 @@ public class NodeIntrinsificationPhase extends Phase {
             }
         }
         return true;
+    }
+
+    /**
+     * Permits a subclass to override the default definition of "foldable".
+     */
+    protected boolean isFoldable(ResolvedJavaMethod method) {
+        return method.getAnnotation(Fold.class) != null;
     }
 
     /**
