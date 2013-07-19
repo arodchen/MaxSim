@@ -23,9 +23,12 @@
 
 package com.oracle.graal.hotspot.phases;
 
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+
 import java.util.*;
 
 import com.oracle.graal.graph.*;
+import com.oracle.graal.hotspot.replacements.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.HeapAccess.WriteBarrierType;
 import com.oracle.graal.nodes.extended.*;
@@ -48,7 +51,7 @@ public class WriteBarrierVerificationPhase extends Phase {
 
     private static void processWrites(StructuredGraph graph) {
         for (Node node : graph.getNodes()) {
-            if (isObjectWrite(node)) {
+            if (isObjectWrite(node) || isObjectArrayRangeWrite(node)) {
                 validateWrite(node);
             }
         }
@@ -59,7 +62,7 @@ public class WriteBarrierVerificationPhase extends Phase {
          * The currently validated write is checked in order to discover if it has an appropriate
          * attached write barrier.
          */
-        if (hasAttachedBarrier(write)) {
+        if (hasAttachedBarrier((FixedWithNextNode) write)) {
             return;
         }
         NodeFlood frontier = write.graph().createNodeFlood();
@@ -68,14 +71,44 @@ public class WriteBarrierVerificationPhase extends Phase {
         while (iterator.hasNext()) {
             Node currentNode = iterator.next();
             assert !isSafepoint(currentNode) : "Write barrier must be present";
-            if (!(currentNode instanceof SerialWriteBarrier) || ((currentNode instanceof SerialWriteBarrier) && !validateBarrier(write, (SerialWriteBarrier) currentNode))) {
-                expandFrontier(frontier, currentNode);
+            if (useG1GC()) {
+                if (!(currentNode instanceof G1PostWriteBarrier) || ((currentNode instanceof G1PostWriteBarrier) && !validateBarrier(write, (WriteBarrier) currentNode))) {
+                    expandFrontier(frontier, currentNode);
+                }
+            } else {
+                if (!(currentNode instanceof SerialWriteBarrier) || ((currentNode instanceof SerialWriteBarrier) && !validateBarrier(write, (WriteBarrier) currentNode)) ||
+                                ((currentNode instanceof SerialWriteBarrier) && !validateBarrier(write, (WriteBarrier) currentNode))) {
+                    expandFrontier(frontier, currentNode);
+                }
             }
         }
     }
 
-    private static boolean hasAttachedBarrier(Node node) {
-        return (((FixedWithNextNode) node).next() instanceof SerialWriteBarrier) && validateBarrier(node, (SerialWriteBarrier) ((FixedWithNextNode) node).next());
+    private static boolean hasAttachedBarrier(FixedWithNextNode node) {
+        final Node next = node.next();
+        final Node previous = node.predecessor();
+        if (HotSpotReplacementsUtil.useG1GC()) {
+            if (isObjectWrite(node)) {
+                return next instanceof G1PostWriteBarrier && previous instanceof G1PreWriteBarrier && validateBarrier(node, (G1PostWriteBarrier) next) &&
+                                validateBarrier(node, (G1PreWriteBarrier) previous);
+            } else if (isObjectArrayRangeWrite(node)) {
+                assert (next instanceof G1ArrayRangePostWriteBarrier) && (previous instanceof G1ArrayRangePreWriteBarrier) &&
+                                ((ArrayRangeWriteNode) node).getArray() == ((G1ArrayRangePostWriteBarrier) next).getObject() &&
+                                ((ArrayRangeWriteNode) node).getArray() == ((G1ArrayRangePreWriteBarrier) previous).getObject() : "ArrayRangeWriteNode misses pre and/or post barriers";
+                return true;
+            } else {
+                return false;
+            }
+        } else {
+            if (isObjectWrite(node)) {
+                return next instanceof SerialWriteBarrier && validateBarrier(node, (SerialWriteBarrier) next);
+            } else if (isObjectArrayRangeWrite(node)) {
+                assert (next instanceof SerialArrayRangeWriteBarrier && ((ArrayRangeWriteNode) node).getArray() == ((SerialArrayRangeWriteBarrier) next).getObject()) : "ArrayRangeWriteNode misses post barriers";
+                return true;
+            } else {
+                return false;
+            }
+        }
     }
 
     private static boolean isObjectWrite(Node node) {
@@ -84,6 +117,10 @@ public class WriteBarrierVerificationPhase extends Phase {
             return true;
         }
         return false;
+    }
+
+    private static boolean isObjectArrayRangeWrite(Node node) {
+        return node instanceof ArrayRangeWriteNode && ((ArrayRangeWriteNode) node).isObjectArray();
     }
 
     private static void expandFrontier(NodeFlood frontier, Node node) {
@@ -103,7 +140,7 @@ public class WriteBarrierVerificationPhase extends Phase {
         return ((node instanceof DeoptimizingNode) && ((DeoptimizingNode) node).canDeoptimize()) || (node instanceof LoopBeginNode);
     }
 
-    private static boolean validateBarrier(Node write, SerialWriteBarrier barrier) {
+    private static boolean validateBarrier(Node write, WriteBarrier barrier) {
         ValueNode writtenObject = null;
         LocationNode writtenLocation = null;
         if (write instanceof WriteNode) {

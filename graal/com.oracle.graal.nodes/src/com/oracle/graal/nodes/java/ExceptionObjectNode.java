@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.nodes.java;
 
-import static com.oracle.graal.api.meta.LocationIdentity.*;
-
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
@@ -38,15 +36,15 @@ import com.oracle.graal.nodes.type.*;
  * The entry to an exception handler with the exception coming from a call (as opposed to a local
  * throw instruction or implicit exception).
  */
-public class ExceptionObjectNode extends DispatchBeginNode implements Lowerable, MemoryCheckpoint {
+public class ExceptionObjectNode extends DispatchBeginNode implements Lowerable, MemoryCheckpoint.Single {
 
     public ExceptionObjectNode(MetaAccessProvider runtime) {
         super(StampFactory.declaredNonNull(runtime.lookupJavaType(Throwable.class)));
     }
 
     @Override
-    public LocationIdentity[] getLocationIdentities() {
-        return new LocationIdentity[]{ANY_LOCATION};
+    public LocationIdentity getLocationIdentity() {
+        return LocationIdentity.ANY_LOCATION;
     }
 
     @Override
@@ -89,7 +87,6 @@ public class ExceptionObjectNode extends DispatchBeginNode implements Lowerable,
             graph().removeFixed(dummyGuard);
         }
         graph().addAfterFixed(this, loadException);
-        tool.setLastFixedNode(loadException);
         setStateAfter(null);
         setStamp(StampFactory.forVoid());
     }

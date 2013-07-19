@@ -23,6 +23,7 @@
 package com.oracle.graal.phases.schedule;
 
 import static com.oracle.graal.api.meta.LocationIdentity.*;
+import static com.oracle.graal.nodes.cfg.ControlFlowGraph.*;
 import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.util.*;
@@ -96,20 +97,27 @@ public final class SchedulePhase extends Phase {
             for (Node node : getBlockToNodesMap().get(block)) {
                 if (node instanceof FloatingReadNode) {
                     currentState.add((FloatingReadNode) node);
-                } else if (node instanceof MemoryCheckpoint) {
-                    for (LocationIdentity identity : ((MemoryCheckpoint) node).getLocationIdentities()) {
-                        for (Iterator<FloatingReadNode> iter = currentState.iterator(); iter.hasNext();) {
-                            FloatingReadNode read = iter.next();
-                            FixedNode fixed = (FixedNode) node;
-                            if (identity == ANY_LOCATION || read.location().getLocationIdentity() == identity) {
-                                addPhantomReference(read, fixed);
-                                iter.remove();
-                            }
-                        }
+                } else if (node instanceof MemoryCheckpoint.Single) {
+                    LocationIdentity identity = ((MemoryCheckpoint.Single) node).getLocationIdentity();
+                    processIdentity(currentState, (FixedNode) node, identity);
+                } else if (node instanceof MemoryCheckpoint.Multi) {
+                    for (LocationIdentity identity : ((MemoryCheckpoint.Multi) node).getLocationIdentities()) {
+                        processIdentity(currentState, (FixedNode) node, identity);
                     }
                 }
+                assert MemoryCheckpoint.TypeAssertion.correctType(node);
             }
             return currentState;
+        }
+
+        private void processIdentity(HashSet<FloatingReadNode> currentState, FixedNode fixed, LocationIdentity identity) {
+            for (Iterator<FloatingReadNode> iter = currentState.iterator(); iter.hasNext();) {
+                FloatingReadNode read = iter.next();
+                if (identity == ANY_LOCATION || read.location().getLocationIdentity() == identity) {
+                    addPhantomReference(read, fixed);
+                    iter.remove();
+                }
+            }
         }
 
         public void addPhantomReference(FloatingReadNode read, FixedNode fixed) {
@@ -200,25 +208,6 @@ public final class SchedulePhase extends Phase {
 
         assignBlockToNodes(graph, selectedStrategy);
         sortNodesWithinBlocks(graph, selectedStrategy);
-    }
-
-    /**
-     * Sets {@link ScheduledNode#scheduledNext} on all scheduled nodes in all blocks using the
-     * scheduling built by {@link #run(StructuredGraph)}. This method should thus only be called
-     * when run has been successfully executed.
-     */
-    public void scheduleGraph() {
-        assert blockToNodesMap != null : "cannot set scheduledNext before run has been executed";
-        for (Block block : cfg.getBlocks()) {
-            List<ScheduledNode> nodeList = blockToNodesMap.get(block);
-            ScheduledNode last = null;
-            for (ScheduledNode node : nodeList) {
-                if (last != null) {
-                    last.setScheduledNext(node);
-                }
-                last = node;
-            }
-        }
     }
 
     public ControlFlowGraph getCFG() {
@@ -347,7 +336,7 @@ public final class SchedulePhase extends Phase {
 
         @Override
         public void apply(Block newBlock) {
-            this.block = getCommonDominator(this.block, newBlock);
+            this.block = commonDominator(this.block, newBlock);
         }
     }
 
@@ -497,16 +486,6 @@ public final class SchedulePhase extends Phase {
             assignBlockToNode((ScheduledNode) usage, strategy);
         }
         // now true usages are ready
-    }
-
-    private static Block getCommonDominator(Block a, Block b) {
-        if (a == null) {
-            return b;
-        }
-        if (b == null) {
-            return a;
-        }
-        return ControlFlowGraph.commonDominator(a, b);
     }
 
     private void sortNodesWithinBlocks(StructuredGraph graph, SchedulingStrategy strategy) {

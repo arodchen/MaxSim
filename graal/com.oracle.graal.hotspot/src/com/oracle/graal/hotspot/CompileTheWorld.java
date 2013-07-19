@@ -165,12 +165,11 @@ public final class CompileTheWorld {
                 }
 
                 String className = je.getName().substring(0, je.getName().length() - ".class".length());
-                className = className.replace('/', '.');
                 classFileCounter++;
 
                 try {
                     // Load and initialize class
-                    Class<?> javaClass = Class.forName(className, true, loader);
+                    Class<?> javaClass = Class.forName(className.replace('/', '.'), true, loader);
 
                     // Pre-load all classes in the constant pool.
                     try {
@@ -181,7 +180,7 @@ public final class CompileTheWorld {
                         }
                     } catch (Throwable t) {
                         // If something went wrong during pre-loading we just ignore it.
-                        TTY.println("CompileTheWorld (%d) : Preloading failed for %s", classFileCounter, className);
+                        TTY.println("Preloading failed for (%d) %s", classFileCounter, className);
                     }
 
                     // Are we compiling this class?
@@ -219,7 +218,7 @@ public final class CompileTheWorld {
     private void compileMethod(HotSpotResolvedJavaMethod method) {
         try {
             long start = System.currentTimeMillis();
-            vmToCompiler.compileMethod(method, StructuredGraph.INVOCATION_ENTRY_BCI, true, 10);
+            vmToCompiler.compileMethod(method, StructuredGraph.INVOCATION_ENTRY_BCI, true);
             compileTime += (System.currentTimeMillis() - start);
             compiledMethodsCounter++;
             method.reprofile();  // makes the method also not-entrant

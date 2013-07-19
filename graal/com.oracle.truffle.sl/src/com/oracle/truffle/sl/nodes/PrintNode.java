@@ -24,9 +24,9 @@ package com.oracle.truffle.sl.nodes;
 
 import java.io.*;
 
-import com.oracle.truffle.api.codegen.*;
+import com.oracle.truffle.api.dsl.*;
 
-@NodeChild(value = "expression", type = TypedNode.class)
+@NodeChild(type = TypedNode.class)
 public abstract class PrintNode extends StatementNode {
 
     private final PrintStream output;
@@ -54,7 +54,7 @@ public abstract class PrintNode extends StatementNode {
         output.print(value);
     }
 
-    @Generic
+    @Specialization
     public void doGeneric(Object value) {
         output.print(value.toString());
     }

@@ -94,7 +94,7 @@ public class NewInstanceStub extends SnippetStub {
                 if (memory.notEqual(0)) {
                     Word prototypeMarkWord = hub.readWord(prototypeMarkWordOffset(), PROTOTYPE_MARK_WORD_LOCATION);
                     initializeObjectHeader(memory, prototypeMarkWord, hub);
-                    for (int offset = 2 * wordSize(); offset < sizeInBytes; offset += wordSize()) {
+                    for (int offset = instanceHeaderSize(); offset < sizeInBytes; offset += wordSize()) {
                         memory.writeWord(offset, Word.zero(), ANY_LOCATION);
                     }
                     return verifyObject(memory.toObject());
@@ -121,6 +121,11 @@ public class NewInstanceStub extends SnippetStub {
      *         operation was unsuccessful
      */
     static Word refillAllocate(Word intArrayHub, int sizeInBytes, boolean log) {
+        // If G1 is enabled, the "eden" allocation space is not the same always
+        // and therefore we have to go to slowpath to allocate a new TLAB.
+        if (useG1GC()) {
+            return Word.zero();
+        }
         if (!useTLAB()) {
             return edenAllocate(Word.unsigned(sizeInBytes), log);
         }

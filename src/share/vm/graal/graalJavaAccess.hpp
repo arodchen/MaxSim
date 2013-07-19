@@ -82,6 +82,7 @@ void graal_compute_offsets();
   end_class                                                                                                                                                    \
   start_class(HotSpotNmethod)                                                                                                                                  \
     boolean_field(HotSpotNmethod, isDefault)                                                                                                                   \
+    boolean_field(HotSpotNmethod, isExternal)                                                                                                                   \
   end_class                                                                                                                                                    \
   start_class(HotSpotCompiledCode)                                                                                                                             \
     oop_field(HotSpotCompiledCode, comp, "Lcom/oracle/graal/api/code/CompilationResult;")                                                                      \
@@ -109,6 +110,9 @@ void graal_compute_offsets();
     int_field(ExceptionHandler, handlerBCI)                                                                                                                    \
     int_field(ExceptionHandler, catchTypeCPI)                                                                                                                  \
     oop_field(ExceptionHandler, catchType, "Lcom/oracle/graal/api/meta/JavaType;")                                                                             \
+  end_class                                                                                                                                                    \
+  start_class(ExternalCompilationResult)                                                                                                                       \
+    long_field(ExternalCompilationResult, entryPoint)                                                                                                              \
   end_class                                                                                                                                                    \
   start_class(CompilationResult)                                                                                                                               \
     int_field(CompilationResult, frameSize)                                                                                                                    \
@@ -149,6 +153,7 @@ void graal_compute_offsets();
   end_class                                                                                                                                                    \
   start_class(CompilationResult_DataPatch)                                                                                                                     \
     oop_field(CompilationResult_DataPatch, constant, "Lcom/oracle/graal/api/meta/Constant;")                                                                   \
+    oop_field(CompilationResult_DataPatch, rawConstant, "[B")                                                                                                  \
     int_field(CompilationResult_DataPatch, alignment)                                                                                                          \
     boolean_field(CompilationResult_DataPatch, inlined)                                                                                                        \
   end_class                                                                                                                                                    \

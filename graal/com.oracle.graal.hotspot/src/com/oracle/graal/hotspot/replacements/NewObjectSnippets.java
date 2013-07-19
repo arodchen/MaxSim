@@ -25,11 +25,11 @@ package com.oracle.graal.hotspot.replacements;
 import static com.oracle.graal.api.code.UnsignedMath.*;
 import static com.oracle.graal.api.meta.LocationIdentity.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
 import static com.oracle.graal.nodes.extended.UnsafeArrayCastNode.*;
 import static com.oracle.graal.nodes.extended.UnsafeCastNode.*;
 import static com.oracle.graal.phases.GraalOptions.*;
 import static com.oracle.graal.replacements.SnippetTemplate.*;
-import static com.oracle.graal.replacements.nodes.BranchProbabilityNode.*;
 import static com.oracle.graal.replacements.nodes.ExplodeLoopNode.*;
 
 import com.oracle.graal.api.code.*;
@@ -38,6 +38,7 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -101,7 +102,10 @@ public class NewObjectSnippets implements Snippets {
             // This handles both negative array sizes and very large array sizes
             DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint);
         }
+        return allocateArrayImpl(hub, length, prototypeMarkWord, headerSize, log2ElementSize, fillContents);
+    }
 
+    private static Object allocateArrayImpl(Word hub, int length, Word prototypeMarkWord, int headerSize, int log2ElementSize, boolean fillContents) {
         Object result;
         int alignment = wordSize();
         int allocationSize = computeArrayAllocationSize(length, alignment, headerSize, log2ElementSize);
@@ -121,16 +125,22 @@ public class NewObjectSnippets implements Snippets {
         return unsafeArrayCast(verifyOop(result), length, StampFactory.forNodeIntrinsic(), anchorNode);
     }
 
+    public static final ForeignCallDescriptor DYNAMIC_NEW_ARRAY = new ForeignCallDescriptor("dynamic_new_array", Object.class, Class.class, int.class);
+
+    @NodeIntrinsic(ForeignCallNode.class)
+    public static native Object dynamicNewArrayStub(@ConstantNodeParameter ForeignCallDescriptor descriptor, Class<?> elementType, int length);
+
     @Snippet
     public static Object allocateArrayDynamic(Class<?> elementType, int length, @ConstantParameter boolean fillContents) {
         Word hub = loadWordFromObject(elementType, arrayKlassOffset());
-        if (hub.equal(Word.zero())) {
-            // the array class is not yet loaded
-            DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.Unresolved);
+        if (hub.equal(Word.zero()) || !belowThan(length, MAX_ARRAY_FAST_PATH_ALLOCATION_LENGTH)) {
+            return dynamicNewArrayStub(DYNAMIC_NEW_ARRAY, elementType, length);
         }
 
         int layoutHelper = readLayoutHelper(hub);
         //@formatter:off
+        // from src/share/vm/oops/klass.hpp:
+        //
         // For arrays, layout helper is a negative number, containing four
         // distinct bytes, as follows:
         //    MSB:[tag, hsz, ebt, log2(esz)]:LSB
@@ -141,11 +151,11 @@ public class NewObjectSnippets implements Snippets {
         //    esz is the element size in bytes
         //@formatter:on
 
-        int headerSize = (layoutHelper >> 16) & 0xFF;
-        int log2ElementSize = layoutHelper & 0xFF;
+        int headerSize = (layoutHelper >> layoutHelperHeaderSizeShift()) & layoutHelperHeaderSizeMask();
+        int log2ElementSize = (layoutHelper >> layoutHelperLog2ElementSizeShift()) & layoutHelperLog2ElementSizeMask();
         Word prototypeMarkWord = hub.readWord(prototypeMarkWordOffset(), PROTOTYPE_MARK_WORD_LOCATION);
 
-        return allocateArray(hub, length, prototypeMarkWord, headerSize, log2ElementSize, fillContents);
+        return allocateArrayImpl(hub, length, prototypeMarkWord, headerSize, log2ElementSize, fillContents);
     }
 
     /**
@@ -193,12 +203,12 @@ public class NewObjectSnippets implements Snippets {
             if (size <= MAX_UNROLLED_OBJECT_ZEROING_SIZE) {
                 new_seqInit.inc();
                 explodeLoop();
-                for (int offset = 2 * wordSize(); offset < size; offset += wordSize()) {
+                for (int offset = instanceHeaderSize(); offset < size; offset += wordSize()) {
                     memory.writeWord(offset, Word.zero(), ANY_LOCATION);
                 }
             } else {
                 new_loopInit.inc();
-                for (int offset = 2 * wordSize(); offset < size; offset += wordSize()) {
+                for (int offset = instanceHeaderSize(); offset < size; offset += wordSize()) {
                     memory.writeWord(offset, Word.zero(), ANY_LOCATION);
                 }
             }

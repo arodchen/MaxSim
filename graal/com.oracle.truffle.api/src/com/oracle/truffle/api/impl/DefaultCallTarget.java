@@ -39,7 +39,7 @@ public class DefaultCallTarget extends CallTarget {
 
     @Override
     public String toString() {
-        return "CallTarget " + rootNode;
+        return rootNode.toString();
     }
 
     @Override

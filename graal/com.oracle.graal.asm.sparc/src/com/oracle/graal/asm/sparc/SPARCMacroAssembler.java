@@ -23,312 +23,404 @@
 package com.oracle.graal.asm.sparc;
 
 import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.*;
+import static com.oracle.graal.sparc.SPARC.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.sparc.*;
+import com.oracle.graal.asm.*;
 
 public class SPARCMacroAssembler extends SPARCAssembler {
+
+    /**
+     * A sentinel value used as a place holder in an instruction stream for an address that will be
+     * patched.
+     */
+    private static final SPARCAddress Placeholder = new SPARCAddress(g0, 0);
 
     public SPARCMacroAssembler(TargetDescription target, RegisterConfig registerConfig) {
         super(target, registerConfig);
     }
 
-    @SuppressWarnings("unused")
-    public static class Bclr {
-
-        public Bclr(SPARCAssembler asm, Register src, Register dst) {
-            new Andn(asm, dst, src, dst);
-        }
-
-        public Bclr(SPARCAssembler asm, int simm13, Register dst) {
-            new Andn(asm, dst, simm13, dst);
+    @Override
+    public void align(int modulus) {
+        if (codeBuffer.position() % modulus != 0) {
+            final int count = modulus - (codeBuffer.position() % modulus);
+            for (int i = 0; i < count; i++) {
+                new Nop().emit(this);
+            }
         }
     }
 
-    @SuppressWarnings("unused")
-    public static class Bset {
+    @Override
+    public void jmp(Label l) {
+        new Bpa(l).emit(this);
+        new Nop().emit(this);
+    }
 
-        public Bset(SPARCAssembler asm, Register src, Register dst) {
-            new Or(asm, dst, src, dst);
+    @Override
+    protected final void patchJumpTarget(int branch, int branchTarget) {
+        final int disp = branchTarget - branch;
+        Fmt00c fmt = Fmt00c.read(this, branch);
+        fmt.setDisp19(disp);
+        fmt.write(this, branch);
+    }
+
+    @Override
+    public AbstractAddress makeAddress(Register base, int displacement) {
+        return new SPARCAddress(base, displacement);
+    }
+
+    @Override
+    public AbstractAddress getPlaceholder() {
+        return Placeholder;
+    }
+
+    public static class Bclr extends Andn {
+
+        public Bclr(Register src, Register dst) {
+            super(dst, src, dst);
         }
 
-        public Bset(SPARCAssembler asm, int simm13, Register dst) {
-            new Or(asm, dst, simm13, dst);
+        public Bclr(int simm13, Register dst) {
+            super(dst, simm13, dst);
         }
     }
 
-    @SuppressWarnings("unused")
-    public static class Btog {
+    public static class Bpgeu extends Bpcc {
 
-        public Btog(SPARCAssembler asm, Register src, Register dst) {
-            new Xor(asm, dst, src, dst);
+        public Bpgeu(CC cc, int simm19) {
+            super(cc, simm19);
         }
 
-        public Btog(SPARCAssembler asm, int simm13, Register dst) {
-            new Xor(asm, dst, simm13, dst);
-        }
-    }
-
-    @SuppressWarnings("unused")
-    public static class Btst {
-
-        public Btst(SPARCAssembler asm, Register src1, Register src2) {
-            new Andcc(asm, src1, src2, SPARC.g0);
-        }
-
-        public Btst(SPARCAssembler asm, Register src1, int simm13) {
-            new Andcc(asm, src1, simm13, SPARC.g0);
+        public Bpgeu(CC cc, Label label) {
+            super(cc, label);
         }
     }
 
-    @SuppressWarnings("unused")
-    public static class Clr {
+    public static class Bset extends Or {
 
-        public Clr(SPARCAssembler asm, Register dst) {
-            new Or(asm, SPARC.g0, SPARC.g0, dst);
+        public Bset(Register src, Register dst) {
+            super(dst, src, dst);
         }
 
-        public Clr(SPARCAssembler asm, SPARCAddress addr) {
-            new Stw(asm, SPARC.g0, addr);
-        }
-    }
-
-    @SuppressWarnings("unused")
-    public static class Clrb {
-
-        public Clrb(SPARCAssembler asm, SPARCAddress addr) {
-            new Stb(asm, SPARC.g0, addr);
+        public Bset(int simm13, Register dst) {
+            super(dst, simm13, dst);
         }
     }
 
-    @SuppressWarnings("unused")
-    public static class Clrh {
+    public static class Btst extends Andcc {
 
-        public Clrh(SPARCAssembler asm, SPARCAddress addr) {
-            new Sth(asm, SPARC.g0, addr);
+        public Btst(Register src1, Register src2) {
+            super(src1, src2, g0);
+        }
+
+        public Btst(Register src1, int simm13) {
+            super(src1, simm13, g0);
         }
     }
 
-    @SuppressWarnings("unused")
-    public static class Clrx {
+    public static class Cas extends Casa {
 
-        public Clrx(SPARCAssembler asm, SPARCAddress addr) {
-            new Stx(asm, SPARC.g0, addr);
+        public Cas(Register src1, Register src2, Register dst) {
+            super(src1, src2, dst, Asi.ASI_PRIMARY);
         }
     }
 
-    @SuppressWarnings("unused")
-    public static class Clruw {
+    public static class Casx extends Casxa {
 
-        public Clruw(SPARCAssembler asm, Register src1, Register dst) {
+        public Casx(Register src1, Register src2, Register dst) {
+            super(src1, src2, dst, Asi.ASI_PRIMARY);
+        }
+    }
+
+    public static class Clr extends Or {
+
+        public Clr(Register dst) {
+            super(g0, g0, dst);
+        }
+    }
+
+    public static class Clrb extends Stb {
+
+        public Clrb(SPARCAddress addr) {
+            super(g0, addr);
+        }
+    }
+
+    public static class Clrh extends Sth {
+
+        public Clrh(SPARCAddress addr) {
+            super(g0, addr);
+        }
+    }
+
+    public static class Clrx extends Stx {
+
+        public Clrx(SPARCAddress addr) {
+            super(g0, addr);
+        }
+    }
+
+    public static class Clruw extends Srl {
+
+        public Clruw(Register src1, Register dst) {
+            super(src1, g0, dst);
             assert src1.encoding() != dst.encoding();
-            new Srl(asm, src1, SPARC.g0, dst);
         }
 
-        public Clruw(SPARCAssembler asm, Register dst) {
-            new Srl(asm, dst, SPARC.g0, dst);
-        }
-    }
-
-    @SuppressWarnings("unused")
-    public static class Cmp {
-
-        public Cmp(SPARCAssembler asm, Register a, Register b) {
-            new Subcc(asm, a, b, SPARC.g0);
-        }
-
-        public Cmp(SPARCAssembler asm, Register a, int simm13) {
-            new Subcc(asm, a, simm13, SPARC.g0);
+        public Clruw(Register dst) {
+            super(dst, g0, dst);
         }
     }
 
-    @SuppressWarnings("unused")
-    public static class Dec {
+    public static class Cmp extends Subcc {
 
-        public Dec(SPARCAssembler asm, Register dst) {
-            new Sub(asm, dst, 1, dst);
+        public Cmp(Register a, Register b) {
+            super(a, b, g0);
         }
 
-        public Dec(SPARCAssembler asm, int simm13, Register dst) {
-            new Sub(asm, dst, simm13, dst);
+        public Cmp(Register a, int simm13) {
+            super(a, simm13, g0);
         }
     }
 
-    @SuppressWarnings("unused")
-    public static class Deccc {
+    public static class Dec extends Sub {
 
-        public Deccc(SPARCAssembler asm, Register dst) {
-            new Subcc(asm, dst, 1, dst);
+        public Dec(Register dst) {
+            super(dst, 1, dst);
         }
 
-        public Deccc(SPARCAssembler asm, int simm13, Register dst) {
-            new Subcc(asm, dst, simm13, dst);
+        public Dec(int simm13, Register dst) {
+            super(dst, simm13, dst);
+        }
+    }
+
+    public static class Deccc extends Subcc {
+
+        public Deccc(Register dst) {
+            super(dst, 1, dst);
+        }
+
+        public Deccc(int simm13, Register dst) {
+            super(dst, simm13, dst);
         }
     }
 
     @SuppressWarnings("unused")
     public static class Inc {
 
-        public Inc(SPARCAssembler asm, Register dst) {
-            new Add(asm, dst, 1, dst);
+        public Inc(Register dst) {
+            new Add(dst, 1, dst);
         }
 
-        public Inc(SPARCAssembler asm, int simm13, Register dst) {
-            new Add(asm, dst, simm13, dst);
+        public Inc(int simm13, Register dst) {
+            new Add(dst, simm13, dst);
         }
     }
 
     @SuppressWarnings("unused")
     public static class Inccc {
 
-        public Inccc(SPARCAssembler asm, Register dst) {
-            new Addcc(asm, dst, 1, dst);
+        public Inccc(Register dst) {
+            new Addcc(dst, 1, dst);
         }
 
-        public Inccc(SPARCAssembler asm, int simm13, Register dst) {
-            new Addcc(asm, dst, simm13, dst);
-        }
-    }
-
-    @SuppressWarnings("unused")
-    public static class Jmp {
-
-        public Jmp(SPARCAssembler asm, SPARCAddress address) {
-            new Jmpl(asm, address, SPARC.g0);
+        public Inccc(int simm13, Register dst) {
+            new Addcc(dst, simm13, dst);
         }
     }
 
-    @SuppressWarnings("unused")
-    public static class Neg {
+    public static class Jmp extends Jmpl {
 
-        public Neg(SPARCAssembler asm, Register src2, Register dst) {
+        public Jmp(SPARCAddress address) {
+            super(address.getBase(), address.getDisplacement(), g0);
+        }
+    }
+
+    public static class Neg extends Sub {
+
+        public Neg(Register src2, Register dst) {
+            super(g0, src2, dst);
             assert src2.encoding() != dst.encoding();
-            new Sub(asm, SPARC.g0, src2, dst);
         }
 
-        public Neg(SPARCAssembler asm, Register dst) {
-            new Sub(asm, SPARC.g0, dst, dst);
+        public Neg(Register dst) {
+            super(g0, dst, dst);
         }
     }
 
-    @SuppressWarnings("unused")
-    public static class Mov {
+    public static class Mov extends Or {
 
-        public Mov(SPARCAssembler asm, Register src1, Register dst) {
+        public Mov(Register src1, Register dst) {
+            super(g0, src1, dst);
             assert src1.encoding() != dst.encoding();
-            new Or(asm, SPARC.g0, src1, dst);
         }
 
-        public Mov(SPARCAssembler asm, int simm13, Register dst) {
-            new Or(asm, SPARC.g0, simm13, dst);
+        public Mov(int simm13, Register dst) {
+            super(g0, simm13, dst);
         }
     }
 
-    @SuppressWarnings("unused")
-    public static class Not {
+    public static class Nop extends Sethi {
 
-        public Not(SPARCAssembler asm, Register src1, Register dst) {
+        public Nop() {
+            super(0, r0);
+        }
+    }
+
+    public static class Not extends Xnor {
+
+        public Not(Register src1, Register dst) {
+            super(src1, g0, dst);
             assert src1.encoding() != dst.encoding();
-            new Xnor(asm, src1, SPARC.g0, dst);
         }
 
-        public Not(SPARCAssembler asm, Register dst) {
-            new Xnor(asm, dst, SPARC.g0, dst);
-        }
-    }
-
-    @SuppressWarnings("unused")
-    public static class RestoreWindow {
-
-        public RestoreWindow(SPARCAssembler asm) {
-            new Restore(asm, SPARC.g0, SPARC.g0, SPARC.g0);
+        public Not(Register dst) {
+            super(dst, g0, dst);
         }
     }
 
-    @SuppressWarnings("unused")
-    public static class Ret {
+    public static class RestoreWindow extends Restore {
 
-        public Ret(SPARCAssembler asm) {
-            new Jmpl(asm, new SPARCAddress(SPARC.i0, 8), SPARC.g0);
-
+        public RestoreWindow() {
+            super(g0, g0, g0);
         }
     }
 
-    @SuppressWarnings("unused")
-    public static class SaveWindow {
+    public static class Ret extends Jmpl {
 
-        public SaveWindow(SPARCAssembler asm) {
-            new Save(asm, SPARC.g0, SPARC.g0, SPARC.g0);
+        public Ret() {
+            super(i7, 8, g0);
         }
     }
 
-    @SuppressWarnings("unused")
+    public static class SaveWindow extends Save {
+
+        public SaveWindow() {
+            super(g0, g0, g0);
+        }
+    }
+
     public static class Setuw {
 
-        public Setuw(SPARCAssembler asm, int value, Register dst) {
-            if (value >= 0 && ((value & 0x3FFF) == 0)) {
-                new Sethi(asm, hi22(value), dst);
+        private int value;
+        private Register dst;
+
+        public Setuw(int value, Register dst) {
+            this.value = value;
+            this.dst = dst;
+        }
+
+        public void emit(SPARCMacroAssembler masm) {
+            if (value == 0) {
+                new Clr(dst).emit(masm);
             } else if (-4095 <= value && value <= 4096) {
-                new Or(asm, SPARC.g0, value, dst);
+                new Or(g0, value, dst).emit(masm);
+            } else if (value >= 0 && ((value & 0x3FFF) == 0)) {
+                new Sethi(hi22(value), dst).emit(masm);
             } else {
-                new Sethi(asm, hi22(value), dst);
-                new Or(asm, dst, lo10(value), dst);
+                new Sethi(hi22(value), dst).emit(masm);
+                new Or(dst, lo10(value), dst).emit(masm);
             }
         }
     }
 
-    @SuppressWarnings("unused")
     public static class Setx {
 
-        public Setx(SPARCAssembler asm, long value, Register tmp, Register dst) {
+        private long value;
+        private Register dst;
+        private boolean forceRelocatable;
+
+        public Setx(long value, Register dst, boolean forceRelocatable) {
+            this.value = value;
+            this.dst = dst;
+            this.forceRelocatable = forceRelocatable;
+        }
+
+        public Setx(long value, Register dst) {
+            this(value, dst, false);
+        }
+
+        public void emit(SPARCMacroAssembler masm) {
             int hi = (int) (value >> 32);
             int lo = (int) (value & ~0);
 
-            if (isSimm13(lo) && value == lo) {
-                new Or(asm, SPARC.g0, lo, dst);
-            } else if (hi == 0) {
-                new Sethi(asm, lo, dst);   // hardware version zero-extends to upper 32
-                if (lo10(lo) != 0) {
-                    new Or(asm, dst, lo10(lo), dst);
-                }
+// if (isSimm13(lo) && value == lo) {
+// new Or(g0, lo, dst).emit(masm);
+// } else if (hi == 0) {
+// new Sethi(lo, dst).emit(masm); // hardware version zero-extends to upper 32
+// if (lo10(lo) != 0) {
+// new Or(dst, lo10(lo), dst).emit(masm);
+// }
+// } else if (hi == -1) {
+// new Sethi(~lo, dst).emit(masm); // hardware version zero-extends to upper 32
+// new Xor(dst, ~lo10(~0), dst).emit(masm);
+// new Add(dst, lo10(lo), dst).emit(masm);
+// } else if (lo == 0) {
+// if (isSimm13(hi)) {
+// new Or(g0, hi, dst).emit(masm);
+// } else {
+// new Sethi(hi, dst).emit(masm); // hardware version zero-extends to upper 32
+// if (lo10(hi) != 0) {
+// new Or(dst, lo10(hi), dst).emit(masm);
+// }
+// }
+// new Sllx(dst, 32, dst).emit(masm);
+
+            // This is the same logic as MacroAssembler::internal_set.
+            final int startPc = masm.codeBuffer.position();
+
+            if (hi == 0 && lo >= 0) {
+                new Sethi(lo, dst).emit(masm);
             } else if (hi == -1) {
-                new Sethi(asm, ~lo, dst);  // hardware version zero-extends to upper 32
-                new Xor(asm, dst, lo10(lo) ^ ~lo10(~0), dst);
-            } else if (lo == 0) {
-                if (isSimm13(hi)) {
-                    new Or(asm, SPARC.g0, hi, dst);
-                } else {
-                    new Sethi(asm, hi, dst);   // hardware version zero-extends to upper 32
-                    if (lo10(hi) != 0) {
-                        new Or(asm, dst, lo10(hi), dst);
-                    }
-                }
-                new Sllx(asm, dst, 32, dst);
+                new Sethi(~lo, dst).emit(masm);
+                new Xor(dst, ~lo10(~0), dst).emit(masm);
             } else {
-                new Sethi(asm, hi, tmp);
-                new Sethi(asm, lo, dst); // macro assembler version sign-extends
-                if (lo10(hi) != 0) {
-                    new Or(asm, tmp, lo10(hi), tmp);
+                int shiftcnt = 0;
+                new Sethi(hi, dst).emit(masm);
+                if ((hi & 0x3ff) != 0) {                                       // Any bits?
+                    new Or(dst, hi & 0x3ff, dst).emit(masm);                   // msb 32-bits are now in lsb 32
                 }
-                if (lo10(lo) != 0) {
-                    new Or(asm, dst, lo10(lo), dst);
+                if ((lo & 0xFFFFFC00) != 0) {                                  // done?
+                    if (((lo >> 20) & 0xfff) != 0) {                           // Any bits set?
+                        new Sllx(dst, 12, dst).emit(masm);                     // Make room for next 12 bits
+                        new Or(dst, (lo >> 20) & 0xfff, dst).emit(masm);       // Or in next 12
+                        shiftcnt = 0;                                          // We already shifted
+                    } else {
+                        shiftcnt = 12;
+                    }
+                    if (((lo >> 10) & 0x3ff) != 0) {
+                        new Sllx(dst, shiftcnt + 10, dst).emit(masm);          // Make room for last 10 bits
+                        new Or(dst, (lo >> 10) & 0x3ff, dst).emit(masm);       // Or in next 10
+                        shiftcnt = 0;
+                    } else {
+                        shiftcnt = 10;
+                    }
+                    new Sllx(dst, shiftcnt + 10, dst).emit(masm);              // Shift leaving disp field 0'd
+                } else {
+                    new Sllx(dst, 32, dst).emit(masm);
                 }
-                new Sllx(asm, tmp, 32, tmp);
-                new Or(asm, dst, tmp, dst);
+            }
+            // Pad out the instruction sequence so it can be patched later.
+            if (forceRelocatable) {
+                while (masm.codeBuffer.position() < (startPc + (7 * 4))) {
+                    new Nop().emit(masm);
+                }
+            }
+            if (lo10(lo) != 0 || forceRelocatable) {
+                new Add(dst, lo10(lo), dst).emit(masm);
             }
         }
     }
 
-    @SuppressWarnings("unused")
-    public static class Signx {
+    public static class Signx extends Sra {
 
-        public Signx(SPARCAssembler asm, Register src1, Register dst) {
+        public Signx(Register src1, Register dst) {
+            super(src1, g0, dst);
             assert src1.encoding() != dst.encoding();
-            new Sra(asm, src1, SPARC.g0, dst);
         }
 
-        public Signx(SPARCAssembler asm, Register dst) {
-            new Sra(asm, dst, SPARC.g0, dst);
+        public Signx(Register dst) {
+            super(dst, g0, dst);
         }
     }
 
@@ -337,7 +429,7 @@ public class SPARCMacroAssembler extends SPARCAssembler {
 
         public Trap(SPARCAssembler asm, int trap) {
             assert trap >= 0 && trap <= 0x7f;
-            new Ta(asm, Icc, SPARC.g0, trap);
+            new Ta(asm, Icc, g0, trap);
         }
     }
 }

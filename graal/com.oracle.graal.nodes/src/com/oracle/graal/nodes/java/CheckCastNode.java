@@ -22,16 +22,23 @@
  */
 package com.oracle.graal.nodes.java;
 
+import static com.oracle.graal.api.code.DeoptimizationAction.*;
+import static com.oracle.graal.api.meta.DeoptimizationReason.*;
+import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
+
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.meta.ProfilingInfo.TriState;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
  * Implements a type check against a compile-time known type.
  */
-public final class CheckCastNode extends FixedWithNextNode implements Canonicalizable, Lowerable, Node.IterableNodeType, Virtualizable {
+public final class CheckCastNode extends FixedWithNextNode implements Canonicalizable, Lowerable, Node.IterableNodeType, Virtualizable, ValueProxy {
 
     @Input private ValueNode object;
     private final ResolvedJavaType type;
@@ -62,9 +69,73 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
         return forStoreCheck;
     }
 
+    // TODO (ds) remove once performance regression in compiler.sunflow (and other benchmarks)
+    // caused by new lowering is fixed
+    private static final boolean useNewLowering = true; // Boolean.getBoolean("graal.checkcast.useNewLowering");
+
+    /**
+     * Lowers a {@link CheckCastNode} to a {@link GuardingPiNode}. That is:
+     * 
+     * <pre>
+     * 1: A a = ...
+     * 2: B b = (B) a;
+     * </pre>
+     * 
+     * is lowered to:
+     * 
+     * <pre>
+     * 1: A a = ...
+     * 2: B b = guardingPi(a == null || a instanceof B, a, stamp(B))
+     * </pre>
+     * 
+     * or if a is known to be non-null:
+     * 
+     * <pre>
+     * 1: A a = ...
+     * 2: B b = guardingPi(a instanceof B, a, stamp(B, non-null))
+     * </pre>
+     * 
+     * Note: we use {@link Graph#add} as opposed to {@link Graph#unique} for the new
+     * {@link InstanceOfNode} to maintain the invariant checked by
+     * {@code LoweringPhase.checkUsagesAreScheduled()}.
+     */
     @Override
     public void lower(LoweringTool tool, LoweringType loweringType) {
-        tool.getRuntime().lower(this, tool);
+        if (useNewLowering) {
+            InstanceOfNode typeTest = graph().add(new InstanceOfNode(type, object, profile));
+            Stamp stamp = StampFactory.declared(type).join(object.stamp());
+            ValueNode condition;
+            if (stamp == null) {
+                // This is a check cast that will always fail
+                condition = LogicConstantNode.contradiction(graph());
+                stamp = StampFactory.declared(type);
+            } else if (object.stamp().nonNull()) {
+                condition = typeTest;
+            } else {
+                if (profile != null && profile.getNullSeen() == TriState.FALSE) {
+                    FixedGuardNode nullGuard = graph().add(new FixedGuardNode(graph().unique(new IsNullNode(object)), UnreachedCode, DeoptimizationAction.InvalidateReprofile, true));
+                    graph().addBeforeFixed(this, nullGuard);
+                    condition = typeTest;
+                    stamp = stamp.join(StampFactory.objectNonNull());
+                } else {
+                    double shortCircuitProbability;
+                    if (profile == null) {
+                        shortCircuitProbability = NOT_FREQUENT_PROBABILITY;
+                    } else {
+                        // Tell the instanceof it does not need to do a null check
+                        typeTest.setProfile(new JavaTypeProfile(TriState.FALSE, profile.getNotRecordedProbability(), profile.getTypes()));
+
+                        // TODO (ds) replace with probability of null-seen when available
+                        shortCircuitProbability = NOT_FREQUENT_PROBABILITY;
+                    }
+                    condition = graph().unique(new ShortCircuitOrNode(graph().unique(new IsNullNode(object)), false, typeTest, false, shortCircuitProbability));
+                }
+            }
+            GuardingPiNode checkedObject = graph().add(new GuardingPiNode(object, condition, false, forStoreCheck ? ArrayStoreException : ClassCastException, InvalidateReprofile, stamp));
+            graph().replaceFixedWithFixed(this, checkedObject);
+        } else {
+            tool.getRuntime().lower(this, tool);
+        }
     }
 
     @Override
@@ -132,5 +203,10 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
                 tool.replaceWithVirtual(state.getVirtualObject());
             }
         }
+    }
+
+    @Override
+    public ValueNode getOriginalValue() {
+        return object;
     }
 }

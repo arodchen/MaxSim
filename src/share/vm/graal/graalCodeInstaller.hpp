@@ -76,7 +76,7 @@ private:
   ExceptionHandlerTable     _exception_handler_table;
 
   jint pd_next_offset(NativeInstruction* inst, jint pc_offset, oop method);
-  void pd_site_DataPatch(oop constant, oop kind, bool inlined, address instruction, int alignment, char typeChar);
+  void pd_site_DataPatch(int pc_offset, oop site);
   void pd_relocate_CodeBlob(CodeBlob* cb, NativeInstruction* inst);
   void pd_relocate_ForeignCall(NativeInstruction* inst, jlong foreign_call_destination);
   void pd_relocate_JavaMethod(oop method, jint pc_offset);
@@ -94,7 +94,9 @@ private:
   void initialize_assumptions(oop target_method);
 
   // perform data and call relocation on the CodeBuffer
-  void initialize_buffer(CodeBuffer& buffer);
+  bool initialize_buffer(CodeBuffer& buffer);
+
+  int calculate_constants_size();
 
   void assumption_MethodContents(Handle assumption);
   void assumption_NoFinalizableSubclass(Handle assumption);
@@ -114,10 +116,10 @@ private:
 };
 
 #ifdef TARGET_ARCH_x86
-# include "codeInstaller_x86.hpp"
+# include "graalCodeInstaller_x86.hpp"
 #endif
 #ifdef TARGET_ARCH_sparc
-# include "codeInstaller_sparc.hpp"
+# include "graalCodeInstaller_sparc.hpp"
 #endif
 #ifdef TARGET_ARCH_zero
 # error

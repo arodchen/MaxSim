@@ -68,7 +68,7 @@
   template(java_lang_Float,                           "java/lang/Float")                          \
   template(java_lang_Double,                          "java/lang/Double")                         \
   template(java_lang_Byte,                            "java/lang/Byte")                           \
-  template(java_lang_Byte_Cache,                      "java/lang/Byte$ByteCache")                 \
+  template(java_lang_Byte_ByteCache,                  "java/lang/Byte$ByteCache")                 \
   template(java_lang_Short,                           "java/lang/Short")                          \
   template(java_lang_Short_ShortCache,                "java/lang/Short$ShortCache")               \
   template(java_lang_Integer,                         "java/lang/Integer")                        \
@@ -338,6 +338,7 @@
   template(com_oracle_graal_api_code_CompilationResult_Mark,         "com/oracle/graal/api/code/CompilationResult$Mark")              \
   template(com_oracle_graal_api_code_CompilationResult_Infopoint,    "com/oracle/graal/api/code/CompilationResult$Infopoint")         \
   template(com_oracle_graal_api_code_CompilationResult_Site,         "com/oracle/graal/api/code/CompilationResult$Site")              \
+  template(com_oracle_graal_api_code_ExternalCompilationResult,      "com/oracle/graal/api/code/ExternalCompilationResult")           \
   template(com_oracle_graal_api_code_InfopointReason,                "com/oracle/graal/api/code/InfopointReason")                     \
   template(com_oracle_graal_api_code_BytecodeFrame,                  "com/oracle/graal/api/code/BytecodeFrame")                       \
   template(com_oracle_graal_api_code_BytecodePosition,               "com/oracle/graal/api/code/BytecodePosition")                    \
@@ -348,11 +349,13 @@
   template(com_oracle_graal_api_code_VirtualObject,                  "com/oracle/graal/api/code/VirtualObject")                       \
   template(com_oracle_graal_api_code_RegisterSaveLayout,             "com/oracle/graal/api/code/RegisterSaveLayout")                  \
   template(com_oracle_graal_api_code_InvalidInstalledCodeException,  "com/oracle/graal/api/code/InvalidInstalledCodeException")       \
+  /* graal.truffle */                                                                                                                 \
+  template(com_oracle_graal_truffle_GraalTruffleRuntime,             "com/oracle/graal/truffle/GraalTruffleRuntime")                  \
   template(startCompiler_name,                    "startCompiler")                                                                    \
   template(bootstrap_name,                        "bootstrap")                                                                        \
   template(shutdownCompiler_name,                 "shutdownCompiler")                                                                 \
   template(compileMethod_name,                    "compileMethod")                                                                    \
-  template(compileMethod_signature,               "(JLcom/oracle/graal/hotspot/meta/HotSpotResolvedObjectType;IZI)V")                 \
+  template(compileMethod_signature,               "(JLcom/oracle/graal/hotspot/meta/HotSpotResolvedObjectType;IZ)V")                  \
   template(setOption_name,                        "setOption")                                                                        \
   template(setOption_signature,                   "(Ljava/lang/String;)Z")                                                            \
   template(createUnresolvedJavaMethod_name,       "createUnresolvedJavaMethod")                                                       \
@@ -382,6 +385,7 @@
   template(getVMToCompiler_name,                  "getVMToCompiler")                                                                  \
   template(getVMToCompiler_signature,             "()Lcom/oracle/graal/hotspot/bridge/VMToCompiler;")                                 \
   template(getInstance_name,                      "getInstance")                                                                      \
+  template(getTruffleRuntimeInstance_signature,   "()Lcom/oracle/graal/truffle/GraalTruffleRuntime;")                                 \
   template(makeInstance_name,                     "makeInstance")                                                                     \
   template(initialize_name,                       "initialize")                                                                       \
   template(getInstance_signature,                 "()Lcom/oracle/graal/hotspot/HotSpotGraalRuntime;")                                 \
@@ -498,6 +502,9 @@
   template(array_klass_name,                          "array_klass")                              \
   template(oop_size_name,                             "oop_size")                                 \
   template(static_oop_field_count_name,               "static_oop_field_count")                   \
+  template(protection_domain_name,                    "protection_domain")                        \
+  template(init_lock_name,                            "init_lock")                                \
+  template(signers_name,                              "signers_name")                             \
   GRAAL_ONLY(template(graal_mirror_name,              "graal_mirror"))                            \
   template(loader_data_name,                          "loader_data")                              \
   template(dependencies_name,                         "dependencies")                             \
@@ -625,13 +632,18 @@
   template(sun_management_ManagementFactory,           "sun/management/ManagementFactory")                        \
   template(sun_management_Sensor,                      "sun/management/Sensor")                                   \
   template(sun_management_Agent,                       "sun/management/Agent")                                    \
+  template(sun_management_DiagnosticCommandImpl,       "sun/management/DiagnosticCommandImpl")                    \
   template(sun_management_GarbageCollectorImpl,        "sun/management/GarbageCollectorImpl")                     \
+  template(sun_management_ManagementFactoryHelper,     "sun/management/ManagementFactoryHelper")                  \
+  template(getDiagnosticCommandMBean_name,             "getDiagnosticCommandMBean")                               \
+  template(getDiagnosticCommandMBean_signature,        "()Lcom/sun/management/DiagnosticCommandMBean;")           \
   template(getGcInfoBuilder_name,                      "getGcInfoBuilder")                                        \
   template(getGcInfoBuilder_signature,                 "()Lsun/management/GcInfoBuilder;")                        \
   template(com_sun_management_GcInfo,                  "com/sun/management/GcInfo")                               \
   template(com_sun_management_GcInfo_constructor_signature, "(Lsun/management/GcInfoBuilder;JJJ[Ljava/lang/management/MemoryUsage;[Ljava/lang/management/MemoryUsage;[Ljava/lang/Object;)V") \
   template(createGCNotification_name,                  "createGCNotification")                                    \
   template(createGCNotification_signature,             "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/sun/management/GcInfo;)V") \
+  template(createDiagnosticFrameworkNotification_name, "createDiagnosticFrameworkNotification")                   \
   template(createMemoryPoolMBean_name,                 "createMemoryPoolMBean")                                   \
   template(createMemoryManagerMBean_name,              "createMemoryManagerMBean")                                \
   template(createGarbageCollectorMBean_name,           "createGarbageCollectorMBean")                             \
@@ -1137,7 +1149,7 @@
    do_name(     Double_valueOf_signature,                        "(D)Ljava/lang/Double;")                               \
                                                                                                                         \
   do_intrinsic(_CompilerToVMImpl_executeCompiledMethod,           com_oracle_graal_hotspot_bridge_CompilerToVMImpl, executeCompiledMethod_name, CompilerToVMImpl_executeCompiledMethod_signature, F_SN)\
-   do_name(     CompilerToVMImpl_executeCompiledMethod_signature, "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;J)Ljava/lang/Object;")                               \
+   do_name(     CompilerToVMImpl_executeCompiledMethod_signature, "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Lcom/oracle/graal/hotspot/meta/HotSpotInstalledCode;)Ljava/lang/Object;")                               \
    do_name(     executeCompiledMethod_name,                       "executeCompiledMethodIntrinsic")                     \
     /*end*/
 

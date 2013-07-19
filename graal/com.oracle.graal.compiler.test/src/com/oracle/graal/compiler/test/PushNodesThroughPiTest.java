@@ -22,9 +22,7 @@
  */
 package com.oracle.graal.compiler.test;
 
-import junit.framework.Assert;
-
-import org.junit.Test;
+import org.junit.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
@@ -77,7 +75,7 @@ public class PushNodesThroughPiTest extends GraalCompilerTest {
                             if (field.getName().equals("x")) {
                                 Assert.assertTrue(rn.object() instanceof LocalNode);
                             } else {
-                                Assert.assertTrue(rn.object() instanceof UnsafeCastNode);
+                                Assert.assertTrue(rn.object().toString(), rn.object() instanceof PiNode);
                             }
                             counter++;
                         }

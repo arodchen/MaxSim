@@ -165,6 +165,14 @@ public class TargetMethodAssembler {
         return asm.getPlaceholder();
     }
 
+    public AbstractAddress recordDataReferenceInCode(byte[] data, int alignment) {
+        assert data != null;
+        int pos = asm.codeBuffer.position();
+        Debug.log("Raw data reference in code: pos = %d, data = %s", pos, data.toString());
+        compilationResult.recordDataReference(pos, data, alignment);
+        return asm.getPlaceholder();
+    }
+
     /**
      * Returns the integer value of any constant that can be represented by a 32-bit integer value,
      * including long constants that fit into the 32-bit range.
@@ -211,7 +219,7 @@ public class TargetMethodAssembler {
     }
 
     /**
-     * Returns the address of a float constant that is embedded as a data references into the code.
+     * Returns the address of a float constant that is embedded as a data reference into the code.
      */
     public AbstractAddress asFloatConstRef(Value value) {
         return asFloatConstRef(value, 4);
@@ -223,7 +231,7 @@ public class TargetMethodAssembler {
     }
 
     /**
-     * Returns the address of a double constant that is embedded as a data references into the code.
+     * Returns the address of a double constant that is embedded as a data reference into the code.
      */
     public AbstractAddress asDoubleConstRef(Value value) {
         return asDoubleConstRef(value, 8);
@@ -235,10 +243,18 @@ public class TargetMethodAssembler {
     }
 
     /**
-     * Returns the address of a long constant that is embedded as a data references into the code.
+     * Returns the address of a long constant that is embedded as a data reference into the code.
      */
     public AbstractAddress asLongConstRef(Value value) {
         assert value.getKind() == Kind.Long && isConstant(value);
+        return recordDataReferenceInCode((Constant) value, 8, false);
+    }
+
+    /**
+     * Returns the address of an object constant that is embedded as a data reference into the code.
+     */
+    public AbstractAddress asObjectConstRef(Value value) {
+        assert value.getKind() == Kind.Object && isConstant(value);
         return recordDataReferenceInCode((Constant) value, 8, false);
     }
 

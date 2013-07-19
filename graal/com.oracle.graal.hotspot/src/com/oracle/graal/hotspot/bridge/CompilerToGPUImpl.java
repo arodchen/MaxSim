@@ -24,6 +24,7 @@
 package com.oracle.graal.hotspot.bridge;
 
 import com.oracle.graal.api.code.InvalidInstalledCodeException;
+import com.oracle.graal.hotspot.meta.HotSpotInstalledCode;
 
 
 /**
@@ -37,4 +38,5 @@ public class CompilerToGPUImpl implements CompilerToGPU {
 
     public native boolean deviceDetach();
 
+    public native Object executeExternalMethodVarargs(Object[] args, HotSpotInstalledCode hotspotInstalledCode) throws InvalidInstalledCodeException;
 }

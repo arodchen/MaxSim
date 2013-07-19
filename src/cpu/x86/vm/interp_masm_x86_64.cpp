@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2003, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -269,6 +269,20 @@ void InterpreterMacroAssembler::get_cache_entry_pointer_at_bcp(Register cache,
   // skip past the header
   addptr(cache, in_bytes(ConstantPoolCache::base_offset()));
   addptr(cache, tmp);  // construct pointer to cache entry
+}
+
+void InterpreterMacroAssembler::get_method_counters(Register method,
+                                                    Register mcs, Label& skip) {
+  Label has_counters;
+  movptr(mcs, Address(method, Method::method_counters_offset()));
+  testptr(mcs, mcs);
+  jcc(Assembler::notZero, has_counters);
+  call_VM(noreg, CAST_FROM_FN_PTR(address,
+          InterpreterRuntime::build_method_counters), method);
+  movptr(mcs, Address(method,Method::method_counters_offset()));
+  testptr(mcs, mcs);
+  jcc(Assembler::zero, skip); // No MethodCounters allocated, OutOfMemory
+  bind(has_counters);
 }
 
 // Load object from cpool->resolved_references(index)
@@ -1140,13 +1154,12 @@ void InterpreterMacroAssembler::profile_called_method(Register method, Register 
     Label done;
     record_item_in_profile_helper(method, mdp, reg2, 0, done, MethodProfileWidth,
       &VirtualCallData::method_offset, &VirtualCallData::method_count_offset, in_bytes(VirtualCallData::nonprofiled_receiver_count_offset()));
-    bind (done);
+    bind(done);
 
     update_mdp_by_constant(mdp, in_bytes(VirtualCallData::virtual_call_data_size()));
     bind(profile_continue);
   }
 }
-
 #endif
 
 // This routine creates a state machine for updating the multi-row

@@ -126,4 +126,25 @@ public class CompilerDirectives {
     @Target({ElementType.METHOD})
     public @interface Unsafe {
     }
+
+    /**
+     * Treats the given value as a value of the given class. The class must evaluate to a constant.
+     * 
+     * @param value the value that is known to have the specified type
+     * @param clazz the specified type of the value
+     * @return the value
+     */
+    @SuppressWarnings("unchecked")
+    @Unsafe
+    public static <T> T unsafeCast(Object value, Class<T> clazz) {
+        return (T) value;
+    }
+
+    /**
+     * Marks methods that are considered slowpath and should therefore not be inlined by default.
+     */
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target({ElementType.METHOD})
+    public @interface SlowPath {
+    }
 }

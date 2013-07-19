@@ -73,9 +73,6 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native ResolvedJavaType getUniqueImplementor(HotSpotResolvedObjectType interfaceType);
 
     @Override
-    public native int getInvocationCount(long metaspaceMethod);
-
-    @Override
     public native JavaType lookupType(String name, HotSpotResolvedObjectType accessingClass, boolean eagerResolve);
 
     @Override
@@ -143,7 +140,7 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native StackTraceElement getStackTraceElement(long metaspaceMethod, int bci);
 
     @Override
-    public native Object executeCompiledMethodVarargs(Object[] args, long nmethod);
+    public native Object executeCompiledMethodVarargs(Object[] args, HotSpotInstalledCode hotspotInstalledCode);
 
     @Override
     public native int getVtableEntryOffset(long metaspaceMethod);
@@ -170,14 +167,17 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native Object lookupAppendixInPool(HotSpotResolvedObjectType pool, int cpi, byte opcode);
 
     @Override
-    public native void invalidateInstalledCode(long nativeMethod);
+    public native void invalidateInstalledCode(HotSpotInstalledCode hotspotInstalledCode);
 
     @Override
-    public native boolean isInstalledCodeValid(long nativeMethod);
+    public native Object readUnsafeUncompressedPointer(Object o, long displacement);
 
     @Override
-    public Object executeCompiledMethod(Object arg1, Object arg2, Object arg3, long nmethod) throws InvalidInstalledCodeException {
-        return executeCompiledMethodIntrinsic(arg1, arg2, arg3, nmethod);
+    public native long readUnsafeKlassPointer(Object o);
+
+    @Override
+    public Object executeCompiledMethod(Object arg1, Object arg2, Object arg3, HotSpotInstalledCode hotspotInstalledCode) throws InvalidInstalledCodeException {
+        return executeCompiledMethodIntrinsic(arg1, arg2, arg3, hotspotInstalledCode);
     }
 
     /**
@@ -187,5 +187,5 @@ public class CompilerToVMImpl implements CompilerToVM {
      * stub that does the necessary argument shuffling and a tail call via an indirect jump to the
      * verified entry point of the given native method.
      */
-    private static native Object executeCompiledMethodIntrinsic(Object arg1, Object arg2, Object arg3, long nmethod);
+    public static native Object executeCompiledMethodIntrinsic(Object arg1, Object arg2, Object arg3, HotSpotInstalledCode hotspotInstalledCode) throws InvalidInstalledCodeException;
 }

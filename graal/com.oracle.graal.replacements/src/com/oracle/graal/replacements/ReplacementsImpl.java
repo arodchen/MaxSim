@@ -156,7 +156,7 @@ public class ReplacementsImpl implements Replacements {
 
     /**
      * Registers a method substitution.
-     * 
+     *
      * @param originalMember a method or constructor being substituted
      * @param substituteMethod the substitute method
      * @return the original method
@@ -177,7 +177,7 @@ public class ReplacementsImpl implements Replacements {
 
     /**
      * Registers a macro substitution.
-     * 
+     *
      * @param originalMethod a method or constructor being substituted
      * @param macro the substitute macro node class
      * @return the original method
@@ -211,7 +211,7 @@ public class ReplacementsImpl implements Replacements {
 
     /**
      * Creates a preprocessed graph for a snippet or method substitution.
-     * 
+     *
      * @param method the snippet or method substitution for which a graph will be created
      * @param original the original method if {@code method} is a {@linkplain MethodSubstitution
      *            substitution} otherwise null
@@ -316,16 +316,21 @@ public class ReplacementsImpl implements Replacements {
          */
         protected StructuredGraph buildInitialGraph(final ResolvedJavaMethod methodToParse) {
             final StructuredGraph graph = new StructuredGraph(methodToParse);
-            GraphBuilderConfiguration config = GraphBuilderConfiguration.getSnippetDefault();
-            GraphBuilderPhase graphBuilder = new GraphBuilderPhase(runtime, config, OptimisticOptimizations.NONE);
-            graphBuilder.apply(graph);
+            Debug.scope("buildInitialGraph", graph, new Runnable() {
 
-            new WordTypeVerificationPhase(runtime, target.wordKind).apply(graph);
-            if (OptCanonicalizer.getValue()) {
-                new WordTypeRewriterPhase(runtime, target.wordKind).apply(graph);
-                new CanonicalizerPhase.Instance(runtime, assumptions, true).apply(graph);
-            }
+                @Override
+                public void run() {
+                    GraphBuilderConfiguration config = GraphBuilderConfiguration.getSnippetDefault();
+                    GraphBuilderPhase graphBuilder = new GraphBuilderPhase(runtime, config, OptimisticOptimizations.NONE);
+                    graphBuilder.apply(graph);
 
+                    new WordTypeVerificationPhase(runtime, target.wordKind).apply(graph);
+                    if (OptCanonicalizer.getValue()) {
+                        new WordTypeRewriterPhase(runtime, target.wordKind).apply(graph);
+                        new CanonicalizerPhase.Instance(runtime, assumptions, true).apply(graph);
+                    }
+                }
+            });
             return graph;
         }
 
@@ -335,7 +340,7 @@ public class ReplacementsImpl implements Replacements {
 
         /**
          * Called after a graph is inlined.
-         * 
+         *
          * @param caller the graph into which {@code callee} was inlined
          * @param callee the graph that was inlined into {@code caller}
          * @param beforeInlineData value returned by {@link #beforeInline}.
@@ -364,47 +369,52 @@ public class ReplacementsImpl implements Replacements {
         private StructuredGraph buildGraph(final ResolvedJavaMethod methodToParse, final SnippetInliningPolicy policy) {
             assert !Modifier.isAbstract(methodToParse.getModifiers()) && !Modifier.isNative(methodToParse.getModifiers()) : methodToParse;
             final StructuredGraph graph = buildInitialGraph(methodToParse);
+            Debug.scope("buildGraph", graph, new Runnable() {
 
-            for (MethodCallTargetNode callTarget : graph.getNodes(MethodCallTargetNode.class)) {
-                ResolvedJavaMethod callee = callTarget.targetMethod();
-                if (callee == method) {
-                    final StructuredGraph originalGraph = new StructuredGraph(original);
-                    new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getSnippetDefault(), OptimisticOptimizations.NONE).apply(originalGraph);
-                    InliningUtil.inline(callTarget.invoke(), originalGraph, true);
+                @Override
+                public void run() {
+                    for (MethodCallTargetNode callTarget : graph.getNodes(MethodCallTargetNode.class)) {
+                        ResolvedJavaMethod callee = callTarget.targetMethod();
+                        if (callee == method) {
+                            final StructuredGraph originalGraph = new StructuredGraph(original);
+                            new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getSnippetDefault(), OptimisticOptimizations.NONE).apply(originalGraph);
+                            InliningUtil.inline(callTarget.invoke(), originalGraph, true);
 
-                    Debug.dump(graph, "after inlining %s", callee);
-                    afterInline(graph, originalGraph, null);
-                    substituteCallsOriginal = true;
-                } else {
-                    StructuredGraph intrinsicGraph = InliningUtil.getIntrinsicGraph(ReplacementsImpl.this, callee);
-                    if ((callTarget.invokeKind() == InvokeKind.Static || callTarget.invokeKind() == InvokeKind.Special) &&
-                                    (policy.shouldInline(callee, methodToParse) || (intrinsicGraph != null && policy.shouldUseReplacement(callee, methodToParse)))) {
-                        StructuredGraph targetGraph;
-                        if (intrinsicGraph != null && policy.shouldUseReplacement(callee, methodToParse)) {
-                            targetGraph = intrinsicGraph;
+                            Debug.dump(graph, "after inlining %s", callee);
+                            afterInline(graph, originalGraph, null);
+                            substituteCallsOriginal = true;
                         } else {
-                            if (callee.getName().startsWith("$jacoco")) {
-                                throw new GraalInternalError("Parsing call to JaCoCo instrumentation method " + format("%H.%n(%p)", callee) + " from " + format("%H.%n(%p)", methodToParse) +
-                                                " while preparing replacement " + format("%H.%n(%p)", method) + ". Placing \"//JaCoCo Exclude\" anywhere in " +
-                                                methodToParse.getDeclaringClass().getSourceFileName() + " should fix this.");
+                            StructuredGraph intrinsicGraph = InliningUtil.getIntrinsicGraph(ReplacementsImpl.this, callee);
+                            if ((callTarget.invokeKind() == InvokeKind.Static || callTarget.invokeKind() == InvokeKind.Special) &&
+                                            (policy.shouldInline(callee, methodToParse) || (intrinsicGraph != null && policy.shouldUseReplacement(callee, methodToParse)))) {
+                                StructuredGraph targetGraph;
+                                if (intrinsicGraph != null && policy.shouldUseReplacement(callee, methodToParse)) {
+                                    targetGraph = intrinsicGraph;
+                                } else {
+                                    if (callee.getName().startsWith("$jacoco")) {
+                                        throw new GraalInternalError("Parsing call to JaCoCo instrumentation method " + format("%H.%n(%p)", callee) + " from " + format("%H.%n(%p)", methodToParse) +
+                                                        " while preparing replacement " + format("%H.%n(%p)", method) + ". Placing \"//JaCoCo Exclude\" anywhere in " +
+                                                        methodToParse.getDeclaringClass().getSourceFileName() + " should fix this.");
+                                    }
+                                    targetGraph = parseGraph(callee, policy);
+                                }
+                                Object beforeInlineData = beforeInline(callTarget, targetGraph);
+                                InliningUtil.inline(callTarget.invoke(), targetGraph, true);
+                                Debug.dump(graph, "after inlining %s", callee);
+                                afterInline(graph, targetGraph, beforeInlineData);
                             }
-                            targetGraph = parseGraph(callee, policy);
                         }
-                        Object beforeInlineData = beforeInline(callTarget, targetGraph);
-                        InliningUtil.inline(callTarget.invoke(), targetGraph, true);
-                        Debug.dump(graph, "after inlining %s", callee);
-                        afterInline(graph, targetGraph, beforeInlineData);
                     }
+
+                    afterInlining(graph);
+
+                    for (LoopEndNode end : graph.getNodes(LoopEndNode.class)) {
+                        end.disableSafepoint();
+                    }
+
+                    new DeadCodeEliminationPhase().apply(graph);
                 }
-            }
-
-            afterInlining(graph);
-
-            for (LoopEndNode end : graph.getNodes(LoopEndNode.class)) {
-                end.disableSafepoint();
-            }
-
-            new DeadCodeEliminationPhase().apply(graph);
+            });
             return graph;
         }
     }
@@ -419,7 +429,7 @@ public class ReplacementsImpl implements Replacements {
 
     /**
      * Resolves a name to a class.
-     * 
+     *
      * @param className the name of the class to resolve
      * @param optional if true, resolution failure returns null
      * @return the resolved class or null if resolution fails and {@code optional} is true

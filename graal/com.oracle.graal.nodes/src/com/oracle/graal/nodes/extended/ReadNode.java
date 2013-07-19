@@ -42,7 +42,7 @@ public final class ReadNode extends FloatableAccessNode implements Node.Iterable
         super(object, location, stamp, guard, barrierType, compress);
     }
 
-    private ReadNode(ValueNode object, int displacement, LocationIdentity locationIdentity, Kind kind) {
+    public ReadNode(ValueNode object, int displacement, LocationIdentity locationIdentity, Kind kind) {
         super(object, ConstantLocationNode.create(locationIdentity, kind, displacement, object.graph()), StampFactory.forKind(kind));
     }
 
@@ -62,7 +62,7 @@ public final class ReadNode extends FloatableAccessNode implements Node.Iterable
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
-        return canonicalizeRead(this, location(), object(), tool);
+        return canonicalizeRead(this, location(), object(), tool, compress());
     }
 
     @Override
@@ -70,7 +70,7 @@ public final class ReadNode extends FloatableAccessNode implements Node.Iterable
         return graph().unique(new FloatingReadNode(object(), location(), lastLocationAccess, stamp(), getGuard(), getWriteBarrierType(), compress()));
     }
 
-    public static ValueNode canonicalizeRead(ValueNode read, LocationNode location, ValueNode object, CanonicalizerTool tool) {
+    public static ValueNode canonicalizeRead(ValueNode read, LocationNode location, ValueNode object, CanonicalizerTool tool, boolean compressedPointer) {
         MetaAccessProvider runtime = tool.runtime();
         if (read.usages().count() == 0) {
             // Read without usages can be savely removed.
@@ -83,7 +83,7 @@ public final class ReadNode extends FloatableAccessNode implements Node.Iterable
                 if (object.kind() == Kind.Object) {
                     Object base = object.asConstant().asObject();
                     if (base != null) {
-                        Constant constant = tool.runtime().readUnsafeConstant(kind, base, displacement);
+                        Constant constant = tool.runtime().readUnsafeConstant(kind, base, displacement, compressedPointer);
                         if (constant != null) {
                             return ConstantNode.forConstant(constant, runtime, read.graph());
                         }
@@ -91,7 +91,7 @@ public final class ReadNode extends FloatableAccessNode implements Node.Iterable
                 } else if (object.kind() == Kind.Long || object.kind().getStackKind() == Kind.Int) {
                     long base = object.asConstant().asLong();
                     if (base != 0L) {
-                        Constant constant = tool.runtime().readUnsafeConstant(kind, null, base + displacement);
+                        Constant constant = tool.runtime().readUnsafeConstant(kind, null, base + displacement, compressedPointer);
                         if (constant != null) {
                             return ConstantNode.forConstant(constant, runtime, read.graph());
                         }
@@ -143,16 +143,4 @@ public final class ReadNode extends FloatableAccessNode implements Node.Iterable
             }
         }
     }
-
-    /**
-     * Reads a value from memory.
-     * 
-     * @param base the base pointer for the memory access
-     * @param displacement the displacement of the access
-     * @param locationIdentity the identity of the access
-     * @param kind the kind of the value read
-     * @return the value read from memory
-     */
-    @NodeIntrinsic(setStampFromReturnType = true)
-    public static native <T> T read(Object base, @ConstantNodeParameter int displacement, @ConstantNodeParameter LocationIdentity locationIdentity, @ConstantNodeParameter Kind kind);
 }

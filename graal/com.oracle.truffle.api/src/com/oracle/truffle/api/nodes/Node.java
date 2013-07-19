@@ -26,6 +26,7 @@ import java.lang.annotation.*;
 import java.util.*;
 
 import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.nodes.NodeInfo.Kind;
 
 /**
  * Abstract base class for all Truffle nodes.
@@ -57,6 +58,10 @@ public abstract class Node implements Cloneable {
     public @interface Child {
     }
 
+    protected Node() {
+        CompilerAsserts.neverPartOfCompilation();
+    }
+
     /**
      * Assigns a link to a guest language source section to this node.
      * 
@@ -86,6 +91,18 @@ public abstract class Node implements Cloneable {
     }
 
     /**
+     * Retrieves the guest language source code section that is currently assigned to this node.
+     * 
+     * @return the assigned source code section
+     */
+    public final SourceSection getEncapsulatingSourceSection() {
+        if (sourceSection == null && getParent() != null) {
+            return getParent().getEncapsulatingSourceSection();
+        }
+        return sourceSection;
+    }
+
+    /**
      * Method that updates the link to the parent in the array of specified new child nodes to this
      * node.
      * 
@@ -109,6 +126,9 @@ public abstract class Node implements Cloneable {
      */
     protected final <T extends Node> T adoptChild(T newChild) {
         if (newChild != null) {
+            if (newChild == this) {
+                throw new IllegalStateException("The parent of a node can never be the node itself.");
+            }
             ((Node) newChild).parent = this;
         }
         return newChild;
@@ -144,7 +164,9 @@ public abstract class Node implements Cloneable {
      */
     @SuppressWarnings({"unchecked"})
     public final <T extends Node> T replace(T newNode, String reason) {
-        assert this.getParent() != null;
+        if (this.getParent() == null) {
+            throw new IllegalStateException("This node cannot be replaced, because it does not yet have a parent.");
+        }
         if (sourceSection != null) {
             // Pass on the source section to the new node.
             newNode.assignSourceSection(sourceSection);
@@ -178,6 +200,75 @@ public abstract class Node implements Cloneable {
      * @param reason the reason the replace supplied
      */
     protected void onReplace(Node newNode, String reason) {
+        if (TruffleOptions.TraceRewrites) {
+            Class<? extends Node> from = getClass();
+            Class<? extends Node> to = newNode.getClass();
+
+            if (TruffleOptions.TraceRewritesFilterFromKind != null) {
+                if (filterByKind(from, TruffleOptions.TraceRewritesFilterFromKind)) {
+                    return;
+                }
+            }
+
+            if (TruffleOptions.TraceRewritesFilterToKind != null) {
+                if (filterByKind(to, TruffleOptions.TraceRewritesFilterToKind)) {
+                    return;
+                }
+            }
+
+            String filter = TruffleOptions.TraceRewritesFilterClass;
+            if (filter != null && (filterByContainsClassName(from, filter) || filterByContainsClassName(to, filter))) {
+                return;
+            }
+
+            // CheckStyle: stop system..print check
+            System.out.printf("[truffle]   rewrite %-50s |From %-40s |To %-40s |Reason %s.%n", this.toString(), formatNodeInfo(from), formatNodeInfo(to), reason);
+            // CheckStyle: resume system..print check
+        }
+    }
+
+    private static String formatNodeInfo(Class<? extends Node> clazz) {
+        NodeInfo nodeInfo = clazz.getAnnotation(NodeInfo.class);
+        String kind = "?";
+        if (nodeInfo != null) {
+            switch (nodeInfo.kind()) {
+                case GENERIC:
+                    kind = "G";
+                    break;
+                case SPECIALIZED:
+                    kind = "S";
+                    break;
+                case UNINITIALIZED:
+                    kind = "U";
+                    break;
+                case POLYMORPHIC:
+                    kind = "P";
+                    break;
+                default:
+                    kind = "?";
+                    break;
+            }
+        }
+        return kind + " " + clazz.getSimpleName();
+    }
+
+    private static boolean filterByKind(Class<?> clazz, Kind kind) {
+        NodeInfo info = clazz.getAnnotation(NodeInfo.class);
+        if (info != null) {
+            return info.kind() != kind;
+        }
+        return true;
+    }
+
+    private static boolean filterByContainsClassName(Class<? extends Node> from, String filter) {
+        Class<?> currentFrom = from;
+        while (currentFrom != null) {
+            if (currentFrom.getName().contains(filter)) {
+                return false;
+            }
+            currentFrom = currentFrom.getSuperclass();
+        }
+        return true;
     }
 
     /**

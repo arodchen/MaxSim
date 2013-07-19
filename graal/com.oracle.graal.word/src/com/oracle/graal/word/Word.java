@@ -59,7 +59,9 @@ public abstract class Word implements Signed, Unsigned, Pointer {
          COMPARISON,
          NOT,
          READ,
+         READ_HEAP,
          WRITE,
+         INITIALIZE,
          ZERO,
          FROM_UNSIGNED,
          FROM_SIGNED,
@@ -757,6 +759,12 @@ public abstract class Word implements Signed, Unsigned, Pointer {
     }
 
     @Override
+    @Operation(opcode = Opcode.INITIALIZE)
+    public void initializeWord(WordBase offset, WordBase val, LocationIdentity locationIdentity) {
+        unsafe.putAddress(add((Word) offset).unbox(), ((Word) val).unbox());
+    }
+
+    @Override
     @Operation(opcode = Opcode.WRITE)
     public native void writeObject(WordBase offset, Object val, LocationIdentity locationIdentity);
 
@@ -806,6 +814,12 @@ public abstract class Word implements Signed, Unsigned, Pointer {
     @Operation(opcode = Opcode.WRITE)
     public void writeWord(int offset, WordBase val, LocationIdentity locationIdentity) {
         writeWord(signed(offset), val, locationIdentity);
+    }
+
+    @Override
+    @Operation(opcode = Opcode.INITIALIZE)
+    public void initializeWord(int offset, WordBase val, LocationIdentity locationIdentity) {
+        initializeWord(signed(offset), val, locationIdentity);
     }
 
     @Override
@@ -866,6 +880,9 @@ public abstract class Word implements Signed, Unsigned, Pointer {
     @Operation(opcode = Opcode.READ)
     public native Object readObject(WordBase offset);
 
+    @Operation(opcode = Opcode.READ_HEAP)
+    public native Object readObject(WordBase offset, int barrierType, boolean compress);
+
     @Override
     @Operation(opcode = Opcode.READ)
     public byte readByte(int offset) {
@@ -918,6 +935,11 @@ public abstract class Word implements Signed, Unsigned, Pointer {
     @Operation(opcode = Opcode.READ)
     public Object readObject(int offset) {
         return readObject(signed(offset));
+    }
+
+    @Operation(opcode = Opcode.READ_HEAP)
+    public Object readObject(int offset, int barrierType, boolean compress) {
+        return readObject(signed(offset), barrierType, compress);
     }
 
     @Override

@@ -33,9 +33,10 @@ class GraalRuntime: public AllStatic {
   static void new_instance(JavaThread* thread, Klass* klass);
   static void new_array(JavaThread* thread, Klass* klass, jint length);
   static void new_multi_array(JavaThread* thread, Klass* klass, int rank, jint* dims);
-  static jboolean thread_is_interrupted(JavaThread* thread, oopDesc* obj, jboolean clear_interrupte);
+  static void dynamic_new_array(JavaThread* thread, oop element_mirror, jint length);
+  static jboolean thread_is_interrupted(JavaThread* thread, oop obj, jboolean clear_interrupted);
   static void vm_message(jboolean vmError, jlong format, jlong v1, jlong v2, jlong v3);
-  static jint identity_hash_code(JavaThread* thread, oopDesc* objd);
+  static jint identity_hash_code(JavaThread* thread, oop obj);
   static address exception_handler_for_pc(JavaThread* thread);
   static void monitorenter(JavaThread* thread, oopDesc* obj, BasicLock* lock);
   static void monitorexit (JavaThread* thread, oopDesc* obj, BasicLock* lock);
@@ -52,6 +53,8 @@ class GraalRuntime: public AllStatic {
     LOG_OBJECT_ADDRESS = 0x04
   };
   static void log_object(JavaThread* thread, oop msg, jint flags);
+  static void write_barrier_pre(JavaThread* thread, oopDesc* obj);
+  static void write_barrier_post(JavaThread* thread, void* card);
 };
 
 #endif // SHARE_VM_GRAAL_GRAAL_RUNTIME_HPP

@@ -24,8 +24,8 @@ package com.oracle.graal.hotspot.replacements;
 
 import static com.oracle.graal.api.meta.LocationIdentity.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
 import static com.oracle.graal.phases.GraalOptions.*;
-import static com.oracle.graal.replacements.nodes.BranchProbabilityNode.*;
 
 import java.lang.reflect.*;
 
@@ -57,7 +57,7 @@ public class ObjectCloneSnippets implements Snippets {
         Object result = NewObjectSnippets.allocateInstance(instanceSize, hub, prototypeMarkWord, false);
 
         Pointer memory = Word.fromObject(result);
-        for (int offset = 2 * wordSize(); offset < instanceSize; offset += wordSize()) {
+        for (int offset = instanceHeaderSize(); offset < instanceSize; offset += wordSize()) {
             memory.writeWord(offset, Word.fromObject(src).readWord(offset, ANY_LOCATION), ANY_LOCATION);
         }
 

@@ -35,23 +35,18 @@
 #include "code/vmreg.hpp"
 
 #ifdef TARGET_ARCH_x86
-# include "codeInstaller_x86.hpp"
 # include "vmreg_x86.inline.hpp"
 #endif
 #ifdef TARGET_ARCH_sparc
-# include "codeInstaller_sparc.hpp"
 # include "vmreg_sparc.inline.hpp"
 #endif
 #ifdef TARGET_ARCH_zero
-# include "codeInstaller_zero.hpp"
 # include "vmreg_zero.inline.hpp"
 #endif
 #ifdef TARGET_ARCH_arm
-# include "codeInstaller_arm.hpp"
 # include "vmreg_arm.inline.hpp"
 #endif
 #ifdef TARGET_ARCH_ppc
-# include "codeInstaller_ppc.hpp"
 # include "vmreg_ppc.inline.hpp"
 #endif
 
@@ -176,7 +171,7 @@ static ScopeValue* get_hotspot_value(oop value, int total_frame_size, GrowableAr
 
   if (value->is_a(RegisterValue::klass())) {
     jint number = code_Register::number(RegisterValue::reg(value));
-    if (number < 16) {
+    if (number < RegisterImpl::number_of_registers) {
       if (type == T_INT || type == T_FLOAT || type == T_SHORT || type == T_CHAR || type == T_BOOLEAN || type == T_BYTE || type == T_ADDRESS) {
         locationType = Location::int_in_long;
       } else if (type == T_LONG) {
@@ -371,10 +366,17 @@ CodeInstaller::CodeInstaller(Handle& compiled_code, GraalEnv::CodeInstallResult&
   jobject compiled_code_obj = JNIHandles::make_local(compiled_code());
   initialize_assumptions(JNIHandles::resolve(compiled_code_obj));
 
+  // Get instructions and constants CodeSections early because we need it.
+  _instructions = buffer.insts();
+  _constants = buffer.consts();
+
   {
     No_Safepoint_Verifier no_safepoint;
     initialize_fields(JNIHandles::resolve(compiled_code_obj));
-    initialize_buffer(buffer);
+    if (!initialize_buffer(buffer)) {
+      result = GraalEnv::code_too_large;
+      return;
+    }
     process_exception_handlers();
   }
 
@@ -399,6 +401,11 @@ CodeInstaller::CodeInstaller(Handle& compiled_code, GraalEnv::CodeInstallResult&
         GraalCompiler::instance(), _debug_recorder, _dependencies, NULL, -1, false, leaf_graph_ids, installed_code, triggered_deoptimizations);
     cb = nm;
   }
+
+  if (cb != NULL) {
+    // Make sure the pre-calculated constants section size was correct.
+    guarantee((cb->code_begin() - cb->content_begin()) == _constants_size, err_msg("%d != %d", cb->code_begin() - cb->content_begin(), _constants_size));
+  }
 }
 
 void CodeInstaller::initialize_fields(oop compiled_code) {
@@ -419,11 +426,12 @@ void CodeInstaller::initialize_fields(oop compiled_code) {
   _code = (arrayOop) CompilationResult::targetCode(comp_result);
   _code_size = CompilationResult::targetCodeSize(comp_result);
   // The frame size we get from the target method does not include the return address, so add one word for it here.
-  _total_frame_size = CompilationResult::frameSize(comp_result) + HeapWordSize;
+  _total_frame_size = CompilationResult::frameSize(comp_result) + HeapWordSize;  // FIXME this is an x86-ism
   _custom_stack_area_offset = CompilationResult::customStackAreaOffset(comp_result);
 
-  // (very) conservative estimate: each site needs a constant section entry
-  _constants_size = _sites->length() * (BytesPerLong*2);
+  // Pre-calculate the constants section size.  This is required for PC-relative addressing.
+  _constants_size = calculate_constants_size();
+
 #ifndef PRODUCT
   _comments = (arrayOop) HotSpotCompiledCode::comments(compiled_code);
 #endif
@@ -432,7 +440,7 @@ void CodeInstaller::initialize_fields(oop compiled_code) {
 }
 
 // perform data and call relocation on the CodeBuffer
-void CodeInstaller::initialize_buffer(CodeBuffer& buffer) {
+bool CodeInstaller::initialize_buffer(CodeBuffer& buffer) {
   int locs_buffer_size = _sites->length() * (relocInfo::length_limit + sizeof(relocInfo));
   char* locs_buffer = NEW_RESOURCE_ARRAY(char, locs_buffer_size);
   buffer.insts()->initialize_shared_locs((relocInfo*)locs_buffer, locs_buffer_size / sizeof(relocInfo));
@@ -444,15 +452,16 @@ void CodeInstaller::initialize_buffer(CodeBuffer& buffer) {
 
   buffer.initialize_oop_recorder(_oop_recorder);
 
-  _instructions = buffer.insts();
-  _constants = buffer.consts();
-
   // copy the code into the newly created CodeBuffer
+  address end_pc = _instructions->start() + _code_size;
+  if (!_instructions->allocates2(end_pc)) {
+    return false;
+  }
   memcpy(_instructions->start(), _code->base(T_BYTE), _code_size);
-  _instructions->set_end(_instructions->start() + _code_size);
+  _instructions->set_end(end_pc);
 
   for (int i = 0; i < _sites->length(); i++) {
-    oop site=((objArrayOop) (_sites))->obj_at(i);
+    oop site = ((objArrayOop) (_sites))->obj_at(i);
     jint pc_offset = CompilationResult_Site::pcOffset(site);
 
     if (site->is_a(CompilationResult_Call::klass())) {
@@ -483,7 +492,7 @@ void CodeInstaller::initialize_buffer(CodeBuffer& buffer) {
 #ifndef PRODUCT
   if (_comments != NULL) {
     for (int i = 0; i < _comments->length(); i++) {
-      oop comment=((objArrayOop) (_comments))->obj_at(i);
+      oop comment = ((objArrayOop) (_comments))->obj_at(i);
       assert(comment->is_a(HotSpotCompiledCode_Comment::klass()), "cce");
       jint offset = HotSpotCompiledCode_Comment::pcOffset(comment);
       char* text = java_lang_String::as_utf8_string(HotSpotCompiledCode_Comment::text(comment));
@@ -491,6 +500,40 @@ void CodeInstaller::initialize_buffer(CodeBuffer& buffer) {
     }
   }
 #endif
+  return true;
+}
+
+/**
+ * Calculate the constants section size by iterating over all DataPatches.
+ * Knowing the size of the constants section before patching instructions
+ * is necessary for PC-relative addressing.
+ */
+int CodeInstaller::calculate_constants_size() {
+  int size = 0;
+
+  for (int i = 0; i < _sites->length(); i++) {
+    oop site = ((objArrayOop) (_sites))->obj_at(i);
+    jint pc_offset = CompilationResult_Site::pcOffset(site);
+
+    if (site->is_a(CompilationResult_DataPatch::klass())) {
+      int alignment = CompilationResult_DataPatch::alignment(site);
+      bool inlined = CompilationResult_DataPatch::inlined(site) == JNI_TRUE;
+
+      if (!inlined) {
+        if (alignment > 0) {
+          guarantee(alignment <= _constants->alignment(), "Alignment inside constants section is restricted by alignment of section begin");
+          size = align_size_up(size, alignment);
+        }
+        if (CompilationResult_DataPatch::constant(site) != NULL) {
+          size = size + sizeof(int64_t);
+        } else {
+          arrayOop rawConstant = arrayOop(CompilationResult_DataPatch::rawConstant(site));
+          size = size + rawConstant->length();
+        }
+      }
+    }
+  }
+  return size == 0 ? 0 : align_size_up(size, _constants->alignment());
 }
 
 void CodeInstaller::assumption_MethodContents(Handle assumption) {
@@ -729,20 +772,18 @@ void CodeInstaller::site_Call(CodeBuffer& buffer, jint pc_offset, oop site) {
 
 void CodeInstaller::site_DataPatch(CodeBuffer& buffer, jint pc_offset, oop site) {
   oop constant = CompilationResult_DataPatch::constant(site);
-  int alignment = CompilationResult_DataPatch::alignment(site);
-  bool inlined = CompilationResult_DataPatch::inlined(site) == JNI_TRUE;
-  oop kind = Constant::kind(constant);
-
-  address instruction = _instructions->start() + pc_offset;
-  char typeChar = Kind::typeChar(kind);
-  switch (typeChar) {
-    case 'f':
-    case 'j':
-    case 'd':
-      record_metadata_in_constant(constant, _oop_recorder);
-      break;
+  if (constant != NULL) {
+    oop kind = Constant::kind(constant);
+    char typeChar = Kind::typeChar(kind);
+    switch (typeChar) {
+      case 'f':
+      case 'j':
+      case 'd':
+        record_metadata_in_constant(constant, _oop_recorder);
+        break;
+    }
   }
-  CodeInstaller::pd_site_DataPatch(constant, kind, inlined, instruction, alignment, typeChar);
+  CodeInstaller::pd_site_DataPatch(pc_offset, site);
 }
 
 void CodeInstaller::site_Mark(CodeBuffer& buffer, jint pc_offset, oop site) {
@@ -753,7 +794,7 @@ void CodeInstaller::site_Mark(CodeBuffer& buffer, jint pc_offset, oop site) {
     assert(java_lang_boxing_object::is_instance(id_obj, T_INT), "Integer id expected");
     jint id = id_obj->int_field(java_lang_boxing_object::value_offset_in_bytes(T_INT));
 
-    address instruction = _instructions->start() + pc_offset;
+    address pc = _instructions->start() + pc_offset;
 
     switch (id) {
       case MARK_UNVERIFIED_ENTRY:
@@ -772,40 +813,34 @@ void CodeInstaller::site_Mark(CodeBuffer& buffer, jint pc_offset, oop site) {
         _offsets.set_value(CodeOffsets::Deopt, pc_offset);
         break;
       case MARK_INVOKEVIRTUAL:
-      case MARK_INVOKEINTERFACE: {
-        // Convert the initial value of the Klass* slot in an inline cache
-        // from 0L to Universe::non_oop_word().
-        NativeMovConstReg* n_copy = nativeMovConstReg_at(instruction);
-        assert(n_copy->data() == 0, "inline cache Klass* initial value should be 0L");
-        n_copy->set_data((intptr_t)Universe::non_oop_word());
-      }
+      case MARK_INVOKEINTERFACE:
       case MARK_INLINE_INVOKE:
       case MARK_INVOKESTATIC:
       case MARK_INVOKESPECIAL:
         _next_call_type = (MarkId) id;
-        _invoke_mark_pc = instruction;
+        _invoke_mark_pc = pc;
         break;
       case MARK_POLL_NEAR: {
-        NativeInstruction* ni = nativeInstruction_at(instruction);
-        int32_t* disp = (int32_t*) pd_locate_operand(instruction);
+        NativeInstruction* ni = nativeInstruction_at(pc);
+        int32_t* disp = (int32_t*) pd_locate_operand(pc);
         // int32_t* disp = (int32_t*) Assembler::locate_operand(instruction, Assembler::disp32_operand);
         int32_t offset = *disp; // The Java code installed the polling page offset into the disp32 operand
         intptr_t new_disp = (intptr_t) (os::get_polling_page() + offset) - (intptr_t) ni;
         *disp = (int32_t)new_disp;
       }
       case MARK_POLL_FAR:
-        _instructions->relocate(instruction, relocInfo::poll_type);
+        _instructions->relocate(pc, relocInfo::poll_type);
         break;
       case MARK_POLL_RETURN_NEAR: {
-        NativeInstruction* ni = nativeInstruction_at(instruction);
-        int32_t* disp = (int32_t*) pd_locate_operand(instruction);
+        NativeInstruction* ni = nativeInstruction_at(pc);
+        int32_t* disp = (int32_t*) pd_locate_operand(pc);
         // int32_t* disp = (int32_t*) Assembler::locate_operand(instruction, Assembler::disp32_operand);
         int32_t offset = *disp; // The Java code installed the polling page offset into the disp32 operand
         intptr_t new_disp = (intptr_t) (os::get_polling_page() + offset) - (intptr_t) ni;
         *disp = (int32_t)new_disp;
       }
       case MARK_POLL_RETURN_FAR:
-        _instructions->relocate(instruction, relocInfo::poll_return_type);
+        _instructions->relocate(pc, relocInfo::poll_return_type);
         break;
       default:
         ShouldNotReachHere();

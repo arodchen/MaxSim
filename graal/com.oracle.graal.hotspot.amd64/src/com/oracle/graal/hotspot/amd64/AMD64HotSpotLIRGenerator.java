@@ -99,7 +99,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
 
         /**
          * Replaces this operation with the appropriate move for saving rbp.
-         * 
+         *
          * @param useStack specifies if rbp must be saved to the stack
          */
         public AllocatableValue finalize(boolean useStack) {
@@ -341,11 +341,15 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
 
     @Override
     protected void emitIndirectCall(IndirectCallTargetNode callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState callState) {
-        AllocatableValue metaspaceMethod = AMD64.rbx.asValue();
-        emitMove(metaspaceMethod, operand(((HotSpotIndirectCallTargetNode) callTarget).metaspaceMethod()));
-        AllocatableValue targetAddress = AMD64.rax.asValue();
-        emitMove(targetAddress, operand(callTarget.computedAddress()));
-        append(new AMD64IndirectCallOp((ResolvedJavaMethod) callTarget.target(), result, parameters, temps, metaspaceMethod, targetAddress, callState));
+        if (callTarget instanceof HotSpotIndirectCallTargetNode) {
+            AllocatableValue metaspaceMethod = AMD64.rbx.asValue();
+            emitMove(metaspaceMethod, operand(((HotSpotIndirectCallTargetNode) callTarget).metaspaceMethod()));
+            AllocatableValue targetAddress = AMD64.rax.asValue();
+            emitMove(targetAddress, operand(callTarget.computedAddress()));
+            append(new AMD64IndirectCallOp((ResolvedJavaMethod) callTarget.target(), result, parameters, temps, metaspaceMethod, targetAddress, callState));
+        } else {
+            super.emitIndirectCall(callTarget, result, parameters, temps, callState);
+        }
     }
 
     @Override
@@ -409,10 +413,16 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         AMD64AddressValue loadAddress = asAddressValue(address);
         Variable result = newVariable(kind);
         assert access == null || access instanceof HeapAccess;
-        if (runtime().config.useCompressedOops && isCompressCandidate(access)) {
-            Variable scratch = newVariable(Kind.Long);
-            append(new LoadCompressedPointer(kind, result, scratch, loadAddress, access != null ? state(access) : null, runtime().config.narrowOopBase, runtime().config.narrowOopShift,
-                            runtime().config.logMinObjAlignment));
+        if (isCompressCandidate(access)) {
+            if (runtime().config.useCompressedOops && kind == Kind.Object) {
+                append(new LoadCompressedPointer(kind, result, loadAddress, access != null ? state(access) : null, runtime().config.narrowOopBase, runtime().config.narrowOopShift,
+                                runtime().config.logMinObjAlignment));
+            } else if (runtime().config.useCompressedKlassPointers && kind == Kind.Long) {
+                append(new LoadCompressedPointer(kind, result, loadAddress, access != null ? state(access) : null, runtime().config.narrowKlassBase, runtime().config.narrowKlassShift,
+                                runtime().config.logKlassAlignment));
+            } else {
+                append(new LoadOp(kind, result, loadAddress, access != null ? state(access) : null));
+            }
         } else {
             append(new LoadOp(kind, result, loadAddress, access != null ? state(access) : null));
         }
@@ -426,14 +436,32 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         if (isConstant(inputVal)) {
             Constant c = asConstant(inputVal);
             if (canStoreConstant(c)) {
-                append(new StoreConstantOp(kind, storeAddress, c, state, runtime().config.useCompressedOops && isCompressCandidate(access)));
+                if (inputVal.getKind() == Kind.Object) {
+                    append(new StoreConstantOp(kind, storeAddress, c, state, runtime().config.useCompressedOops && isCompressCandidate(access)));
+                } else if (inputVal.getKind() == Kind.Long) {
+                    append(new StoreConstantOp(kind, storeAddress, c, state, runtime().config.useCompressedKlassPointers && isCompressCandidate(access)));
+                } else {
+                    append(new StoreConstantOp(kind, storeAddress, c, state, false));
+                }
                 return;
             }
         }
         Variable input = load(inputVal);
-        if (runtime().config.useCompressedOops && isCompressCandidate(access)) {
-            Variable scratch = newVariable(Kind.Long);
-            append(new StoreCompressedPointer(kind, storeAddress, input, scratch, state, runtime().config.narrowOopBase, runtime().config.narrowOopShift, runtime().config.logMinObjAlignment));
+        if (isCompressCandidate(access)) {
+            if (runtime().config.useCompressedOops && kind == Kind.Object) {
+                if (input.getKind() == Kind.Object) {
+                    Variable scratch = newVariable(Kind.Long);
+                    append(new StoreCompressedPointer(kind, storeAddress, input, scratch, state, runtime().config.narrowOopBase, runtime().config.narrowOopShift, runtime().config.logMinObjAlignment));
+                } else {
+                    // the input oop is already compressed
+                    append(new StoreOp(input.getKind(), storeAddress, input, state));
+                }
+            } else if (runtime().config.useCompressedKlassPointers && kind == Kind.Long) {
+                Variable scratch = newVariable(Kind.Long);
+                append(new StoreCompressedPointer(kind, storeAddress, input, scratch, state, runtime().config.narrowKlassBase, runtime().config.narrowKlassShift, runtime().config.logKlassAlignment));
+            } else {
+                append(new StoreOp(kind, storeAddress, input, state));
+            }
         } else {
             append(new StoreOp(kind, storeAddress, input, state));
         }

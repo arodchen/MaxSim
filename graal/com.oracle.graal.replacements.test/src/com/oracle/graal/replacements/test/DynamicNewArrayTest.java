@@ -23,11 +23,9 @@
 package com.oracle.graal.replacements.test;
 
 import java.lang.reflect.*;
-import java.util.*;
 
 import org.junit.*;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.test.*;
 
 /**
@@ -70,9 +68,16 @@ public class DynamicNewArrayTest extends GraalCompilerTest {
 
     @Test
     public void test7() {
+        test("dynamic", void.class, 5);
+    }
+
+    @Test
+    public void testStub() {
         Method method = getMethod("dynamic");
+        // this will use the stub call because Element[] is not loaded
         Result actual1 = executeActual(method, null, Element.class, 7);
-        Result actual2 = executeActualCheckDeopt(method, Collections.<DeoptimizationReason> singleton(DeoptimizationReason.Unresolved), null, Element.class, 7);
+        // this call will use the fast path
+        Result actual2 = executeActual(method, null, Element.class, 7);
         Result expected = executeExpected(method, null, Element.class, 7);
         assertEquals(actual1, expected);
         assertEquals(actual2, expected);

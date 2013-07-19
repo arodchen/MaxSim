@@ -22,13 +22,15 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
+import static com.oracle.graal.graph.UnsafeAccess.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.hotspot.meta.HotSpotRuntime.*;
-import static com.oracle.graal.replacements.nodes.BranchProbabilityNode.*;
+import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
 import sun.misc.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.hotspot.*;
@@ -277,7 +279,7 @@ public class HotSpotReplacementsUtil {
 
     public static void initializeObjectHeader(Word memory, Word markWord, Word hub) {
         memory.writeWord(markOffset(), markWord, MARK_WORD_LOCATION);
-        memory.writeWord(hubOffset(), hub, HUB_LOCATION);
+        StoreHubNode.write(memory.toObject(), hub);
     }
 
     @Fold
@@ -351,6 +353,11 @@ public class HotSpotReplacementsUtil {
     }
 
     @Fold
+    public static int instanceHeaderSize() {
+        return config().useCompressedKlassPointers ? (2 * wordSize()) - 4 : 2 * wordSize();
+    }
+
+    @Fold
     public static int cardTableShift() {
         return config().cardtableShift;
     }
@@ -371,7 +378,7 @@ public class HotSpotReplacementsUtil {
     }
 
     @Fold
-    public static int logOfHRGrainBytes() {
+    public static int logOfHeapRegionGrainBytes() {
         return config().logOfHRGrainBytes;
     }
 
@@ -437,17 +444,10 @@ public class HotSpotReplacementsUtil {
     }
 
     /**
-     * Loads the hub from a object, null checking it first.
+     * Loads the hub of an object (without null checking it first).
      */
     public static Word loadHub(Object object) {
         return loadHubIntrinsic(object, getWordKind());
-    }
-
-    /**
-     * Loads the hub from a object.
-     */
-    public static Word loadHubNoNullcheck(Object object) {
-        return loadWordFromObject(object, hubOffset());
     }
 
     public static Object verifyOop(Object object) {
@@ -475,6 +475,7 @@ public class HotSpotReplacementsUtil {
     }
 
     public static Word loadWordFromObject(Object object, int offset) {
+        assert offset != hubOffset() : "Use loadHubIntrinsic instead";
         return loadWordFromObjectIntrinsic(object, 0, offset, getWordKind());
     }
 
@@ -490,7 +491,10 @@ public class HotSpotReplacementsUtil {
     @SuppressWarnings("unused")
     @NodeIntrinsic(value = LoadHubNode.class, setStampFromReturnType = true)
     static Word loadHubIntrinsic(Object object, @ConstantNodeParameter Kind word) {
-        return Word.box(unsafeReadWord(object, hubOffset()));
+        if (wordKind() == Kind.Int) {
+            return Word.box((int) unsafeReadKlassPointer(object));
+        }
+        return Word.box(unsafeReadKlassPointer(object));
     }
 
     @Fold
@@ -691,5 +695,19 @@ public class HotSpotReplacementsUtil {
     @Fold
     public static int verifiedEntryPointOffset() {
         return config().nmethodEntryOffset;
+    }
+
+    @Fold
+    public static long gcTotalCollectionsAddress() {
+        return config().gcTotalCollectionsAddress;
+    }
+
+    @Fold
+    public static long referentOffset() {
+        try {
+            return unsafe.objectFieldOffset(java.lang.ref.Reference.class.getDeclaredField("referent"));
+        } catch (Exception e) {
+            throw new GraalInternalError(e);
+        }
     }
 }

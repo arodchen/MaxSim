@@ -241,6 +241,13 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
+    protected void emitIndirectCall(IndirectCallTargetNode callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState callState) {
+        AllocatableValue targetAddress = AMD64.rax.asValue();
+        emitMove(targetAddress, operand(callTarget.computedAddress()));
+        append(new AMD64Call.IndirectCallOp(callTarget.target(), result, parameters, temps, targetAddress, callState));
+    }
+
+    @Override
     public void emitOverflowCheckBranch(LabelRef destination, boolean negated) {
         append(new BranchOp(negated ? ConditionFlag.NoOverflow : ConditionFlag.Overflow, destination));
     }
@@ -416,7 +423,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitAdd(Value a, Value b) {
-        switch (a.getKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 return emitBinary(IADD, true, a, b);
             case Long:
@@ -432,7 +439,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitSub(Value a, Value b) {
-        switch (a.getKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 return emitBinary(ISUB, false, a, b);
             case Long:
@@ -448,7 +455,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitMul(Value a, Value b) {
-        switch (a.getKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 return emitBinary(IMUL, true, a, b);
             case Long:
@@ -497,7 +504,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     public Value[] emitIntegerDivRem(Value a, Value b, DeoptimizingNode deopting) {
         LIRFrameState state = state(deopting);
-        switch (a.getKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 emitDivRem(IDIVREM, a, b, state);
                 return new Value[]{emitMove(RAX_I), emitMove(RDX_I)};
@@ -511,7 +518,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     public Value emitDiv(Value a, Value b, DeoptimizingNode deopting) {
-        switch (a.getKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 emitDivRem(IDIV, a, b, state(deopting));
                 return emitMove(RAX_I);
@@ -535,7 +542,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     public Value emitRem(Value a, Value b, DeoptimizingNode deopting) {
-        switch (a.getKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 emitDivRem(IREM, a, b, state(deopting));
                 return emitMove(RDX_I);
@@ -560,7 +567,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     @Override
     public Variable emitUDiv(Value a, Value b, DeoptimizingNode deopting) {
         LIRFrameState state = state(deopting);
-        switch (a.getKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 emitDivRem(IUDIV, a, b, state);
                 return emitMove(RAX_I);
@@ -575,7 +582,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     @Override
     public Variable emitURem(Value a, Value b, DeoptimizingNode deopting) {
         LIRFrameState state = state(deopting);
-        switch (a.getKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 emitDivRem(IUREM, a, b, state);
                 return emitMove(RDX_I);
@@ -589,7 +596,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitAnd(Value a, Value b) {
-        switch (a.getKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 return emitBinary(IAND, true, a, b);
             case Long:
@@ -601,7 +608,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitOr(Value a, Value b) {
-        switch (a.getKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 return emitBinary(IOR, true, a, b);
             case Long:
@@ -613,7 +620,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitXor(Value a, Value b) {
-        switch (a.getKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 return emitBinary(IXOR, true, a, b);
             case Long:
@@ -637,7 +644,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitShl(Value a, Value b) {
-        switch (a.getKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 return emitShift(ISHL, a, b);
             case Long:
@@ -649,7 +656,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitShr(Value a, Value b) {
-        switch (a.getKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 return emitShift(ISHR, a, b);
             case Long:
@@ -661,7 +668,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitUShr(Value a, Value b) {
-        switch (a.getKind()) {
+        switch (a.getKind().getStackKind()) {
             case Int:
                 return emitShift(IUSHR, a, b);
             case Long:

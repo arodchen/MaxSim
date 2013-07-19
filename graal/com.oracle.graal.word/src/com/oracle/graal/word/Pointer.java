@@ -365,6 +365,20 @@ public interface Pointer extends Unsigned {
     void writeWord(WordBase offset, WordBase val, LocationIdentity locationIdentity);
 
     /**
+     * Initializes the memory at address {@code (this + offset)}. Both the base address and offset
+     * are in bytes. The memory must be uninitialized or zero prior to this operation.
+     * <p>
+     * The offset is always treated as a {@link Signed} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * knows that the highest-order bit of the unsigned value is never used).
+     * 
+     * @param offset the signed offset for the memory access
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
+     * @param val the value to be written to memory
+     */
+    void initializeWord(WordBase offset, WordBase val, LocationIdentity locationIdentity);
+
+    /**
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
@@ -457,6 +471,16 @@ public interface Pointer extends Unsigned {
      * @param val the value to be written to memory
      */
     void writeWord(int offset, WordBase val, LocationIdentity locationIdentity);
+
+    /**
+     * Initializes the memory at address {@code (this + offset)}. Both the base address and offset
+     * are in bytes. The memory must be uninitialized or zero prior to this operation.
+     * 
+     * @param offset the signed offset for the memory access
+     * @param locationIdentity the identity of the write (see {@link LocationNode})
+     * @param val the value to be written to memory
+     */
+    void initializeWord(int offset, WordBase val, LocationIdentity locationIdentity);
 
     /**
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
@@ -586,6 +610,21 @@ public interface Pointer extends Unsigned {
     Object readObject(WordBase offset);
 
     /**
+     * Reads the memory at address {@code (this + offset)}. This particular access can allow
+     * decompression and read barriers (G1 referent field).
+     * <p>
+     * The offset is always treated as a {@link Signed} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * knows that the highest-order bit of the unsigned value is never used).
+     * 
+     * @param offset the signed offset for the memory access
+     * @param barrierType the type of the read barrier to be added
+     * @param compress whether or not the object is a decompression candidate
+     * @return the result of the memory access
+     */
+    Object readObject(WordBase offset, int barrierType, boolean compress);
+
+    /**
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * 
@@ -665,6 +704,17 @@ public interface Pointer extends Unsigned {
      * @return the result of the memory access
      */
     Object readObject(int offset);
+
+    /**
+     * Reads the memory at address {@code (this + offset)}. This particular access can be
+     * parameterized to allow decompression and read barriers (G1 referent field).
+     * 
+     * @param offset the signed offset for the memory access
+     * @param barrierType the type of the read barrier to be added
+     * @param compress whether or not the object is a decompression candidate
+     * @return the result of the memory access
+     */
+    Object readObject(int offset, int barrierType, boolean compress);
 
     /**
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in

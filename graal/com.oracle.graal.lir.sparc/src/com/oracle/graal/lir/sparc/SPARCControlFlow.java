@@ -30,16 +30,14 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Bpe;
-import com.oracle.graal.asm.sparc.SPARCAssembler.CC;
-import com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag;
-import com.oracle.graal.asm.sparc.SPARCAssembler.Subcc;
+import com.oracle.graal.asm.sparc.SPARCAssembler.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.FallThroughOp;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.sparc.*;
+
+import static com.oracle.graal.asm.sparc.SPARCMacroAssembler.*;
 
 public class SPARCControlFlow {
 
@@ -54,13 +52,31 @@ public class SPARCControlFlow {
         }
 
         @Override
-        @SuppressWarnings("unused")
-        public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
-            // masm.at();
-            Label l = destination.label();
-            // l.addPatchAt(tasm.asm.codeBuffer.position());
-            String target = l.isBound() ? "L" + l.toString() : AbstractSPARCAssembler.UNBOUND_TARGET;
-            // masm.bra(target);
+        public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
+            // FIXME Using xcc is wrong! It depends on the compare.
+            switch (condition) {
+                case EQ:
+                    new Bpe(CC.Xcc, destination.label()).emit(masm);
+                    break;
+                case NE:
+                    new Bpne(CC.Xcc, destination.label()).emit(masm);
+                    break;
+                case BE:
+                    new Bpleu(CC.Xcc, destination.label()).emit(masm);
+                    break;
+                case LE:
+                    new Bple(CC.Xcc, destination.label()).emit(masm);
+                    break;
+                case AE:
+                    new Bpgeu(CC.Xcc, destination.label()).emit(masm);
+                    break;
+                case GT:
+                    new Bpg(CC.Xcc, destination.label()).emit(masm);
+                    break;
+                default:
+                    throw GraalInternalError.shouldNotReachHere();
+            }
+            new Nop().emit(masm);  // delay slot
         }
 
         @Override
@@ -92,7 +108,7 @@ public class SPARCControlFlow {
         }
 
         @Override
-        public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
             cmove(tasm, masm, result, false, condition, false, trueValue, falseValue);
         }
     }
@@ -115,12 +131,12 @@ public class SPARCControlFlow {
         }
 
         @Override
-        public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
             cmove(tasm, masm, result, true, condition, unorderedIsTrue, trueValue, falseValue);
         }
     }
 
-    private static void cmove(TargetMethodAssembler tasm, SPARCAssembler masm, Value result, boolean isFloat, ConditionFlag condition, boolean unorderedIsTrue, Value trueValue, Value falseValue) {
+    private static void cmove(TargetMethodAssembler tasm, SPARCMacroAssembler masm, Value result, boolean isFloat, ConditionFlag condition, boolean unorderedIsTrue, Value trueValue, Value falseValue) {
         // check that we don't overwrite an input operand before it is used.
         assert !result.equals(trueValue);
 
@@ -136,32 +152,19 @@ public class SPARCControlFlow {
         }
     }
 
-    @SuppressWarnings("unused")
-    private static void cmove(TargetMethodAssembler tasm, SPARCAssembler masm, Value result, ConditionFlag cond, Value other) {
-        if (isRegister(other)) {
-            assert !asRegister(other).equals(asRegister(result)) : "other already overwritten by previous move";
-            switch (other.getKind()) {
-                case Int:
-                    // masm.cmovl(cond, asRegister(result), asRegister(other));
-                    break;
-                case Long:
-                    // masm.cmovq(cond, asRegister(result), asRegister(other));
-                    break;
-                default:
-                    throw GraalInternalError.shouldNotReachHere();
-            }
-        } else {
-            SPARCAddress addr = (SPARCAddress) tasm.asAddress(other);
-            switch (other.getKind()) {
-                case Int:
-                    // masm.cmovl(cond, asRegister(result), addr);
-                    break;
-                case Long:
-                    // masm.cmovq(cond, asRegister(result), addr);
-                    break;
-                default:
-                    throw GraalInternalError.shouldNotReachHere();
-            }
+    private static void cmove(TargetMethodAssembler tasm, SPARCMacroAssembler masm, Value result, ConditionFlag cond, Value other) {
+        if (!isRegister(other)) {
+            SPARCMove.move(tasm, masm, result, other);
+            throw new InternalError("result should be scratch");
+        }
+        assert !asRegister(other).equals(asRegister(result)) : "other already overwritten by previous move";
+        switch (other.getKind()) {
+            case Int:
+                new Movcc(cond, CC.Icc, asRegister(other), asRegister(result)).emit(masm);
+                throw new InternalError("check instruction");
+            case Long:
+            default:
+                throw GraalInternalError.shouldNotReachHere();
         }
     }
 
@@ -225,11 +228,10 @@ public class SPARCControlFlow {
         }
 
         @Override
-        public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
-            if (tasm.frameContext != null) {
-                tasm.frameContext.leave(tasm);
-            }
-            // masm.return();
+        public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
+            new Ret().emit(masm);
+            // On SPARC we always leave the frame.
+            tasm.frameContext.leave(tasm);
         }
     }
 
@@ -252,7 +254,7 @@ public class SPARCControlFlow {
 
         @Override
         @SuppressWarnings("unused")
-        public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
             if (key.getKind() == Kind.Int) {
                 Register intKey = asIntReg(key);
                 for (int i = 0; i < keyConstants.length; i++) {
@@ -261,10 +263,10 @@ public class SPARCControlFlow {
                     }
                     long lc = keyConstants[i].asLong();
                     assert NumUtil.isInt(lc);
-                    new Subcc(masm, intKey, (int) lc, SPARC.r0); // CMP
+                    new Cmp(intKey, (int) lc).emit(masm);
                     Label l = keyTargets[i].label();
                     l.addPatchAt(tasm.asm.codeBuffer.position());
-                    new Bpe(masm, CC.Icc, l);
+                    new Bpe(CC.Icc, l).emit(masm);
                 }
             } else if (key.getKind() == Kind.Long) {
                 Register longKey = asLongReg(key);
@@ -274,15 +276,15 @@ public class SPARCControlFlow {
                     // masm.at();
                     Label l = keyTargets[i].label();
                     l.addPatchAt(tasm.asm.codeBuffer.position());
-                    new Bpe(masm, CC.Xcc, l);
+                    new Bpe(CC.Xcc, l).emit(masm);
                 }
             } else if (key.getKind() == Kind.Object) {
                 Register intKey = asObjectReg(key);
                 Register temp = asObjectReg(scratch);
                 for (int i = 0; i < keyConstants.length; i++) {
                     SPARCMove.move(tasm, masm, temp.asValue(Kind.Object), keyConstants[i]);
-                    new Subcc(masm, intKey, temp, SPARC.r0); // CMP
-                    new Bpe(masm, CC.Icc, keyTargets[i].label());
+                    new Cmp(intKey, temp).emit(masm);
+                    new Bpe(CC.Ptrcc, keyTargets[i].label()).emit(masm);
                 }
             } else {
                 throw new GraalInternalError("sequential switch only supported for int, long and object");
@@ -322,10 +324,9 @@ public class SPARCControlFlow {
         }
 
         @Override
-        public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
             assert isSorted(lowKeys) && isSorted(highKeys);
 
-            @SuppressWarnings("unused")
             Label actualDefaultTarget = defaultTarget == null ? new Label() : defaultTarget.label();
             int prevHighKey = 0;
             boolean skipLowCheck = false;
@@ -348,11 +349,12 @@ public class SPARCControlFlow {
                 prevHighKey = highKey;
             }
             if (defaultTarget != null) {
-                // masm.jmp(defaultTarget.label());
+                new Bpa(defaultTarget.label()).emit(masm);
             } else {
-                // masm.bind(actualDefaultTarget);
+                masm.bind(actualDefaultTarget);
                 // masm.hlt();
             }
+            throw new InternalError("NYI");
         }
 
         @Override
@@ -400,19 +402,18 @@ public class SPARCControlFlow {
         }
 
         @Override
-        public void emitCode(TargetMethodAssembler tasm, SPARCAssembler masm) {
+        public void emitCode(TargetMethodAssembler tasm, SPARCMacroAssembler masm) {
             tableswitch(tasm, masm, lowKey, defaultTarget, targets, asIntReg(index), asLongReg(scratch));
         }
     }
 
-    @SuppressWarnings("unused")
     private static void tableswitch(TargetMethodAssembler tasm, SPARCAssembler masm, int lowKey, LabelRef defaultTarget, LabelRef[] targets, Register value, Register scratch) {
         Buffer buf = masm.codeBuffer;
         // Compare index against jump table bounds
         int highKey = lowKey + targets.length - 1;
         if (lowKey != 0) {
             // subtract the low value from the switch value
-            // masm.sub_s32(value, value, lowKey);
+            new Sub(value, lowKey, value).emit(masm);
             // masm.setp_gt_s32(value, highKey - lowKey);
         } else {
             // masm.setp_gt_s32(value, highKey);
@@ -420,9 +421,15 @@ public class SPARCControlFlow {
 
         // Jump to default target if index is not within the jump table
         if (defaultTarget != null) {
-            // masm.at();
-            // masm.bra(defaultTarget.label().toString());
+            new Bpgu(CC.Icc, defaultTarget.label()).emit(masm);
+            new Nop().emit(masm);  // delay slot
         }
+
+        // Load jump table entry into scratch and jump to it
+// masm.movslq(value, new AMD64Address(scratch, value, Scale.Times4, 0));
+// masm.addq(scratch, value);
+        new Jmp(new SPARCAddress(scratch, 0)).emit(masm);
+        new Nop().emit(masm);  // delay slot
 
         // address of jump table
         int tablePos = buf.position();
@@ -431,5 +438,6 @@ public class SPARCControlFlow {
         tasm.compilationResult.addAnnotation(jt);
 
         // SPARC: unimp: tableswitch extract
+        throw new InternalError("NYI");
     }
 }

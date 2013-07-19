@@ -24,7 +24,7 @@ package com.oracle.truffle.sl.nodes;
 
 import java.math.*;
 
-import com.oracle.truffle.api.codegen.*;
+import com.oracle.truffle.api.dsl.*;
 
 public abstract class LessThanNode extends BinaryNode {
 
@@ -41,10 +41,5 @@ public abstract class LessThanNode extends BinaryNode {
     @Specialization(guards = "isString")
     public boolean doString(Object left, Object right) {
         return left.toString().compareTo(right.toString()) < 0;
-    }
-
-    @Generic
-    public boolean doGeneric(Object left, Object right) {
-        throw new RuntimeException("comparison not defined for types " + left.getClass().getSimpleName() + ", " + right.getClass().getSimpleName());
     }
 }

@@ -22,6 +22,9 @@
  */
 package com.oracle.graal.phases.common;
 
+import static com.oracle.graal.api.code.DeoptimizationAction.*;
+import static com.oracle.graal.api.meta.DeoptimizationReason.*;
+import static com.oracle.graal.nodes.type.StampFactory.*;
 import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.lang.reflect.*;
@@ -251,18 +254,26 @@ public class InliningUtil {
     }
 
     /**
-     * Represents an opportunity for inlining at the given invoke, with the given weight and level.
+     * Represents an opportunity for inlining at a given invoke, with the given weight and level.
      * The weight is the amortized weight of the additional code - so smaller is better. The level
      * is the number of nested inlinings that lead to this invoke.
      */
     public interface InlineInfo {
 
+        /**
+         * The graph containing the {@link #invoke() invocation} that may be inlined.
+         */
         StructuredGraph graph();
 
+        /**
+         * The invocation that may be inlined.
+         */
         Invoke invoke();
 
         /**
-         * Returns the number of invoked methods.
+         * Returns the number of methods that may be inlined by the {@link #invoke() invocation}.
+         * This may be more than one in the case of a invocation profile showing a number of "hot"
+         * concrete methods dispatched to by the invocation.
          */
         int numberOfMethods();
 
@@ -320,27 +331,7 @@ public class InliningUtil {
                 assert inlineable instanceof InlineableMacroNode;
 
                 Class<? extends FixedWithNextNode> macroNodeClass = ((InlineableMacroNode) inlineable).getMacroNodeClass();
-                if (((MethodCallTargetNode) invoke.callTarget()).targetMethod() != concrete) {
-                    assert ((MethodCallTargetNode) invoke.callTarget()).invokeKind() != InvokeKind.Static;
-                    InliningUtil.replaceInvokeCallTarget(invoke, graph, InvokeKind.Special, concrete);
-                }
-
-                FixedWithNextNode macroNode;
-                try {
-                    macroNode = macroNodeClass.getConstructor(Invoke.class).newInstance(invoke);
-                } catch (ReflectiveOperationException | IllegalArgumentException | SecurityException e) {
-                    throw new GraalInternalError(e).addContext(invoke.asNode()).addContext("macroSubstitution", macroNodeClass);
-                }
-
-                CallTargetNode callTarget = invoke.callTarget();
-                if (invoke instanceof InvokeNode) {
-                    graph.replaceFixedWithFixed((InvokeNode) invoke, graph.add(macroNode));
-                } else {
-                    InvokeWithExceptionNode invokeWithException = (InvokeWithExceptionNode) invoke;
-                    invokeWithException.killExceptionEdge();
-                    graph.replaceSplitWithFixed(invokeWithException, graph.add(macroNode), invokeWithException.next());
-                }
-                GraphUtil.killWithUnusedFloatingInputs(callTarget);
+                inlineMacroNode(invoke, concrete, graph, macroNodeClass);
             }
 
             InlinedBytecodes.add(concrete.getCodeSize());
@@ -485,16 +476,16 @@ public class InliningUtil {
         }
 
         private void createGuard(StructuredGraph graph, MetaAccessProvider runtime) {
-            InliningUtil.receiverNullCheck(invoke);
-            ValueNode receiver = ((MethodCallTargetNode) invoke.callTarget()).receiver();
+            ValueNode nonNullReceiver = InliningUtil.nonNullReceiver(invoke);
             ConstantNode typeHub = ConstantNode.forConstant(type.getEncoding(Representation.ObjectHub), runtime, graph);
-            LoadHubNode receiverHub = graph.add(new LoadHubNode(receiver, typeHub.kind()));
+            LoadHubNode receiverHub = graph.add(new LoadHubNode(nonNullReceiver, typeHub.kind()));
+
             CompareNode typeCheck = CompareNode.createCompareNode(Condition.EQ, receiverHub, typeHub);
             FixedGuardNode guard = graph.add(new FixedGuardNode(typeCheck, DeoptimizationReason.TypeCheckedInliningViolated, DeoptimizationAction.InvalidateReprofile));
             assert invoke.predecessor() != null;
 
-            ValueNode anchoredReceiver = createAnchoredReceiver(graph, guard, type, receiver, true);
-            invoke.callTarget().replaceFirstInput(receiver, anchoredReceiver);
+            ValueNode anchoredReceiver = createAnchoredReceiver(graph, guard, type, nonNullReceiver, true);
+            invoke.callTarget().replaceFirstInput(nonNullReceiver, anchoredReceiver);
 
             graph.addBeforeFixed(invoke.asNode(), receiverHub);
             graph.addBeforeFixed(invoke.asNode(), guard);
@@ -508,7 +499,7 @@ public class InliningUtil {
 
     /**
      * Polymorphic inlining of m methods with n type checks (n >= m) in case that the profiling
-     * information suggests a reasonable amounts of different receiver types and different methods.
+     * information suggests a reasonable amount of different receiver types and different methods.
      * If an unknown type is encountered a deoptimization is triggered.
      */
     private static class MultiTypeGuardInlineInfo extends AbstractInlineInfo {
@@ -592,8 +583,6 @@ public class InliningUtil {
 
         @Override
         public void inline(MetaAccessProvider runtime, Assumptions assumptions, Replacements replacements) {
-            // receiver null check must be the first node
-            InliningUtil.receiverNullCheck(invoke);
             if (hasSingleMethod()) {
                 inlineSingleMethod(graph(), runtime, assumptions);
             } else {
@@ -672,7 +661,7 @@ public class InliningUtil {
             invoke.asNode().replaceAtUsages(returnValuePhi);
             invoke.asNode().replaceAndDelete(null);
 
-            ArrayList<PiNode> replacementNodes = new ArrayList<>();
+            ArrayList<GuardedValueNode> replacementNodes = new ArrayList<>();
 
             // do the actual inlining for every invoke
             for (int i = 0; i < numberOfMethods; i++) {
@@ -688,7 +677,7 @@ public class InliningUtil {
 
                 ValueNode receiver = ((MethodCallTargetNode) invokeForInlining.callTarget()).receiver();
                 boolean exact = (getTypeCount(i) == 1 && !methodDispatch);
-                PiNode anchoredReceiver = createAnchoredReceiver(graph, node, commonType, receiver, exact);
+                GuardedValueNode anchoredReceiver = createAnchoredReceiver(graph, node, commonType, receiver, exact);
                 invokeForInlining.callTarget().replaceFirstInput(receiver, anchoredReceiver);
 
                 inline(invokeForInlining, methodAt(i), inlineableElementAt(i), assumptions, false);
@@ -773,9 +762,9 @@ public class InliningUtil {
 
         private boolean createDispatchOnTypeBeforeInvoke(StructuredGraph graph, AbstractBeginNode[] successors, boolean invokeIsOnlySuccessor, MetaAccessProvider runtime) {
             assert ptypes.size() >= 1;
-
+            ValueNode nonNullReceiver = nonNullReceiver(invoke);
             Kind hubKind = ((MethodCallTargetNode) invoke.callTarget()).targetMethod().getDeclaringClass().getEncoding(Representation.ObjectHub).getKind();
-            LoadHubNode hub = graph.add(new LoadHubNode(((MethodCallTargetNode) invoke.callTarget()).receiver(), hubKind));
+            LoadHubNode hub = graph.add(new LoadHubNode(nonNullReceiver, hubKind));
             graph.addBeforeFixed(invoke.asNode(), hub);
 
             if (!invokeIsOnlySuccessor && chooseMethodDispatch()) {
@@ -960,8 +949,6 @@ public class InliningUtil {
         }
 
         private void devirtualizeWithTypeSwitch(StructuredGraph graph, InvokeKind kind, ResolvedJavaMethod target, MetaAccessProvider runtime) {
-            InliningUtil.receiverNullCheck(invoke);
-
             AbstractBeginNode invocationEntry = graph.add(new BeginNode());
             AbstractBeginNode unknownTypeSux = createUnknownTypeSuccessor(graph);
             AbstractBeginNode[] successors = new AbstractBeginNode[]{invocationEntry, unknownTypeSux};
@@ -969,7 +956,7 @@ public class InliningUtil {
 
             invocationEntry.setNext(invoke.asNode());
             ValueNode receiver = ((MethodCallTargetNode) invoke.callTarget()).receiver();
-            PiNode anchoredReceiver = createAnchoredReceiver(graph, invocationEntry, target.getDeclaringClass(), receiver, false);
+            GuardedValueNode anchoredReceiver = createAnchoredReceiver(graph, invocationEntry, target.getDeclaringClass(), receiver, false);
             invoke.callTarget().replaceFirstInput(receiver, anchoredReceiver);
             replaceInvokeCallTarget(invoke, graph, kind, target);
         }
@@ -1052,6 +1039,10 @@ public class InliningUtil {
 
         ResolvedJavaType holder = targetMethod.getDeclaringClass();
         ObjectStamp receiverStamp = callTarget.receiver().objectStamp();
+        if (receiverStamp.alwaysNull()) {
+            // Don't inline if receiver is known to be null
+            return null;
+        }
         if (receiverStamp.type() != null) {
             // the invoke target might be more specific than the holder (happens after inlining:
             // locals lose their declared type...)
@@ -1225,13 +1216,13 @@ public class InliningUtil {
         }
     }
 
-    private static PiNode createAnchoredReceiver(StructuredGraph graph, GuardingNode anchor, ResolvedJavaType commonType, ValueNode receiver, boolean exact) {
+    private static GuardedValueNode createAnchoredReceiver(StructuredGraph graph, GuardingNode anchor, ResolvedJavaType commonType, ValueNode receiver, boolean exact) {
         return createAnchoredReceiver(graph, anchor, receiver, exact ? StampFactory.exactNonNull(commonType) : StampFactory.declaredNonNull(commonType));
     }
 
-    private static PiNode createAnchoredReceiver(StructuredGraph graph, GuardingNode anchor, ValueNode receiver, Stamp stamp) {
+    private static GuardedValueNode createAnchoredReceiver(StructuredGraph graph, GuardingNode anchor, ValueNode receiver, Stamp stamp) {
         // to avoid that floating reads on receiver fields float above the type check
-        return graph.unique(new PiNode(receiver, stamp, anchor));
+        return graph.unique(new GuardedValueNode(receiver, anchor, stamp));
     }
 
     // TODO (chaeubl): cleanup this method
@@ -1302,17 +1293,8 @@ public class InliningUtil {
 
         FrameState stateAfter = invoke.stateAfter();
         assert stateAfter == null || stateAfter.isAlive();
-        if (receiverNullCheck) {
-            GuardingNode receiverNullCheckNode = receiverNullCheck(invoke);
-            if (receiverNullCheckNode != null) {
-                ValueNode receiver = invoke.callTarget().arguments().get(0);
-                Stamp piStamp = receiver.stamp();
-                if (piStamp instanceof ObjectStamp) {
-                    piStamp = piStamp.join(StampFactory.objectNonNull());
-                }
-                ValueNode anchoredReceiver = createAnchoredReceiver(graph, receiverNullCheckNode, receiver, piStamp);
-                invoke.callTarget().replaceFirstInput(receiver, anchoredReceiver);
-            }
+        if (receiverNullCheck && !((MethodCallTargetNode) invoke.callTarget()).isStatic()) {
+            nonNullReceiver(invoke);
         }
 
         IdentityHashMap<Node, Node> replacements = new IdentityHashMap<>();
@@ -1410,6 +1392,12 @@ public class InliningUtil {
                             frameState.setOuterFrameState(outerFrameState);
                         }
                     }
+                } else if (node instanceof ValueAnchorNode) {
+                    /*
+                     * Synchronized inlinees have a valid point to deopt to after the monitor exit
+                     * at the end, so there's no need for the value anchor to be permanent anymore.
+                     */
+                    ((ValueAnchorNode) node).setPermanent(false);
                 }
                 if (callerLockDepth != 0 && node instanceof MonitorReference) {
                     MonitorReference monitor = (MonitorReference) node;
@@ -1450,17 +1438,24 @@ public class InliningUtil {
         return true;
     }
 
-    public static GuardingNode receiverNullCheck(Invoke invoke) {
+    /**
+     * Gets the receiver for an invoke, adding a guard if necessary to ensure it is non-null.
+     */
+    public static ValueNode nonNullReceiver(Invoke invoke) {
         MethodCallTargetNode callTarget = (MethodCallTargetNode) invoke.callTarget();
+        assert !callTarget.isStatic() : callTarget.targetMethod();
         StructuredGraph graph = callTarget.graph();
-        NodeInputList<ValueNode> parameters = callTarget.arguments();
-        ValueNode firstParam = parameters.size() <= 0 ? null : parameters.get(0);
-        if (!callTarget.isStatic() && firstParam.kind() == Kind.Object && !firstParam.objectStamp().nonNull()) {
-            FixedGuardNode guard = graph.add(new FixedGuardNode(graph.unique(new IsNullNode(firstParam)), DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, true));
-            graph.addBeforeFixed(invoke.asNode(), guard);
-            return guard;
+        ValueNode firstParam = callTarget.arguments().get(0);
+        if (firstParam.kind() == Kind.Object && !firstParam.objectStamp().nonNull()) {
+            assert !firstParam.objectStamp().alwaysNull();
+            IsNullNode condition = graph.unique(new IsNullNode(firstParam));
+            Stamp stamp = firstParam.stamp().join(objectNonNull());
+            GuardingPiNode nonNullReceiver = graph.add(new GuardingPiNode(firstParam, condition, true, NullCheckException, InvalidateReprofile, stamp));
+            graph.addBeforeFixed(invoke.asNode(), nonNullReceiver);
+            callTarget.replaceFirstInput(firstParam, nonNullReceiver);
+            return nonNullReceiver;
         }
-        return null;
+        return firstParam;
     }
 
     public static boolean canIntrinsify(Replacements replacements, ResolvedJavaMethod target) {
@@ -1473,5 +1468,30 @@ public class InliningUtil {
 
     public static Class<? extends FixedWithNextNode> getMacroNodeClass(Replacements replacements, ResolvedJavaMethod target) {
         return replacements.getMacroSubstitution(target);
+    }
+
+    public static FixedWithNextNode inlineMacroNode(Invoke invoke, ResolvedJavaMethod concrete, StructuredGraph graph, Class<? extends FixedWithNextNode> macroNodeClass) throws GraalInternalError {
+        if (((MethodCallTargetNode) invoke.callTarget()).targetMethod() != concrete) {
+            assert ((MethodCallTargetNode) invoke.callTarget()).invokeKind() != InvokeKind.Static;
+            InliningUtil.replaceInvokeCallTarget(invoke, graph, InvokeKind.Special, concrete);
+        }
+
+        FixedWithNextNode macroNode;
+        try {
+            macroNode = macroNodeClass.getConstructor(Invoke.class).newInstance(invoke);
+        } catch (ReflectiveOperationException | IllegalArgumentException | SecurityException e) {
+            throw new GraalInternalError(e).addContext(invoke.asNode()).addContext("macroSubstitution", macroNodeClass);
+        }
+
+        CallTargetNode callTarget = invoke.callTarget();
+        if (invoke instanceof InvokeNode) {
+            graph.replaceFixedWithFixed((InvokeNode) invoke, graph.add(macroNode));
+        } else {
+            InvokeWithExceptionNode invokeWithException = (InvokeWithExceptionNode) invoke;
+            invokeWithException.killExceptionEdge();
+            graph.replaceSplitWithFixed(invokeWithException, graph.add(macroNode), invokeWithException.next());
+        }
+        GraphUtil.killWithUnusedFloatingInputs(callTarget);
+        return macroNode;
     }
 }

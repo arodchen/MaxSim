@@ -31,7 +31,7 @@ import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 
 @NodeInfo(nameTemplate = "FixedGuard(!={p#negated}) {p#reason/s}")
-public class FixedGuardNode extends FixedWithNextNode implements Simplifiable, Lowerable, Node.IterableNodeType, Negatable, GuardingNode {
+public class FixedGuardNode extends DeoptimizingFixedWithNextNode implements Simplifiable, Lowerable, Node.IterableNodeType, Negatable, GuardingNode {
 
     @Input private LogicNode condition;
     private final DeoptimizationReason reason;
@@ -88,12 +88,11 @@ public class FixedGuardNode extends FixedWithNextNode implements Simplifiable, L
                 this.replaceAtUsages(BeginNode.prevBegin(this));
                 graph().removeFixed(this);
             } else {
-                FixedNode next = this.next();
-                if (next != null) {
-                    tool.deleteBranch(next);
-                }
-                setNext(graph().add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, reason)));
-                return;
+                FixedWithNextNode predecessor = (FixedWithNextNode) predecessor();
+                DeoptimizeNode deopt = graph().add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, reason));
+                deopt.setDeoptimizationState(getDeoptimizationState());
+                tool.deleteBranch(this);
+                predecessor.setNext(deopt);
             }
         }
     }
@@ -106,6 +105,7 @@ public class FixedGuardNode extends FixedWithNextNode implements Simplifiable, L
             FixedNode next = next();
             setNext(null);
             DeoptimizeNode deopt = graph().add(new DeoptimizeNode(action, reason));
+            deopt.setDeoptimizationState(getDeoptimizationState());
             IfNode ifNode;
             if (negated) {
                 ifNode = graph().add(new IfNode(condition, deopt, next, 0));
@@ -127,5 +127,15 @@ public class FixedGuardNode extends FixedWithNextNode implements Simplifiable, L
     @Override
     public FixedGuardNode asNode() {
         return this;
+    }
+
+    @Override
+    public boolean canDeoptimize() {
+        return true;
+    }
+
+    @Override
+    public DeoptimizationReason getDeoptimizationReason() {
+        return reason;
     }
 }

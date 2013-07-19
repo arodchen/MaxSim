@@ -50,6 +50,7 @@ public final class HotSpotVMConfig extends CompilerObject {
     public boolean usePopCountInstruction;
     public boolean useAESIntrinsics;
     public boolean useG1GC;
+    public long gcTotalCollectionsAddress;
 
     // Compressed Oops related values.
     public boolean useCompressedOops;
@@ -57,6 +58,9 @@ public final class HotSpotVMConfig extends CompilerObject {
     public long narrowOopBase;
     public int narrowOopShift;
     public int logMinObjAlignment;
+    public long narrowKlassBase;
+    public int narrowKlassShift;
+    public int logKlassAlignment;
 
     // CPU capabilities
     public int useSSE;
@@ -264,6 +268,12 @@ public final class HotSpotVMConfig extends CompilerObject {
      */
     public int threadIsMethodHandleReturnOffset;
 
+    /**
+     * Bit pattern that represents a non-oop. Neither the high bits nor the low bits of this value
+     * are allowed to look like (respectively) the high or low bits of a real oop.
+     */
+    public long nonOopBits;
+
     public long verifyOopCounterAddress;
     public long verifyOopMask;
     public long verifyOopBits;
@@ -408,6 +418,7 @@ public final class HotSpotVMConfig extends CompilerObject {
     public long newInstanceAddress;
     public long newArrayAddress;
     public long newMultiArrayAddress;
+    public long dynamicNewArrayAddress;
     public long registerFinalizerAddress;
     public long threadIsInterruptedAddress;
     public long vmMessageAddress;

@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.replacements;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
@@ -35,10 +33,7 @@ import com.oracle.graal.nodes.java.*;
 public class ArraySubstitutions {
 
     @MethodSubstitution
-    public static Object newArray(Class<?> componentType, int length) throws NegativeArraySizeException {
-        if (componentType == null) {
-            DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.NullCheckException);
-        }
-        return DynamicNewArrayNode.newArray(componentType, length);
+    public static Object newInstance(Class<?> componentType, int length) throws NegativeArraySizeException {
+        return DynamicNewArrayNode.newArray(GuardingPiNode.guardingNonNull(componentType), length);
     }
 }

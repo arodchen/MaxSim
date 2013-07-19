@@ -41,7 +41,7 @@ public final class GraalOptions {
     @Option(help = "")
     public static final OptionValue<Double> MegamorphicInliningMinMethodProbability = new OptionValue<>(0.33D);
     @Option(help = "")
-    public static final OptionValue<Integer> MaximumDesiredSize = new OptionValue<>(5000);
+    public static final OptionValue<Integer> MaximumDesiredSize = new OptionValue<>(20000);
     @Option(help = "")
     public static final OptionValue<Integer> MaximumRecursiveInlining = new OptionValue<>(1);
 
@@ -63,6 +63,8 @@ public final class GraalOptions {
     public static final OptionValue<Integer> SmallCompiledLowLevelGraphSize = new OptionValue<>(300);
     @Option(help = "")
     public static final OptionValue<Double> LimitInlinedInvokes = new OptionValue<>(5.0);
+    @Option(help = "")
+    public static final OptionValue<Boolean> InlineEverything = new OptionValue<>(false);
 
     // escape analysis settings
     @Option(help = "")
@@ -88,8 +90,6 @@ public final class GraalOptions {
     public static final OptionValue<Integer> DeoptsToDisableOptimisticOptimization = new OptionValue<>(40);
 
     // comilation queue
-    @Option(help = "")
-    public static final OptionValue<Boolean> DynamicCompilePriority = new OptionValue<>(false);
     @Option(help = "")
     public static final OptionValue<String> CompileTheWorld = new OptionValue<>(null);
     @Option(help = "")
@@ -143,10 +143,13 @@ public final class GraalOptions {
     // Debug settings:
     @Option(help = "")
     public static final OptionValue<Boolean> BootstrapReplacements = new OptionValue<>(false);
-
+    @Option(help = "")
+    public static final OptionValue<Integer> GCDebugStartCycle = new OptionValue<>(-1);
     // Ideal graph visualizer output settings
     @Option(help = "")
     public static final OptionValue<Boolean> PrintBinaryGraphs = new OptionValue<>(true);
+    @Option(help = "outputs probabilities for fixed nodes during binary graph dumping")
+    public static final OptionValue<Boolean> PrintGraphProbabilities = new OptionValue<>(false);
     @Option(help = "")
     public static final OptionValue<Boolean> PrintCFG = new OptionValue<>(false);
     @Option(help = "")
@@ -183,6 +186,8 @@ public final class GraalOptions {
     public static final OptionValue<Boolean> ExitVMOnException = new OptionValue<>(true);
     @Option(help = "")
     public static final OptionValue<Boolean> PrintStackTraceOnException = new OptionValue<>(false);
+    @Option(help = "Sets a phase after which the decompiler dumps the graph, -G:Dump= required")
+    public static final OptionValue<String> DecompileAfterPhase = new OptionValue<>(null);
 
     // HotSpot command line options
     @Option(help = "")
@@ -308,6 +313,7 @@ public final class GraalOptions {
     public static final OptionValue<Boolean> IntrinsifyInstalledCodeMethods = new OptionValue<>(true);
     @Option(help = "")
     public static final OptionValue<Boolean> IntrinsifyCallSiteTarget = new OptionValue<>(true);
+
     /**
      * Counts the various paths taken through snippets.
      */

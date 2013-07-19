@@ -33,6 +33,7 @@ import mx
 import sanitycheck
 import json, textwrap
 
+# This works because when mx loads this file, it makes sure __file__ gets an absolute path
 _graal_home = dirname(dirname(__file__))
 
 """ Used to distinguish an exported GraalVM (see 'mx export'). """
@@ -53,6 +54,10 @@ _vmbuildChoices = ['product', 'fastdebug', 'debug', 'optimized']
 _vmbuild = _vmbuildChoices[0]
 
 _jacoco = 'off'
+
+_workdir = None
+
+_vmdir = None
 
 _native_dbg = None
 
@@ -264,20 +269,20 @@ def _vmCfgInJdk(jdk):
     return join(_vmLibDirInJdk(jdk), 'jvm.cfg')
 
 def _jdksDir():
-    return join(_graal_home, 'jdk' + str(mx.java().version))
+    return os.path.abspath(_vmdir if _vmdir else join(_graal_home, 'jdk' + str(mx.java().version)))
 
-def _jdk(build='product', vmToCheck=None, create=False):
+def _jdk(build='product', vmToCheck=None, create=False, installGraalJar=True):
     """
     Get the JDK into which Graal is installed, creating it first if necessary.
     """
     jdk = join(_jdksDir(), build)
-    srcJdk = mx.java().jdk
-    jdkContents = ['bin', 'include', 'jre', 'lib']
-    if exists(join(srcJdk, 'db')):
-        jdkContents.append('db')
-    if mx.get_os() != 'windows' and exists(join(srcJdk, 'man')):
-        jdkContents.append('man')
     if create:
+        srcJdk = mx.java().jdk
+        jdkContents = ['bin', 'include', 'jre', 'lib']
+        if exists(join(srcJdk, 'db')):
+            jdkContents.append('db')
+        if mx.get_os() != 'windows' and exists(join(srcJdk, 'man')):
+            jdkContents.append('man')
         if not exists(jdk):
             mx.log('Creating ' + jdk + ' from ' + srcJdk)
             os.makedirs(jdk)
@@ -328,7 +333,8 @@ def _jdk(build='product', vmToCheck=None, create=False):
             vmOption = ' --vm ' + vmToCheck if vmToCheck else ''
             mx.abort('The ' + build + ' VM has not been created - run "mx' + vmOption + ' build ' + build + '"')
             
-    _installGraalJarInJdks(mx.distribution('GRAAL'))
+    if installGraalJar:
+        _installGraalJarInJdks(mx.distribution('GRAAL'))
     
     if vmToCheck is not None:
         jvmCfg = _vmCfgInJdk(jdk)
@@ -346,7 +352,7 @@ def _jdk(build='product', vmToCheck=None, create=False):
 def _installGraalJarInJdks(graalDist):
     graalJar = graalDist.path
     graalOptions = join(_graal_home, 'graal.options')
-    jdks = join(_graal_home, 'jdk' + str(mx.java().version))
+    jdks = _jdksDir()
     if exists(jdks):
         for e in os.listdir(jdks):
             jreLibDir = join(jdks, e, 'jre', 'lib')
@@ -421,7 +427,7 @@ def _runInDebugShell(cmd, workingDir, logFile=None, findInOutput=None, respondTo
 def jdkhome(vm=None):
     """return the JDK directory selected for the 'vm' command"""
     build = _vmbuild if _vmSourcesAvailable else 'product'
-    return join(_graal_home, 'jdk' + str(mx.java().version), build)
+    return _jdk(build, installGraalJar=False)
    
 def print_jdkhome(args, vm=None):
     """print the JDK directory selected for the 'vm' command"""
@@ -496,7 +502,7 @@ def build(args, vm=None):
         if build == 'ide-build-target':
             build = os.environ.get('IDE_BUILD_TARGET', 'product')
             if len(build) == 0:
-                mx.log('[skipping build from IDE as IDE_BUILD_TARGET environment variable is ""]')
+                mx.logv('[skipping build from IDE as IDE_BUILD_TARGET environment variable is ""]')
                 continue
 
         jdk = _jdk(build, create=True)
@@ -537,7 +543,7 @@ def build(args, vm=None):
                     break
 
         if not mustBuild:
-            mx.log('[all files in src and make directories are older than ' + timestampFile[len(_graal_home) + 1:] + ' - skipping native build]')
+            mx.logv('[all files in src and make directories are older than ' + timestampFile[len(_graal_home) + 1:] + ' - skipping native build]')
             continue
 
         if platform.system() == 'Windows':
@@ -648,6 +654,11 @@ def vm(args, vm=None, nonZeroIsFatal=True, out=None, err=None, cwd=None, timeout
     if vm is None:
         vm = _vm
 
+    if cwd is None:
+        cwd = _workdir
+    elif _workdir is not None:
+        mx.abort("conflicting working directories: do not set --workdir for this command")
+
     build = vmbuild if vmbuild is not None else _vmbuild if _vmSourcesAvailable else 'product'
     jdk = _jdk(build, vmToCheck=vm)
     mx.expand_project_in_args(args)
@@ -698,8 +709,7 @@ def _find_classes_with_annotations(p, pkgRoot, annotations, includeInnerClasses=
     return p.find_classes_with_matching_source_line(pkgRoot, matches, includeInnerClasses)
 
 def _run_tests(args, harness, annotations, testfile):
-    pos = [a for a in args if a[0] != '-' and a[0] != '@' ]
-    neg = [a[1:] for a in args if a[0] == '-']
+    tests = [a for a in args if a[0] != '@' ]
     vmArgs = [a[1:] for a in args if a[0] == '@']
 
     def containsAny(c, substrings):
@@ -707,17 +717,28 @@ def _run_tests(args, harness, annotations, testfile):
             if s in c:
                 return True
         return False
-
-    classes = []
+    
+    candidates = []
     for p in mx.projects():
         if mx.java().javaCompliance < p.javaCompliance:
             continue
-        classes += _find_classes_with_annotations(p, None, annotations).keys()
+        candidates += _find_classes_with_annotations(p, None, annotations).keys()
 
-        if len(pos) != 0:
-            classes = [c for c in classes if containsAny(c, pos)]
-        if len(neg) != 0:
-            classes = [c for c in classes if not containsAny(c, neg)]
+    classes = []
+    if len(tests) == 0:
+        classes = candidates
+    else:
+        for t in tests:
+            if t.startswith('-'):
+                mx.abort('VM option needs @ prefix (i.e., @' + t + ')')
+                
+            found = False
+            for c in candidates:
+                if t in c:
+                    found = True
+                    classes.append(c)
+            if not found:
+                mx.log('warning: no tests matched by substring "' + t)
 
     projectscp = mx.classpath([pcp.name for pcp in mx.projects() if pcp.javaCompliance <= mx.java().javaCompliance])
 
@@ -756,8 +777,7 @@ def _unittest(args, annotations):
 _unittestHelpSuffix = """
 
     If filters are supplied, only tests whose fully qualified name
-    includes a filter as a substring are run. Negative filters are
-    those with a '-' prefix.
+    includes a filter as a substring are run.
     
     Options with a '@' prefix are passed to the VM.
     
@@ -934,8 +954,13 @@ def gate(args):
         tasks.append(t.stop())
 
         _vmbuild = 'product'
+        t = Task('BootstrapWithGCVerification:product')
+        vm(['-XX:+UnlockDiagnosticVMOptions', '-XX:+VerifyBeforeGC', '-XX:+VerifyAfterGC', '-version'])
+        tasks.append(t.stop())
+
+        _vmbuild = 'product'
         t = Task('BootstrapWithRegisterPressure:product')
-        vm(['-G:RegisterPressure=rbx,r11,r14,xmm3,xmm11,xmm14', '-esa', '-version'])
+        vm(['-G:RegisterPressure=rbx,r11,r10,r14,xmm3,xmm11,xmm14', '-esa', '-version'])
         tasks.append(t.stop())
 
         _vmbuild = 'product'
@@ -1025,17 +1050,17 @@ def longtests(args):
 def gv(args):
     """run the Graal Visualizer"""
     with open(join(_graal_home, '.graal_visualizer.log'), 'w') as fp:
-        mx.log('[Graal Visualizer log is in ' + fp.name + ']')
+        mx.logv('[Graal Visualizer log is in ' + fp.name + ']')
         if not exists(join(_graal_home, 'visualizer', 'build.xml')):
-            mx.log('[This initial execution may take a while as the NetBeans platform needs to be downloaded]')
+            mx.logv('[This initial execution may take a while as the NetBeans platform needs to be downloaded]')
         mx.run(['ant', '-f', join(_graal_home, 'visualizer', 'build.xml'), '-l', fp.name, 'run'])
 
 def igv(args):
     """run the Ideal Graph Visualizer"""
     with open(join(_graal_home, '.ideal_graph_visualizer.log'), 'w') as fp:
-        mx.log('[Ideal Graph Visualizer log is in ' + fp.name + ']')
+        mx.logv('[Ideal Graph Visualizer log is in ' + fp.name + ']')
         if not exists(join(_graal_home, 'src', 'share', 'tools', 'IdealGraphVisualizer', 'nbplatform')):
-            mx.log('[This initial execution may take a while as the NetBeans platform needs to be downloaded]')
+            mx.logv('[This initial execution may take a while as the NetBeans platform needs to be downloaded]')
         mx.run(['ant', '-f', join(_graal_home, 'src', 'share', 'tools', 'IdealGraphVisualizer', 'build.xml'), '-l', fp.name, 'run'])
 
 def bench(args):
@@ -1270,7 +1295,6 @@ def site(args):
                     '--dot-output-base', 'projects'] + args)
 
 def mx_init(suite):
-    _vmbuild = 'product'
     commands = {
         'build': [build, '[-options]'],
         'buildvars': [buildvars, ''],
@@ -1301,6 +1325,8 @@ def mx_init(suite):
     }
 
     mx.add_argument('--jacoco', help='instruments com.oracle.* classes using JaCoCo', default='off', choices=['off', 'on', 'append'])
+    mx.add_argument('--workdir', help='runs the VM in the given directory', default=None)
+    mx.add_argument('--vmdir', help='specify where the directory in which the vms should be', default=None)
 
     if (_vmSourcesAvailable):
         mx.add_argument('--vm', action='store', dest='vm', default='graal', choices=_vmChoices, help='the VM to build/run (default: ' + _vmChoices[0] + ')')
@@ -1333,6 +1359,10 @@ def mx_post_parse_cmd_line(opts):#
         _make_eclipse_launch = getattr(opts, 'make_eclipse_launch', False)
     global _jacoco
     _jacoco = opts.jacoco
+    global _workdir
+    _workdir = opts.workdir
+    global _vmdir
+    _vmdir = opts.vmdir
     global _native_dbg
     _native_dbg = opts.native_dbg
 

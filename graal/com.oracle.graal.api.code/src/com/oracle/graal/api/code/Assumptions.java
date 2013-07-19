@@ -281,10 +281,12 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
 
             int index;
 
+            @Override
             public void remove() {
                 throw new UnsupportedOperationException();
             }
 
+            @Override
             public Assumption next() {
                 if (index >= count) {
                     throw new NoSuchElementException();
@@ -292,6 +294,7 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
                 return list[index++];
             }
 
+            @Override
             public boolean hasNext() {
                 return index < count;
             }
@@ -370,6 +373,23 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
     public void record(Assumptions assumptions) {
         for (int i = 0; i < assumptions.count; i++) {
             record(assumptions.list[i]);
+        }
+    }
+
+    public void print(PrintStream out) {
+        List<Assumption> nonNullList = new ArrayList<>();
+        if (list != null) {
+            for (int i = 0; i < list.length; ++i) {
+                Assumption a = list[i];
+                if (a != null) {
+                    nonNullList.add(a);
+                }
+            }
+        }
+
+        out.printf("%d assumptions:\n", nonNullList.size());
+        for (Assumption a : nonNullList) {
+            out.println(a.toString());
         }
     }
 }

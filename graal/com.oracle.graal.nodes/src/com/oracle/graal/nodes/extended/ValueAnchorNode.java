@@ -24,10 +24,8 @@ package com.oracle.graal.nodes.extended;
 
 import static com.oracle.graal.graph.iterators.NodePredicates.*;
 
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
@@ -48,7 +46,7 @@ public final class ValueAnchorNode extends FixedWithNextNode implements Canonica
         this.anchored = new NodeInputList<>(this, values);
     }
 
-    private final boolean permanent;
+    private boolean permanent;
 
     @Override
     public void generate(LIRGeneratorTool gen) {
@@ -63,6 +61,18 @@ public final class ValueAnchorNode extends FixedWithNextNode implements Canonica
 
     public void removeAnchoredNode(ValueNode value) {
         this.anchored.remove(value);
+    }
+
+    public NodeInputList<ValueNode> getAnchoredNodes() {
+        return anchored;
+    }
+
+    public void setPermanent(boolean permanent) {
+        this.permanent = permanent;
+    }
+
+    public boolean isPermanent() {
+        return permanent;
     }
 
     @Override
@@ -81,20 +91,9 @@ public final class ValueAnchorNode extends FixedWithNextNode implements Canonica
             }
         }
         for (Node node : anchored.nonNull().and(isNotA(FixedNode.class))) {
-            if (node instanceof ConstantNode) {
-                continue;
+            if (!(node instanceof ConstantNode)) {
+                return this; // still necessary
             }
-            if (node instanceof IntegerDivNode || node instanceof IntegerRemNode) {
-                ArithmeticNode arithmeticNode = (ArithmeticNode) node;
-                if (arithmeticNode.y().isConstant()) {
-                    Constant constant = arithmeticNode.y().asConstant();
-                    assert constant.getKind() == arithmeticNode.kind() : constant.getKind() + " != " + arithmeticNode.kind();
-                    if (constant.asLong() != 0) {
-                        continue;
-                    }
-                }
-            }
-            return this; // still necessary
         }
         if (usages().isEmpty()) {
             return null; // no node which require an anchor found
