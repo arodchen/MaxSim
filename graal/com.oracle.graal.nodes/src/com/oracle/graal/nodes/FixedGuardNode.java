@@ -38,6 +38,12 @@ public class FixedGuardNode extends DeoptimizingFixedWithNextNode implements Sim
     private final DeoptimizationAction action;
     private boolean negated;
 
+    private static boolean suppressDeoptimize;
+
+    public static void suppressDeoptimize() {
+        suppressDeoptimize = true;
+    }
+
     public LogicNode condition() {
         return condition;
     }
@@ -88,11 +94,13 @@ public class FixedGuardNode extends DeoptimizingFixedWithNextNode implements Sim
                 this.replaceAtUsages(BeginNode.prevBegin(this));
                 graph().removeFixed(this);
             } else {
-                FixedWithNextNode predecessor = (FixedWithNextNode) predecessor();
-                DeoptimizeNode deopt = graph().add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, reason));
-                deopt.setDeoptimizationState(getDeoptimizationState());
-                tool.deleteBranch(this);
-                predecessor.setNext(deopt);
+                if (!suppressDeoptimize) {
+                    FixedWithNextNode predecessor = (FixedWithNextNode) predecessor();
+                    DeoptimizeNode deopt = graph().add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, reason));
+                    deopt.setDeoptimizationState(getDeoptimizationState());
+                    tool.deleteBranch(this);
+                    predecessor.setNext(deopt);
+                }
             }
         }
     }
@@ -102,18 +110,20 @@ public class FixedGuardNode extends DeoptimizingFixedWithNextNode implements Sim
         if (loweringType == LoweringType.BEFORE_GUARDS) {
             tool.getRuntime().lower(this, tool);
         } else {
-            FixedNode next = next();
-            setNext(null);
-            DeoptimizeNode deopt = graph().add(new DeoptimizeNode(action, reason));
-            deopt.setDeoptimizationState(getDeoptimizationState());
-            IfNode ifNode;
-            if (negated) {
-                ifNode = graph().add(new IfNode(condition, deopt, next, 0));
-            } else {
-                ifNode = graph().add(new IfNode(condition, next, deopt, 1));
+            if (!suppressDeoptimize) {
+                FixedNode next = next();
+                setNext(null);
+                DeoptimizeNode deopt = graph().add(new DeoptimizeNode(action, reason));
+                deopt.setDeoptimizationState(getDeoptimizationState());
+                IfNode ifNode;
+                if (negated) {
+                    ifNode = graph().add(new IfNode(condition, deopt, next, 0));
+                } else {
+                    ifNode = graph().add(new IfNode(condition, next, deopt, 1));
+                }
+                ((FixedWithNextNode) predecessor()).setNext(ifNode);
+                GraphUtil.killWithUnusedFloatingInputs(this);
             }
-            ((FixedWithNextNode) predecessor()).setNext(ifNode);
-            GraphUtil.killWithUnusedFloatingInputs(this);
         }
     }
 

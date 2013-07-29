@@ -1002,6 +1002,9 @@ public class InliningUtil {
 
         public AssumptionInlineInfo(Invoke invoke, ResolvedJavaMethod concrete, Assumption takenAssumption) {
             super(invoke, concrete);
+            if (takenAssumption instanceof Assumptions.ConcreteSubtype) {
+                System.console();
+            }
             this.takenAssumption = takenAssumption;
         }
 
@@ -1025,7 +1028,7 @@ public class InliningUtil {
 
     /**
      * Determines if inlining is possible at the given invoke node.
-     * 
+     *
      * @param invoke the invoke that should be inlined
      * @return an instance of InlineInfo, or null if no inlining is possible at the given invoke
      */
@@ -1286,7 +1289,7 @@ public class InliningUtil {
 
     /**
      * Performs an actual inlining, thereby replacing the given invoke with the given inlineGraph.
-     * 
+     *
      * @param invoke the invoke that will be replaced
      * @param inlineGraph the graph that the invoke will be replaced with
      * @param receiverNullCheck true if a null check needs to be generated for non-static inlinings,

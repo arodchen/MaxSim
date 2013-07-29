@@ -62,9 +62,15 @@ public class GraalCompiler {
     public static final OptionValue<Boolean> Inline = new OptionValue<>(true);
     // @formatter:on
 
+    private static boolean maxineHackDisableCE;
+
+    public static void setMaxineHackDisableCE(boolean b) {
+        maxineHackDisableCE = b;
+    }
+
     /**
      * Requests compilation of a given graph.
-     * 
+     *
      * @param graph the graph to be compiled
      * @param cc the calling convention for calls to the code compiled for {@code graph}
      * @param installedCodeOwner the method the compiled code will be
@@ -120,9 +126,9 @@ public class GraalCompiler {
 
     /**
      * Builds the graph, optimizes it.
-     * 
+     *
      * @param runtime
-     * 
+     *
      * @param target
      */
     public static LIR emitHIR(GraalCodeCacheProvider runtime, TargetDescription target, final StructuredGraph graph, Replacements replacements, Assumptions assumptions, GraphCache cache,
@@ -154,12 +160,14 @@ public class GraalCompiler {
             if (IterativeInlining.getValue()) {
                 new IterativeInliningPhase(cache, plan, optimisticOpts, canonicalizer).apply(graph, highTierContext);
             } else {
-                new InliningPhase(runtime, null, replacements, assumptions, cache, plan, optimisticOpts).apply(graph);
+                InliningPhaseFactory.create(runtime, null, replacements, assumptions, cache, plan, optimisticOpts).apply(graph);
                 new DeadCodeEliminationPhase().apply(graph);
 
+                if (!maxineHackDisableCE) {
                 if (ConditionalElimination.getValue() && OptCanonicalizer.getValue()) {
                     canonicalizer.apply(graph, highTierContext);
                     new IterativeConditionalEliminationPhase().apply(graph, highTierContext);
+                }
                 }
             }
         }
