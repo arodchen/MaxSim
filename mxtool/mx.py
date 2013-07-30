@@ -1932,6 +1932,7 @@ def checkstyle(args):
     for p in sorted_deps():
         if p.native:
             continue
+        
         sourceDirs = p.source_dirs()
         dotCheckstyle = join(p.dir, '.checkstyle')
 
@@ -1950,8 +1951,9 @@ def checkstyle(args):
             if len(javafilelist) == 0:
                 logv('[no Java sources in {0} - skipping]'.format(sourceDir))
                 continue
+            
+            timestampFile = join(p.suite.mxDir, 'checkstyle-timestamps', sourceDir[len(p.suite.dir) + 1:].replace(os.sep, '_') + '.timestamp')
 
-            timestampFile = join(p.suite.dir, 'mx', 'checkstyle-timestamps', sourceDir[len(p.suite.dir) + 1:].replace(os.sep, '_') + '.timestamp')
             if not exists(dirname(timestampFile)):
                 os.makedirs(dirname(timestampFile))
             mustCheck = False
@@ -2038,10 +2040,10 @@ def checkstyle(args):
                                 elif name == 'error':
                                     errors.append('{}:{}: {}'.format(source, attrs['line'], attrs['message']))
 
-                            p = xml.parsers.expat.ParserCreate()
-                            p.StartElementHandler = start_element
+                            xp = xml.parsers.expat.ParserCreate()
+                            xp.StartElementHandler = start_element
                             with open(auditfileName) as fp:
-                                p.ParseFile(fp)
+                                xp.ParseFile(fp)
                             if len(errors) != 0:
                                 map(log, errors)
                                 totalErrors = totalErrors + len(errors)
