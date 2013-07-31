@@ -29,3 +29,9 @@ TYPE=TIERED
 VM_SUBDIR = server
 
 CFLAGS += -DCOMPILER2 -DCOMPILER1
+
+ifeq ($(INCLUDE_GRAAL), true)
+  CFLAGS += -DGRAAL
+else
+  VM_SUBDIR = server-nograal
+endif

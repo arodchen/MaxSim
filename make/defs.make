@@ -236,7 +236,7 @@ ifneq ($(ALT_JDK_IMAGE_DIR),)
   JDK_IMAGE_DIR=$(ALT_JDK_IMAGE_DIR)
 endif
 
-# The platform dependent defs.make defines platform specific variable such
+# The platform dependent defs.make defines platform specific variable such 
 # as ARCH, EXPORT_LIST etc. We must place the include here after BOOTDIR is defined.
 include $(GAMMADIR)/make/$(OSNAME)/makefiles/defs.make
 
@@ -336,6 +336,7 @@ EXPORT_LIST += $(EXPORT_INCLUDE_DIR)/jvmticmlr.h
 EXPORT_LIST += $(EXPORT_INCLUDE_DIR)/jni.h
 EXPORT_LIST += $(EXPORT_INCLUDE_DIR)/$(JDK_INCLUDE_SUBDIR)/jni_md.h
 EXPORT_LIST += $(EXPORT_INCLUDE_DIR)/jmm.h
+EXPORT_LIST += $(EXPORT_JRE_LIB_DIR)/graal.jar
 
 .PHONY: $(HS_ALT_MAKE)/defs.make
 

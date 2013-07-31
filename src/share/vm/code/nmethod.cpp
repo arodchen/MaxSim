@@ -45,6 +45,9 @@
 #ifdef SHARK
 #include "shark/sharkCompiler.hpp"
 #endif
+#ifdef GRAAL
+#include "graal/graalJavaAccess.hpp"
+#endif
 
 #ifdef DTRACE_ENABLED
 
@@ -97,6 +100,11 @@ bool nmethod::is_compiled_by_c1() const {
   if (is_native_method()) return false;
   return compiler()->is_c1();
 }
+bool nmethod::is_compiled_by_graal() const {
+  if (compiler() == NULL || method() == NULL)  return false;  // can happen during debug printing
+  if (is_native_method()) return false;
+  return compiler()->is_graal();
+}
 bool nmethod::is_compiled_by_c2() const {
   if (compiler() == NULL || method() == NULL)  return false;  // can happen during debug printing
   if (is_native_method()) return false;
@@ -116,7 +124,6 @@ bool nmethod::is_compiled_by_shark() const {
 //   PrintC1Statistics, PrintOptoStatistics, LogVMOutput, and LogCompilation.
 // (In the latter two cases, they like other stats are printed to the log only.)
 
-#ifndef PRODUCT
 // These variables are put into one block to reduce relocations
 // and make it simpler to print from the debugger.
 static
@@ -206,7 +213,6 @@ struct nmethod_stats_struct {
                   pc_desc_tests, pc_desc_searches, pc_desc_adds);
   }
 } nmethod_stats;
-#endif //PRODUCT
 
 
 //---------------------------------------------------------------------------------
@@ -480,7 +486,10 @@ void nmethod::init_defaults() {
   _scavenge_root_state     = 0;
   _saved_nmethod_link      = NULL;
   _compiler                = NULL;
-
+#ifdef GRAAL
+  _graal_installed_code   = NULL;
+  _triggered_deoptimizations = NULL;
+#endif
 #ifdef HAVE_DTRACE_H
   _trap_offset             = 0;
 #endif // def HAVE_DTRACE_H
@@ -509,7 +518,7 @@ nmethod* nmethod::new_native_nmethod(methodHandle method,
                                             code_buffer, frame_size,
                                             basic_lock_owner_sp_offset,
                                             basic_lock_sp_offset, oop_maps);
-    NOT_PRODUCT(if (nm != NULL)  nmethod_stats.note_native_nmethod(nm));
+    if (nm != NULL)  nmethod_stats.note_native_nmethod(nm);
     if (PrintAssembly && nm != NULL) {
       Disassembler::decode(nm);
     }
@@ -545,7 +554,7 @@ nmethod* nmethod::new_dtrace_nmethod(methodHandle method,
     nm = new (nmethod_size) nmethod(method(), nmethod_size,
                                     &offsets, code_buffer, frame_size);
 
-    NOT_PRODUCT(if (nm != NULL)  nmethod_stats.note_nmethod(nm));
+    if (nm != NULL)  nmethod_stats.note_nmethod(nm);
     if (PrintAssembly && nm != NULL) {
       Disassembler::decode(nm);
     }
@@ -574,11 +583,17 @@ nmethod* nmethod::new_nmethod(methodHandle method,
   ExceptionHandlerTable* handler_table,
   ImplicitExceptionTable* nul_chk_table,
   AbstractCompiler* compiler,
-  int comp_level
+  int comp_level,
+  GrowableArray<jlong>* leaf_graph_ids
+#ifdef GRAAL
+  , Handle installed_code,
+  Handle triggered_deoptimizations
+#endif
 )
 {
   assert(debug_info->oop_recorder() == code_buffer->oop_recorder(), "shared OR");
   code_buffer->finalize_oop_references(method);
+  int leaf_graph_ids_size = leaf_graph_ids == NULL ? 0 : round_to(sizeof(jlong) * leaf_graph_ids->length(), oopSize);
   // create nmethod
   nmethod* nm = NULL;
   { MutexLockerEx mu(CodeCache_lock, Mutex::_no_safepoint_check_flag);
@@ -588,8 +603,8 @@ nmethod* nmethod::new_nmethod(methodHandle method,
       + round_to(dependencies->size_in_bytes() , oopSize)
       + round_to(handler_table->size_in_bytes(), oopSize)
       + round_to(nul_chk_table->size_in_bytes(), oopSize)
-      + round_to(debug_info->data_size()       , oopSize);
-
+      + round_to(debug_info->data_size()       , oopSize)
+      + leaf_graph_ids_size;
     nm = new (nmethod_size)
     nmethod(method(), nmethod_size, compile_id, entry_bci, offsets,
             orig_pc_offset, debug_info, dependencies, code_buffer, frame_size,
@@ -597,7 +612,13 @@ nmethod* nmethod::new_nmethod(methodHandle method,
             handler_table,
             nul_chk_table,
             compiler,
-            comp_level);
+            comp_level,
+            leaf_graph_ids
+#ifdef GRAAL
+            , installed_code,
+            triggered_deoptimizations
+#endif
+            );
 
     if (nm != NULL) {
       // To make dependency checking during class loading fast, record
@@ -618,7 +639,7 @@ nmethod* nmethod::new_nmethod(methodHandle method,
         InstanceKlass::cast(klass)->add_dependent_nmethod(nm);
       }
     }
-    NOT_PRODUCT(if (nm != NULL)  nmethod_stats.note_nmethod(nm));
+    if (nm != NULL)  nmethod_stats.note_nmethod(nm);
     if (PrintAssembly && nm != NULL) {
       Disassembler::decode(nm);
     }
@@ -675,7 +696,8 @@ nmethod::nmethod(
     _dependencies_offset     = _scopes_pcs_offset;
     _handler_table_offset    = _dependencies_offset;
     _nul_chk_table_offset    = _handler_table_offset;
-    _nmethod_end_offset      = _nul_chk_table_offset;
+    _leaf_graph_ids_offset   = _nul_chk_table_offset;
+    _nmethod_end_offset      = _leaf_graph_ids_offset;
     _compile_id              = compile_id;
     _comp_level              = CompLevel_none;
     _entry_point             = code_begin()          + offsets->value(CodeOffsets::Entry);
@@ -819,7 +841,12 @@ nmethod::nmethod(
   ExceptionHandlerTable* handler_table,
   ImplicitExceptionTable* nul_chk_table,
   AbstractCompiler* compiler,
-  int comp_level
+  int comp_level,
+  GrowableArray<jlong>* leaf_graph_ids
+#ifdef GRAAL
+  , Handle installed_code,
+  Handle triggered_deoptimizations
+#endif
   )
   : CodeBlob("nmethod", code_buffer, sizeof(nmethod),
              nmethod_size, offsets->value(CodeOffsets::Frame_Complete), frame_size, oop_maps),
@@ -843,21 +870,47 @@ nmethod::nmethod(
     _consts_offset           = content_offset()      + code_buffer->total_offset_of(code_buffer->consts());
     _stub_offset             = content_offset()      + code_buffer->total_offset_of(code_buffer->stubs());
 
-    // Exception handler and deopt handler are in the stub section
-    assert(offsets->value(CodeOffsets::Exceptions) != -1, "must be set");
-    assert(offsets->value(CodeOffsets::Deopt     ) != -1, "must be set");
-    _exception_offset        = _stub_offset          + offsets->value(CodeOffsets::Exceptions);
-    _deoptimize_offset       = _stub_offset          + offsets->value(CodeOffsets::Deopt);
-    if (offsets->value(CodeOffsets::DeoptMH) != -1) {
-      _deoptimize_mh_offset  = _stub_offset          + offsets->value(CodeOffsets::DeoptMH);
+#ifdef GRAAL
+    _graal_installed_code = installed_code();
+    _triggered_deoptimizations = (typeArrayOop)triggered_deoptimizations();
+#endif
+    if (compiler->is_graal()) {
+      // Graal might not produce any stub sections
+      if (offsets->value(CodeOffsets::Exceptions) != -1) {
+        _exception_offset        = code_offset()          + offsets->value(CodeOffsets::Exceptions);
+      } else {
+        _exception_offset = -1;
+      }
+      if (offsets->value(CodeOffsets::Deopt) != -1) {
+        _deoptimize_offset       = code_offset()          + offsets->value(CodeOffsets::Deopt);
+      } else {
+        _deoptimize_offset = -1;
+      }
+      if (offsets->value(CodeOffsets::DeoptMH) != -1) {
+        _deoptimize_mh_offset  = code_offset()          + offsets->value(CodeOffsets::DeoptMH);
+      } else {
+        _deoptimize_mh_offset  = -1;
+      }
     } else {
-      _deoptimize_mh_offset  = -1;
+      // Exception handler and deopt handler are in the stub section
+      assert(offsets->value(CodeOffsets::Exceptions) != -1, "must be set");
+      assert(offsets->value(CodeOffsets::Deopt     ) != -1, "must be set");
+
+      _exception_offset        = _stub_offset          + offsets->value(CodeOffsets::Exceptions);
+      _deoptimize_offset       = _stub_offset          + offsets->value(CodeOffsets::Deopt);
+      if (offsets->value(CodeOffsets::DeoptMH) != -1) {
+        _deoptimize_mh_offset  = _stub_offset          + offsets->value(CodeOffsets::DeoptMH);
+      } else {
+        _deoptimize_mh_offset  = -1;
+      }
     }
     if (offsets->value(CodeOffsets::UnwindHandler) != -1) {
       _unwind_handler_offset = code_offset()         + offsets->value(CodeOffsets::UnwindHandler);
     } else {
       _unwind_handler_offset = -1;
     }
+
+    int leaf_graph_ids_size = leaf_graph_ids == NULL ? 0 : round_to(sizeof(jlong) * leaf_graph_ids->length(), oopSize);
 
     _oops_offset             = data_offset();
     _metadata_offset         = _oops_offset          + round_to(code_buffer->total_oop_size(), oopSize);
@@ -867,7 +920,8 @@ nmethod::nmethod(
     _dependencies_offset     = _scopes_pcs_offset    + adjust_pcs_size(debug_info->pcs_size());
     _handler_table_offset    = _dependencies_offset  + round_to(dependencies->size_in_bytes (), oopSize);
     _nul_chk_table_offset    = _handler_table_offset + round_to(handler_table->size_in_bytes(), oopSize);
-    _nmethod_end_offset      = _nul_chk_table_offset + round_to(nul_chk_table->size_in_bytes(), oopSize);
+    _leaf_graph_ids_offset   = _nul_chk_table_offset + round_to(nul_chk_table->size_in_bytes(), oopSize);
+    _nmethod_end_offset      = _leaf_graph_ids_offset + leaf_graph_ids_size;
 
     _entry_point             = code_begin()          + offsets->value(CodeOffsets::Entry);
     _verified_entry_point    = code_begin()          + offsets->value(CodeOffsets::Verified_Entry);
@@ -890,9 +944,13 @@ nmethod::nmethod(
     handler_table->copy_to(this);
     nul_chk_table->copy_to(this);
 
+    if (leaf_graph_ids != NULL && leaf_graph_ids_size > 0) {
+      memcpy(leaf_graph_ids_begin(), leaf_graph_ids->adr_at(0), leaf_graph_ids_size);
+    }
+
     // we use the information of entry points to find out if a method is
     // static or non static
-    assert(compiler->is_c2() ||
+    assert(compiler->is_c2() || compiler->is_graal() ||
            _method->is_static() == (entry_point() == _verified_entry_point),
            " entry points must be same for static methods and vice versa");
   }
@@ -1103,7 +1161,7 @@ ScopeDesc* nmethod::scope_desc_at(address pc) {
   PcDesc* pd = pc_desc_at(pc);
   guarantee(pd != NULL, "scope must be present");
   return new ScopeDesc(this, pd->scope_decode_offset(),
-                       pd->obj_decode_offset(), pd->should_reexecute(),
+                       pd->obj_decode_offset(), pd->should_reexecute(), pd->rethrow_exception(),
                        pd->return_oop());
 }
 
@@ -1191,7 +1249,7 @@ bool nmethod::can_not_entrant_be_converted() {
 }
 
 void nmethod::inc_decompile_count() {
-  if (!is_compiled_by_c2()) return;
+  if (!is_compiled_by_c2() && !is_compiled_by_graal()) return;
   // Could be gated by ProfileTraps, but do not bother...
   Method* m = method();
   if (m == NULL)  return;
@@ -1238,6 +1296,17 @@ void nmethod::make_unloaded(BoolObjectClosure* is_alive, oop cause) {
     }
     _method = NULL;            // Clear the method of this dead nmethod
   }
+
+#ifdef GRAAL
+  // The method can only be unloaded after the pointer to the installed code
+  // Java wrapper is no longer alive. Here we need to clear out this weak
+  // reference to the dead object.
+  if (_graal_installed_code != NULL) {
+    HotSpotInstalledCode::set_codeBlob(_graal_installed_code, 0);
+    _graal_installed_code = NULL;
+  }
+#endif
+
   // Make the class unloaded - i.e., change state and notify sweeper
   assert(SafepointSynchronize::is_at_safepoint(), "must be at safepoint");
   if (is_in_use()) {
@@ -1322,8 +1391,15 @@ bool nmethod::make_not_entrant_or_zombie(unsigned int state) {
     // The caller can be calling the method statically or through an inline
     // cache call.
     if (!is_osr_method() && !is_not_entrant()) {
-      NativeJump::patch_verified_entry(entry_point(), verified_entry_point(),
-                  SharedRuntime::get_handle_wrong_method_stub());
+      address stub = SharedRuntime::get_handle_wrong_method_stub();
+#ifdef GRAAL
+      if (_graal_installed_code != NULL) {
+        // Break the link between nmethod and HotSpotInstalledCode such that the nmethod can subsequently be flushed safely.
+        HotSpotInstalledCode::set_codeBlob(_graal_installed_code, 0);
+        _graal_installed_code = NULL;
+      }
+#endif
+      NativeJump::patch_verified_entry(entry_point(), verified_entry_point(), stub);
     }
 
     if (is_in_use()) {
@@ -1387,7 +1463,8 @@ bool nmethod::make_not_entrant_or_zombie(unsigned int state) {
   }
 
   if (TraceCreateZombies) {
-    tty->print_cr("nmethod <" INTPTR_FORMAT "> code made %s", this, (state == not_entrant) ? "not entrant" : "zombie");
+    ResourceMark m;
+    tty->print_cr("nmethod <" INTPTR_FORMAT "> %s code made %s", this, this->method()->name_and_sig_as_C_string(), (state == not_entrant) ? "not entrant" : "zombie");
   }
 
   // Make sweeper aware that there is a zombie method that needs to be removed
@@ -1611,6 +1688,21 @@ void nmethod::do_unloading(BoolObjectClosure* is_alive, bool unloading_occurred)
     unloading_occurred = true;
   }
 
+#ifdef GRAAL
+  // Follow Graal method
+  if (_graal_installed_code != NULL) {
+    if (HotSpotNmethod::isDefault(_graal_installed_code)) {
+      if (!is_alive->do_object_b(_graal_installed_code)) {
+        _graal_installed_code = NULL;
+      }
+    } else {
+      if (can_unload(is_alive, (oop*)&_graal_installed_code, unloading_occurred)) {
+        return;
+      }
+    }
+  }
+#endif
+
   // Exception cache
   ExceptionCache* ec = exception_cache();
   while (ec != NULL) {
@@ -1764,6 +1856,13 @@ void nmethod::verify_metadata_loaders(address low_boundary, BoolObjectClosure* i
 #endif
 }
 
+#ifdef GRAAL
+void nmethod::mark_graal_reference(OopClosure* f) {
+  if (_graal_installed_code != NULL) {
+    f->do_oop((oop*) &_graal_installed_code);
+  }
+}
+#endif
 
 // Iterate over metadata calling this function.   Used by RedefineClasses
 void nmethod::metadata_do(void f(Metadata*)) {
@@ -1843,6 +1942,15 @@ void nmethod::oops_do(OopClosure* f, bool do_strong_roots_only) {
     // %%% Note:  On SPARC we patch only a 4-byte trap, not a full NativeJump.
     // (See comment above.)
   }
+
+#ifdef GRAAL
+  if (_graal_installed_code != NULL) {
+    f->do_oop((oop*) &_graal_installed_code);
+  }
+  if (_triggered_deoptimizations != NULL) {
+    f->do_oop((oop*) &_triggered_deoptimizations);
+  }
+#endif
 
   RelocIterator iter(this, low_boundary);
 
@@ -2393,10 +2501,11 @@ void nmethod::verify_interrupt_point(address call_site) {
     MutexLocker ml_verify (CompiledIC_lock);
     ic = CompiledIC_at(this, call_site);
   }
+
   PcDesc* pd = pc_desc_at(ic->end_of_call());
   assert(pd != NULL, "PcDesc must exist");
   for (ScopeDesc* sd = new ScopeDesc(this, pd->scope_decode_offset(),
-                                     pd->obj_decode_offset(), pd->should_reexecute(),
+                                     pd->obj_decode_offset(), pd->should_reexecute(), pd->rethrow_exception(),
                                      pd->return_oop());
        !sd->is_top(); sd = sd->sender()) {
     sd->verify();
@@ -2485,6 +2594,8 @@ void nmethod::print() const {
     tty->print("(c2) ");
   } else if (is_compiled_by_shark()) {
     tty->print("(shark) ");
+  } else if (is_compiled_by_graal()) {
+    tty->print("(Graal) ");
   } else {
     tty->print("(nm) ");
   }
@@ -2676,7 +2787,7 @@ ScopeDesc* nmethod::scope_desc_in(address begin, address end) {
   PcDesc* p = pc_desc_near(begin+1);
   if (p != NULL && p->real_pc(this) <= end) {
     return new ScopeDesc(this, p->scope_decode_offset(),
-                         p->obj_decode_offset(), p->should_reexecute(),
+                         p->obj_decode_offset(), p->should_reexecute(), p->rethrow_exception(),
                          p->return_oop());
   }
   return NULL;
@@ -2685,9 +2796,9 @@ ScopeDesc* nmethod::scope_desc_in(address begin, address end) {
 void nmethod::print_nmethod_labels(outputStream* stream, address block_begin) const {
   if (block_begin == entry_point())             stream->print_cr("[Entry Point]");
   if (block_begin == verified_entry_point())    stream->print_cr("[Verified Entry Point]");
-  if (block_begin == exception_begin())         stream->print_cr("[Exception Handler]");
+  if (GRAAL_ONLY(_exception_offset >= 0 &&) block_begin == exception_begin())         stream->print_cr("[Exception Handler]");
   if (block_begin == stub_begin())              stream->print_cr("[Stub Code]");
-  if (block_begin == deopt_handler_begin())     stream->print_cr("[Deopt Handler Code]");
+  if (GRAAL_ONLY(_deoptimize_offset >= 0 &&) block_begin == deopt_handler_begin())     stream->print_cr("[Deopt Handler Code]");
 
   if (has_method_handle_invokes())
     if (block_begin == deopt_mh_handler_begin())  stream->print_cr("[Deopt MH Handler Code]");
@@ -2921,6 +3032,8 @@ void nmethod::print_nul_chk_table() {
   ImplicitExceptionTable(this).print(code_begin());
 }
 
+#endif // PRODUCT
+
 void nmethod::print_statistics() {
   ttyLocker ttyl;
   if (xtty != NULL)  xtty->head("statistics type='nmethod'");
@@ -2931,5 +3044,3 @@ void nmethod::print_statistics() {
   Dependencies::print_statistics();
   if (xtty != NULL)  xtty->tail("statistics");
 }
-
-#endif // PRODUCT

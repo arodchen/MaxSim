@@ -785,6 +785,10 @@ class JavaThread: public Thread {
   JavaThread*    _next;                          // The next thread in the Threads list
   oop            _threadObj;                     // The Java level thread object
 
+  // (thomaswue) Necessary for holding a compilation buffer.
+  // Moved up from CompilerThread to JavaThread in order to enable code
+  // installation from Java application code.
+  BufferBlob*   _buffer_blob;
 #ifdef ASSERT
  private:
   int _java_call_counter;
@@ -912,7 +916,13 @@ class JavaThread: public Thread {
 
  private:
 
+#ifdef GRAAL
+  address   _graal_alternate_call_target;
+  address   _graal_implicit_exception_pc;  // pc at which the most recent implicit exception occurred
+#endif
   StackGuardState        _stack_guard_state;
+
+  nmethod*      _scanned_nmethod;  // nmethod being scanned by the sweeper
 
   // Compiler exception handling (NOTE: The _exception_oop is *NOT* the same as _pending_exception. It is
   // used to temp. parsing values into and out of the runtime system during exception handling for compiled
@@ -985,6 +995,10 @@ class JavaThread: public Thread {
     return (struct JNINativeInterface_ *)_jni_environment.functions;
   }
 
+
+  BufferBlob*   get_buffer_blob()                { return _buffer_blob; }
+  void          set_buffer_blob(BufferBlob* b)   { _buffer_blob = b; };
+
   // This function is called at thread creation to allow
   // platform specific thread variables to be initialized.
   void cache_global_variables();
@@ -1000,6 +1014,12 @@ class JavaThread: public Thread {
   void exit(bool destroy_vm, ExitType exit_type = normal_exit);
 
   void cleanup_failed_attach_current_thread();
+
+  // Track the nmethod currently being scanned by the sweeper
+  void          set_scanned_nmethod(nmethod* nm) {
+    assert(_scanned_nmethod == NULL || nm == NULL, "should reset to NULL before writing a new value");
+    _scanned_nmethod = nm;
+  }
 
   // Testers
   virtual bool is_Java_thread() const            { return true;  }
@@ -1271,6 +1291,11 @@ class JavaThread: public Thread {
   MemRegion deferred_card_mark() const           { return _deferred_card_mark; }
   void set_deferred_card_mark(MemRegion mr)      { _deferred_card_mark = mr;   }
 
+#ifdef GRAAL
+  void set_graal_alternate_call_target(address a) { _graal_alternate_call_target = a; }
+  void set_graal_implicit_exception_pc(address a) { _graal_implicit_exception_pc = a; }
+#endif
+
   // Exception handling for compiled methods
   oop      exception_oop() const                 { return _exception_oop; }
   address  exception_pc() const                  { return _exception_pc; }
@@ -1351,6 +1376,10 @@ class JavaThread: public Thread {
   static ByteSize thread_state_offset()          { return byte_offset_of(JavaThread, _thread_state        ); }
   static ByteSize saved_exception_pc_offset()    { return byte_offset_of(JavaThread, _saved_exception_pc  ); }
   static ByteSize osthread_offset()              { return byte_offset_of(JavaThread, _osthread            ); }
+#ifdef GRAAL
+  static ByteSize graal_alternate_call_target_offset() { return byte_offset_of(JavaThread, _graal_alternate_call_target); }
+  static ByteSize graal_implicit_exception_pc_offset() { return byte_offset_of(JavaThread, _graal_implicit_exception_pc); }
+#endif
   static ByteSize exception_oop_offset()         { return byte_offset_of(JavaThread, _exception_oop       ); }
   static ByteSize exception_pc_offset()          { return byte_offset_of(JavaThread, _exception_pc        ); }
   static ByteSize exception_handler_pc_offset()  { return byte_offset_of(JavaThread, _exception_handler_pc); }
@@ -1814,9 +1843,7 @@ class CompilerThread : public JavaThread {
   CompileLog*   _log;
   CompileTask*  _task;
   CompileQueue* _queue;
-  BufferBlob*   _buffer_blob;
 
-  nmethod*      _scanned_nmethod;  // nmethod being scanned by the sweeper
 
  public:
 
@@ -1835,9 +1862,6 @@ class CompilerThread : public JavaThread {
   ciEnv*        env()                            { return _env; }
   void          set_env(ciEnv* env)              { _env = env; }
 
-  BufferBlob*   get_buffer_blob()                { return _buffer_blob; }
-  void          set_buffer_blob(BufferBlob* b)   { _buffer_blob = b; };
-
   // Get/set the thread's logging information
   CompileLog*   log()                            { return _log; }
   void          init_log(CompileLog* log) {
@@ -1845,11 +1869,6 @@ class CompilerThread : public JavaThread {
     assert(_log == NULL, "set only once");
     _log = log;
   }
-
-  // GC support
-  // Apply "f->do_oop" to all root oops in "this".
-  // Apply "cf->do_code_blob" (if !NULL) to all code blobs active in frames
-  void oops_do(OopClosure* f, CLDToOopClosure* cld_f, CodeBlobClosure* cf);
 
 #ifndef PRODUCT
 private:
@@ -1863,11 +1882,6 @@ public:
   CompileTask*  task()                           { return _task; }
   void          set_task(CompileTask* task)      { _task = task; }
 
-  // Track the nmethod currently being scanned by the sweeper
-  void          set_scanned_nmethod(nmethod* nm) {
-    assert(_scanned_nmethod == NULL || nm == NULL, "should reset to NULL before writing a new value");
-    _scanned_nmethod = nm;
-  }
 };
 
 inline CompilerThread* CompilerThread::current() {

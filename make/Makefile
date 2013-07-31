@@ -84,12 +84,16 @@ else
   ALT_OUT=
 endif
 
+# Directory for shared code (e.g. graal.jar)
+SHARED_DIR=$(OUTPUTDIR)/shared
+
 # Typical C1/C2 targets made available with this Makefile
 C1_VM_TARGETS=product1 fastdebug1 optimized1 debug1
 C2_VM_TARGETS=product  fastdebug  optimized  debug
 ZERO_VM_TARGETS=productzero fastdebugzero optimizedzero debugzero
 SHARK_VM_TARGETS=productshark fastdebugshark optimizedshark debugshark
 MINIMAL1_VM_TARGETS=productminimal1 fastdebugminimal1 debugminimal1
+GRAAL_VM_TARGETS=productgraal fastdebuggraal optimizedgraal debuggraal
 
 COMMON_VM_PRODUCT_TARGETS=product product1 docs export_product
 COMMON_VM_FASTDEBUG_TARGETS=fastdebug fastdebug1 docs export_fastdebug
@@ -136,6 +140,12 @@ all_fastdebugshark: fastdebugshark docs export_fastdebug
 all_debugshark:     debugshark docs export_debug
 all_optimizedshark: optimizedshark docs export_optimized
 
+allgraal:           all_productgraal all_fastdebuggraal
+all_productgraal:   productgraal docs export_product
+all_fastdebuggraal: fastdebuggraal docs export_fastdebug
+all_debuggraal:     debuggraal docs export_debug
+all_optimizedgraal: optimizedgraal docs export_optimized
+
 # Do everything
 world:         all create_jdk
 
@@ -154,9 +164,11 @@ endif
 # Output directories
 C1_DIR      =$(OUTPUTDIR)/$(VM_PLATFORM)_compiler1
 C2_DIR      =$(OUTPUTDIR)/$(VM_PLATFORM)_compiler2
+GRAAL_DIR   =$(OUTPUTDIR)/$(VM_PLATFORM)_graal
 MINIMAL1_DIR=$(OUTPUTDIR)/$(VM_PLATFORM)_minimal1
 ZERO_DIR    =$(OUTPUTDIR)/$(VM_PLATFORM)_zero
 SHARK_DIR   =$(OUTPUTDIR)/$(VM_PLATFORM)_shark
+GRAAL_DIR   =$(OUTPUTDIR)/$(VM_PLATFORM)_graal
 
 # Build variation of hotspot
 $(C1_VM_TARGETS):
@@ -179,6 +191,10 @@ $(MINIMAL1_VM_TARGETS):
 	$(CD) $(GAMMADIR)/make; \
 	$(MAKE) BUILD_DIR=$(MINIMAL1_DIR) BUILD_FLAVOR=$(@:%minimal1=%) VM_TARGET=$@ generic_buildminimal1 $(ALT_OUT)
 
+$(GRAAL_VM_TARGETS):
+	$(CD) $(GAMMADIR)/make; \
+	$(MAKE) BUILD_DIR=$(GRAAL_DIR) BUILD_FLAVOR=$(@:%graal=%) VM_TARGET=$@ generic_buildgraal $(ALT_OUT)
+
 # Install hotspot script in build directory
 HOTSPOT_SCRIPT=$(BUILD_DIR)/$(BUILD_FLAVOR)/hotspot
 $(HOTSPOT_SCRIPT): $(GAMMADIR)/make/hotspot.script
@@ -187,7 +203,7 @@ $(HOTSPOT_SCRIPT): $(GAMMADIR)/make/hotspot.script
 	$(QUIETLY) chmod +x $@
 
 # Build compiler1 (client) rule, different for platforms
-generic_build1: $(HOTSPOT_SCRIPT)
+generic_build1: $(HOTSPOT_SCRIPT) buildshared
 	$(MKDIR) -p $(OUTPUTDIR)
 ifeq ($(OSNAME),windows)
   ifeq ($(ARCH_DATA_MODEL), 32)
@@ -202,17 +218,13 @@ ifeq ($(OSNAME),windows)
 	@$(ECHO) "No compiler1 ($(VM_TARGET)) for ARCH_DATA_MODEL=$(ARCH_DATA_MODEL)"
   endif
 else
-  ifeq ($(ARCH_DATA_MODEL), 32)
 	$(CD) $(OUTPUTDIR); \
 	    $(MAKE) -f $(ABS_OS_MAKEFILE) \
 		      $(MAKE_ARGS) $(VM_TARGET)
-  else
-	@$(ECHO) "No compiler1 ($(VM_TARGET)) for ARCH_DATA_MODEL=$(ARCH_DATA_MODEL)"
-  endif
 endif
 
 # Build compiler2 (server) rule, different for platforms
-generic_build2: $(HOTSPOT_SCRIPT)
+generic_build2: $(HOTSPOT_SCRIPT) buildshared
 	$(MKDIR) -p $(OUTPUTDIR)
 ifeq ($(OSNAME),windows)
 	$(CD) $(OUTPUTDIR); \
@@ -261,6 +273,17 @@ else
 	@$(ECHO) "Error: trying to build a minimal target but JVM_VARIANT_MINIMAL1 is not true."
 endif
 
+generic_buildgraal: $(HOTSPOT_SCRIPT) buildshared
+	$(MKDIR) -p $(OUTPUTDIR)
+	$(CD) $(OUTPUTDIR); \
+		$(MAKE) -f $(ABS_OS_MAKEFILE) \
+			$(MAKE_ARGS) $(VM_TARGET) 
+
+
+# Builds code that can be shared among different build flavors
+buildshared:
+	python2.7 -u $(GAMMADIR)/mxtool/mx.py build --no-native --export-dir $(SHARED_DIR)
+
 # Export file rule
 generic_export: $(EXPORT_LIST)
 
@@ -287,11 +310,12 @@ XUSAGE=$(HS_SRC_DIR)/share/vm/Xusage.txt
 DOCS_DIR=$(OUTPUTDIR)/$(VM_PLATFORM)_docs
 C1_BUILD_DIR      =$(C1_DIR)/$(BUILD_FLAVOR)
 C2_BUILD_DIR      =$(C2_DIR)/$(BUILD_FLAVOR)
+GRAAL_BUILD_DIR   =$(GRAAL_DIR)/$(BUILD_FLAVOR)
 MINIMAL1_BUILD_DIR=$(MINIMAL1_DIR)/$(BUILD_FLAVOR)
 ZERO_BUILD_DIR    =$(ZERO_DIR)/$(BUILD_FLAVOR)
 SHARK_BUILD_DIR   =$(SHARK_DIR)/$(BUILD_FLAVOR)
 
-# Server (C2)
+# Server (C2) and Graal
 ifeq ($(JVM_VARIANT_SERVER), true)
 # Common
 $(EXPORT_SERVER_DIR)/%.diz:       		$(C2_BUILD_DIR)/%.diz
@@ -333,6 +357,49 @@ $(EXPORT_SERVER_DIR)/64/%.debuginfo:    	$(C2_BUILD_DIR)/%.debuginfo
 $(EXPORT_JRE_LIB_ARCH_DIR)/%.diz: 		$(C2_BUILD_DIR)/%.diz
 	$(install-file)
 $(EXPORT_SERVER_DIR)/64/%.diz:    		$(C2_BUILD_DIR)/%.diz
+	$(install-file)
+
+# Graal
+# Common
+$(EXPORT_SERVER_DIR)/%.diz:       		$(GRAAL_BUILD_DIR)/%.diz
+	$(install-file)
+$(EXPORT_LIB_DIR)/%.jar:			$(GRAAL_BUILD_DIR)/../generated/%.jar
+	$(install-file)
+$(EXPORT_INCLUDE_DIR)/%:			$(GRAAL_BUILD_DIR)/../generated/jvmtifiles/%
+	$(install-file)
+# Windows
+$(EXPORT_SERVER_DIR)/%.dll:			$(GRAAL_BUILD_DIR)/%.dll
+	$(install-file)
+$(EXPORT_SERVER_DIR)/%.pdb:			$(GRAAL_BUILD_DIR)/%.pdb
+	$(install-file)
+$(EXPORT_SERVER_DIR)/%.map:			$(GRAAL_BUILD_DIR)/%.map
+	$(install-file)
+$(EXPORT_LIB_DIR)/%.lib:			$(GRAAL_BUILD_DIR)/%.lib
+	$(install-file)
+$(EXPORT_JRE_BIN_DIR)/%.diz:			$(GRAAL_BUILD_DIR)/%.diz
+	$(install-file)
+$(EXPORT_JRE_BIN_DIR)/%.dll:			$(GRAAL_BUILD_DIR)/%.dll
+	$(install-file)
+$(EXPORT_JRE_BIN_DIR)/%.pdb:			$(GRAAL_BUILD_DIR)/%.pdb
+	$(install-file)
+$(EXPORT_JRE_BIN_DIR)/%.map:			$(GRAAL_BUILD_DIR)/%.map
+	$(install-file)
+# Unix
+$(EXPORT_JRE_LIB_ARCH_DIR)/%.$(LIBRARY_SUFFIX): $(GRAAL_BUILD_DIR)/%.$(LIBRARY_SUFFIX)
+	$(install-file)
+$(EXPORT_SERVER_DIR)/%.$(LIBRARY_SUFFIX):       $(GRAAL_BUILD_DIR)/%.$(LIBRARY_SUFFIX)
+	$(install-file)
+$(EXPORT_SERVER_DIR)/64/%.$(LIBRARY_SUFFIX):    $(GRAAL_BUILD_DIR)/%.$(LIBRARY_SUFFIX)
+	$(install-file)
+$(EXPORT_JRE_LIB_ARCH_DIR)/%.debuginfo: 	$(GRAAL_BUILD_DIR)/%.debuginfo
+	$(install-file)
+$(EXPORT_SERVER_DIR)/%.debuginfo:       	$(GRAAL_BUILD_DIR)/%.debuginfo
+	$(install-file)
+$(EXPORT_SERVER_DIR)/64/%.debuginfo:    	$(GRAAL_BUILD_DIR)/%.debuginfo
+	$(install-file)
+$(EXPORT_JRE_LIB_ARCH_DIR)/%.diz: 		$(GRAAL_BUILD_DIR)/%.diz
+	$(install-file)
+$(EXPORT_SERVER_DIR)/64/%.diz:    		$(GRAAL_BUILD_DIR)/%.diz
 	$(install-file)
 endif
 
@@ -470,6 +537,9 @@ $(EXPORT_SERVER_DIR)/%.diz:			$(SHARK_BUILD_DIR)/%.diz
 	$(install-file)
 endif
 
+$(EXPORT_JRE_LIB_DIR)/%.jar: $(SHARED_DIR)/%.jar
+	$(install-file)
+
 $(EXPORT_INCLUDE_DIR)/%: $(HS_SRC_DIR)/share/vm/code/%
 	$(install-file)
 
@@ -508,8 +578,10 @@ $(EXPORT_SERVER_DIR)/Xusage.txt $(EXPORT_CLIENT_DIR)/Xusage.txt $(EXPORT_MINIMAL
 #
 clobber clean: clean_build clean_export clean_jdk
 clean_build:
+	$(RM) -r $(SHARED_DIR)
 	$(RM) -r $(C1_DIR)
 	$(RM) -r $(C2_DIR)
+	$(RM) -r $(GRAAL_DIR)
 	$(RM) -r $(ZERO_DIR)
 	$(RM) -r $(SHARK_DIR)
 	$(RM) -r $(MINIMAL1_DIR)
@@ -759,6 +831,8 @@ jvmgcore: warn_jvmg_deprecated debugcore
 jvmgzero: warn_jvmg_deprecated debugzero
 
 jvmgshark: warn_jvmg_deprecated debugshark
+
+jvmggraal: warn_jvmg_deprecated debuggraal
 
 # JPRT rule to build this workspace
 include $(GAMMADIR)/make/jprt.gmk

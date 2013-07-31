@@ -3040,6 +3040,10 @@ void TemplateTable::invokevirtual_helper(Register index,
 
   // get target Method* & entry point
   __ lookup_virtual_method(rax, index, method);
+#ifdef GRAAL
+  // r14: MethodDataPointer (r14 is callee saved)
+  __ profile_called_method(method, r14, r13);
+#endif
   __ jump_from_interpreted(method, rdx);
 }
 
@@ -3124,7 +3128,7 @@ void TemplateTable::invokeinterface(int byte_no) {
   __ lookup_interface_method(// inputs: rec. class, interface, itable index
                              rdx, rax, rbx,
                              // outputs: method, scan temp. reg
-                             rbx, r13,
+                             rbx, r14,
                              no_such_interface);
 
   // rbx: Method* to call
@@ -3139,6 +3143,10 @@ void TemplateTable::invokeinterface(int byte_no) {
   // do the call
   // rcx: receiver
   // rbx,: Method*
+#ifdef GRAAL
+  // r13: MethodDataPointer (r13 is callee saved)
+  __ profile_called_method(rbx, r13, r14);
+#endif
   __ jump_from_interpreted(rbx, rdx);
   __ should_not_reach_here();
 

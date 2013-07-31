@@ -183,6 +183,57 @@ class SymbolPropertyTable;
   do_klass(Short_klass,                                 java_lang_Short,                           Pre                 ) \
   do_klass(Integer_klass,                               java_lang_Integer,                         Pre                 ) \
   do_klass(Long_klass,                                  java_lang_Long,                            Pre                 ) \
+                                                                                                                         \
+  /* Support for Graal */                                                                                                \
+  do_klass(BitSet_klass,                          java_util_BitSet,                                             Opt) \
+  /* graal.hotspot */                                                                                                \
+  do_klass(HotSpotCompiledCode_klass,             com_oracle_graal_hotspot_HotSpotCompiledCode,                 Opt) \
+  do_klass(HotSpotCompiledCode_Comment_klass,     com_oracle_graal_hotspot_HotSpotCompiledCode_Comment,         Opt) \
+  do_klass(HotSpotCompiledNmethod_klass,          com_oracle_graal_hotspot_HotSpotCompiledNmethod,              Opt) \
+  do_klass(HotSpotCompiledRuntimeStub_klass,      com_oracle_graal_hotspot_HotSpotCompiledRuntimeStub,          Opt) \
+  do_klass(HotSpotForeignCallLinkage_klass,       com_oracle_graal_hotspot_HotSpotForeignCallLinkage,           Opt) \
+  do_klass(HotSpotCodeInfo_klass,                 com_oracle_graal_hotspot_meta_HotSpotCodeInfo,                Opt) \
+  do_klass(HotSpotInstalledCode_klass,            com_oracle_graal_hotspot_meta_HotSpotInstalledCode,           Opt) \
+  do_klass(HotSpotNmethod_klass,                  com_oracle_graal_hotspot_meta_HotSpotNmethod,                 Opt) \
+  do_klass(HotSpotJavaType_klass,                 com_oracle_graal_hotspot_meta_HotSpotJavaType,                Opt) \
+  do_klass(HotSpotMethodData_klass,               com_oracle_graal_hotspot_meta_HotSpotMethodData,              Opt) \
+  do_klass(HotSpotResolvedJavaField_klass,        com_oracle_graal_hotspot_meta_HotSpotResolvedJavaField,       Opt) \
+  do_klass(HotSpotResolvedJavaMethod_klass,       com_oracle_graal_hotspot_meta_HotSpotResolvedJavaMethod,      Opt) \
+  do_klass(HotSpotResolvedObjectType_klass,       com_oracle_graal_hotspot_meta_HotSpotResolvedObjectType,      Opt) \
+  do_klass(HotSpotMonitorValue_klass,             com_oracle_graal_hotspot_meta_HotSpotMonitorValue,            Opt) \
+  do_klass(LocalImpl_klass,                       com_oracle_graal_hotspot_debug_LocalImpl,                     Opt) \
+  /* graal.api.code */                                                                                               \
+  do_klass(Assumptions_klass,                     com_oracle_graal_api_code_Assumptions,                        Opt) \
+  do_klass(Assumptions_ConcreteMethod_klass,      com_oracle_graal_api_code_Assumptions_ConcreteMethod,         Opt) \
+  do_klass(Assumptions_NoFinalizableSubclass_klass, com_oracle_graal_api_code_Assumptions_NoFinalizableSubclass, Opt) \
+  do_klass(Assumptions_ConcreteSubtype_klass,     com_oracle_graal_api_code_Assumptions_ConcreteSubtype,        Opt) \
+  do_klass(Assumptions_MethodContents_klass,      com_oracle_graal_api_code_Assumptions_MethodContents,         Opt) \
+  do_klass(Assumptions_CallSiteTargetValue_klass, com_oracle_graal_api_code_Assumptions_CallSiteTargetValue,    Opt) \
+  do_klass(BytecodePosition_klass,                com_oracle_graal_api_code_BytecodePosition,                   Opt) \
+  do_klass(DebugInfo_klass,                       com_oracle_graal_api_code_DebugInfo,                          Opt) \
+  do_klass(RegisterSaveLayout_klass,              com_oracle_graal_api_code_RegisterSaveLayout,                 Opt) \
+  do_klass(BytecodeFrame_klass,                   com_oracle_graal_api_code_BytecodeFrame,                      Opt) \
+  do_klass(CompilationResult_klass,               com_oracle_graal_api_code_CompilationResult,                  Opt) \
+  do_klass(CompilationResult_Call_klass,          com_oracle_graal_api_code_CompilationResult_Call,             Opt) \
+  do_klass(CompilationResult_DataPatch_klass,     com_oracle_graal_api_code_CompilationResult_DataPatch,        Opt) \
+  do_klass(CompilationResult_ExceptionHandler_klass, com_oracle_graal_api_code_CompilationResult_ExceptionHandler, Opt) \
+  do_klass(CompilationResult_Mark_klass,          com_oracle_graal_api_code_CompilationResult_Mark,             Opt) \
+  do_klass(CompilationResult_Infopoint_klass,     com_oracle_graal_api_code_CompilationResult_Infopoint,        Opt) \
+  do_klass(CompilationResult_Site_klass,          com_oracle_graal_api_code_CompilationResult_Site,             Opt) \
+  do_klass(ExternalCompilationResult_klass,       com_oracle_graal_api_code_ExternalCompilationResult,          Opt) \
+  do_klass(InfopointReason_klass,                 com_oracle_graal_api_code_InfopointReason,                    Opt) \
+  do_klass(code_Register_klass,                   com_oracle_graal_api_code_Register,                           Opt) \
+  do_klass(RegisterValue_klass,                   com_oracle_graal_api_code_RegisterValue,                      Opt) \
+  do_klass(StackSlot_klass,                       com_oracle_graal_api_code_StackSlot,                          Opt) \
+  do_klass(VirtualObject_klass,                   com_oracle_graal_api_code_VirtualObject,                      Opt) \
+  /* graal.api.meta */                                                                                               \
+  do_klass(Constant_klass,                        com_oracle_graal_api_meta_Constant,                           Opt) \
+  do_klass(ExceptionHandler_klass,                com_oracle_graal_api_meta_ExceptionHandler,                   Opt) \
+  do_klass(Kind_klass,                            com_oracle_graal_api_meta_Kind,                               Opt) \
+  do_klass(JavaMethod_klass,                      com_oracle_graal_api_meta_JavaMethod,                         Opt) \
+  do_klass(JavaType_klass,                        com_oracle_graal_api_meta_JavaType,                           Opt) \
+  do_klass(Value_klass,                           com_oracle_graal_api_meta_Value,                              Opt) \
+
   /*end*/
 
 

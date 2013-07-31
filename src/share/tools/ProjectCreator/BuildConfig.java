@@ -67,6 +67,24 @@ class BuildConfig {
         String outDir = buildBase;
         String jdkTargetRoot = getFieldString(null, "JdkTargetRoot");
 
+        String value = System.getenv("OUT_DIR");
+        if (value != null) {
+            outDir = value;
+            int lastDirectorySeparator = Math.max(outDir.lastIndexOf("/"), outDir.lastIndexOf("\\"));
+            if (lastDirectorySeparator >= 0) {
+                outDir = outDir.substring(0, lastDirectorySeparator);
+            }
+            outDir += Util.sep + build + Util.sep + "jre" + Util.sep + "bin";
+            if (flavour.equals("graal")) {
+                outDir += Util.sep + "graal";
+            } else if (flavour.equals("compiler1")) {
+                outDir += Util.sep + "client";
+            } else {
+                outDir += Util.sep + "server";
+            }
+            buildBase = outDir;
+        }
+
         put("Id", flavourBuild);
         put("OutputDir", outDir);
         put("SourceBase", sourceBase);
@@ -148,7 +166,19 @@ class BuildConfig {
 
     void initDefaultDefines(Vector defines) {
         Vector sysDefines = new Vector();
-        sysDefines.add("WIN32");
+
+        if( vars.get("PlatformName").equals("Win32")) {
+            sysDefines.add("WIN32");
+        } else {
+            sysDefines.add("_AMD64_");
+            sysDefines.add("AMD64");
+            sysDefines.add("_WIN64");
+            sysDefines.add("_LP64");
+            if (System.getenv("MSC_VER") != null)
+               sysDefines.add("MSC_VER=" + System.getenv("MSC_VER"));
+            sysDefines.add("HOTSPOT_LIB_ARCH=\\\"amd64\\\"");
+        }
+	
         sysDefines.add("_WINDOWS");
         sysDefines.add("HOTSPOT_BUILD_USER=\\\""+System.getProperty("user.name")+"\\\"");
         sysDefines.add("HOTSPOT_BUILD_TARGET=\\\""+get("Build")+"\\\"");
@@ -222,6 +252,10 @@ class BuildConfig {
 
     String build() {
         return get("Build");
+    }
+
+    String outputDir() {
+        return get("OutputDir");
     }
 
     Object getSpecificField(String field) {
@@ -407,6 +441,9 @@ class BuildConfig {
                 case 'f':
                     sb.append(flavour());
                     break;
+		case 'o':
+		    sb.append(outputDir());
+		    break;
                 default:
                     sb.append(ch);
                     sb.append(ch1);
@@ -440,6 +477,28 @@ abstract class GenericDebugNonKernelConfig extends GenericDebugConfig {
         super.init(includes, defines);
         getCI().getAdditionalNonKernelLinkerFlags(getV("LinkerFlags"));
    }
+}
+
+class GraalDebugConfig extends GenericDebugNonKernelConfig {
+    String getOptFlag() {
+        return getCI().getNoOptFlag();
+    }
+
+    GraalDebugConfig() {
+        initNames("graal", "debug", "jvm.dll");
+        init(getIncludes(), getDefines());
+    }
+}
+
+class GraalFastDebugConfig extends GenericDebugNonKernelConfig {
+    String getOptFlag() {
+        return getCI().getOptFlag();
+    }
+
+    GraalFastDebugConfig() {
+        initNames("graal", "fastdebug", "jvm.dll");
+        init(getIncludes(), getDefines());
+    }
 }
 
 class C1DebugConfig extends GenericDebugNonKernelConfig {
@@ -517,6 +576,13 @@ abstract class ProductConfig extends BuildConfig {
 
         getV("CompilerFlags").addAll(getCI().getProductCompilerFlags());
         getV("LinkerFlags").addAll(getCI().getProductLinkerFlags());
+    }
+}
+
+class GraalProductConfig extends ProductConfig {
+    GraalProductConfig() {
+        initNames("graal", "product", "jvm.dll");
+        init(getIncludes(), getDefines());
     }
 }
 

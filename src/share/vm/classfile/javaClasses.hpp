@@ -206,6 +206,7 @@ class java_lang_String : AllStatic {
 
 #define CLASS_INJECTED_FIELDS(macro)                                       \
   macro(java_lang_Class, klass,                  intptr_signature,  false) \
+  GRAAL_ONLY(macro(java_lang_Class, graal_mirror, object_signature, false))\
   macro(java_lang_Class, array_klass,            intptr_signature,  false) \
   macro(java_lang_Class, oop_size,               int_signature,     false) \
   macro(java_lang_Class, static_oop_field_count, int_signature,     false) \
@@ -224,6 +225,9 @@ class java_lang_Class : AllStatic {
 
   static int _oop_size_offset;
   static int _static_oop_field_count_offset;
+#ifdef GRAAL
+  static int _graal_mirror_offset;
+#endif
 
   static int _protection_domain_offset;
   static int _init_lock_offset;
@@ -282,6 +286,11 @@ class java_lang_Class : AllStatic {
   static int static_oop_field_count(oop java_class);
   static void set_static_oop_field_count(oop java_class, int size);
 
+#ifdef GRAAL
+  static oop graal_mirror(oop java_class);
+  static int graal_mirror_offset_in_bytes()         { return _graal_mirror_offset; }
+#endif
+
   static GrowableArray<Klass*>* fixup_mirror_list() {
     return _fixup_mirror_list;
   }
@@ -319,6 +328,7 @@ class java_lang_Thread : AllStatic {
  public:
   // Instance creation
   static oop create();
+  static int java_thread_offset_in_bytes() { return _eetop_offset; }
   // Returns the JavaThread associated with the thread obj
   static JavaThread* thread(oop java_thread);
   // Set JavaThread for instance

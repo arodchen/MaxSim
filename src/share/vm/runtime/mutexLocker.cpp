@@ -132,6 +132,10 @@ Mutex*   JfrBuffer_lock               = NULL;
 Mutex*   JfrStream_lock               = NULL;
 Monitor* PeriodicTask_lock            = NULL;
 
+#ifdef GRAAL
+Mutex*   GraalDeoptLeafGraphIds_lock  = NULL;
+#endif // GRAAL
+
 #define MAX_NUM_MUTEX 128
 static Monitor * _mutex_array[MAX_NUM_MUTEX];
 static int _num_mutex;
@@ -277,6 +281,9 @@ void mutex_init() {
   def(JfrBuffer_lock               , Mutex,   nonleaf+1,   true);
   def(JfrStream_lock               , Mutex,   nonleaf+2,   true);
   def(PeriodicTask_lock            , Monitor, nonleaf+5,   true);
+#ifdef GRAAL
+  def(GraalDeoptLeafGraphIds_lock  , Mutex,   special,     true);
+#endif // GRAAL
 }
 
 GCMutexLocker::GCMutexLocker(Monitor * mutex) {

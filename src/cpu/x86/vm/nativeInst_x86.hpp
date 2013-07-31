@@ -61,6 +61,7 @@ class NativeInstruction VALUE_OBJ_CLASS_SPEC {
   bool is_nop()                        { return ubyte_at(0) == nop_instruction_code; }
   bool is_dtrace_trap();
   inline bool is_call();
+  inline bool is_call_reg();
   inline bool is_illegal();
   inline bool is_return();
   inline bool is_jump();
@@ -180,6 +181,24 @@ inline NativeCall* nativeCall_before(address return_address) {
 #endif
   return call;
 }
+
+class NativeCallReg: public NativeInstruction {
+ public:
+  enum Intel_specific_constants {
+    instruction_code            = 0xFF,
+    instruction_offset          =    0,
+    return_address_offset_norex =    2,
+    return_address_offset_rex   =    3
+  };
+
+  int next_instruction_offset() const  {
+    if (ubyte_at(0) == NativeCallReg::instruction_code) {
+      return return_address_offset_norex;
+    } else {
+      return return_address_offset_rex;
+    }
+  }
+};
 
 // An interface for accessing/manipulating native mov reg, imm32 instructions.
 // (used to manipulate inlined 32bit data dll calls, etc.)
@@ -532,6 +551,9 @@ class NativeTstRegMem: public NativeInstruction {
 
 inline bool NativeInstruction::is_illegal()      { return (short)int_at(0) == (short)NativeIllegalInstruction::instruction_code; }
 inline bool NativeInstruction::is_call()         { return ubyte_at(0) == NativeCall::instruction_code; }
+inline bool NativeInstruction::is_call_reg()     { return ubyte_at(0) == NativeCallReg::instruction_code ||
+                                                          (ubyte_at(1) == NativeCallReg::instruction_code &&
+                                                           (ubyte_at(0) == Assembler::REX || ubyte_at(0) == Assembler::REX_B)); }
 inline bool NativeInstruction::is_return()       { return ubyte_at(0) == NativeReturn::instruction_code ||
                                                           ubyte_at(0) == NativeReturnX::instruction_code; }
 inline bool NativeInstruction::is_jump()         { return ubyte_at(0) == NativeJump::instruction_code ||
@@ -552,6 +574,10 @@ inline bool NativeInstruction::is_safepoint_poll() {
       return false;
     }
   } else {
+#ifdef GRAAL
+    // Graal may allocate an arbitrary register for storing the polling address.
+    return true;
+#else
     if (ubyte_at(0) == NativeTstRegMem::instruction_code_memXregl &&
         ubyte_at(1) == 0x05) { // 00 rax 101
       address fault = addr_at(6) + int_at(2);
@@ -559,6 +585,7 @@ inline bool NativeInstruction::is_safepoint_poll() {
     } else {
       return false;
     }
+#endif
   }
 #else
   return ( ubyte_at(0) == NativeMovRegMem::instruction_code_mem2reg ||

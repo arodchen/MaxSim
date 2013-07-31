@@ -49,6 +49,9 @@
 #ifdef COMPILER1
 #include "c1/c1_Compiler.hpp"
 #endif
+#ifdef GRAAL
+#include "graal/graalCompiler.hpp"
+#endif
 #ifdef COMPILER2
 #include "opto/c2compiler.hpp"
 #endif
@@ -747,7 +750,16 @@ void CompileBroker::compilation_init() {
   // Set the interface to the current compiler(s).
   int c1_count = CompilationPolicy::policy()->compiler_count(CompLevel_simple);
   int c2_count = CompilationPolicy::policy()->compiler_count(CompLevel_full_optimization);
-#ifdef COMPILER1
+
+#ifdef GRAAL
+  GraalCompiler* graal = new GraalCompiler();
+#endif
+
+#if defined(GRAALVM)
+  _compilers[0] = graal;
+  c1_count = 0;
+  c2_count = 0;
+#elif defined(COMPILER1)
   if (c1_count > 0) {
     _compilers[0] = new Compiler();
   }
@@ -961,9 +973,9 @@ CompilerThread* CompileBroker::make_compiler_thread(const char* name, CompileQue
 // Initialize the compilation queue
 void CompileBroker::init_compiler_threads(int c1_compiler_count, int c2_compiler_count) {
   EXCEPTION_MARK;
-#if !defined(ZERO) && !defined(SHARK)
+#if !defined(ZERO) && !defined(SHARK) && !defined(GRAALVM)
   assert(c2_compiler_count > 0 || c1_compiler_count > 0, "No compilers?");
-#endif // !ZERO && !SHARK
+#endif // !ZERO && !SHARK && !GRAALVM
   if (c2_compiler_count > 0) {
     _c2_method_queue  = new CompileQueue("C2MethodQueue",  MethodCompileQueue_lock);
   }
@@ -1025,10 +1037,9 @@ bool CompileBroker::is_idle() {
         return false;
       }
     }
-
-    // No pending or active compilations.
-    return true;
   }
+  // No pending or active compilations.
+  return true;
 }
 
 
@@ -1111,6 +1122,13 @@ void CompileBroker::compile_method_base(methodHandle method,
   if (InstanceRefKlass::owns_pending_list_lock(JavaThread::current())) {
     return;
   }
+#ifdef GRAALVM
+  if (!JavaThread::current()->is_compiling()) {
+    GraalCompiler::instance()->compile_method(method, osr_bci, is_compile_blocking(method, osr_bci));
+  } else {
+    // Recursive compile request => ignore.
+  }
+#else
 
   // Outputs from the following MutexLocker block:
   CompileTask* task     = NULL;
@@ -1195,6 +1213,7 @@ void CompileBroker::compile_method_base(methodHandle method,
   if (blocking) {
     wait_for_completion(task);
   }
+#endif
 }
 
 
@@ -1206,7 +1225,7 @@ nmethod* CompileBroker::compile_method(methodHandle method, int osr_bci,
   assert(method->method_holder()->oop_is_instance(), "not an instance method");
   assert(osr_bci == InvocationEntryBci || (0 <= osr_bci && osr_bci < method->code_size()), "bci out of range");
   assert(!method->is_abstract() && (osr_bci == InvocationEntryBci || !method->is_native()), "cannot compile abstract/native methods");
-  assert(!method->method_holder()->is_not_initialized(), "method holder must be initialized");
+  assert(!method->method_holder()->is_not_initialized() || method->intrinsic_id() == vmIntrinsics::_CompilerToVMImpl_executeCompiledMethod, "method holder must be initialized");
   // allow any levels for WhiteBox
   assert(WhiteBoxAPI || TieredCompilation || comp_level == CompLevel_highest_tier, "only CompLevel_highest_tier must be used in non-tiered");
   // return quickly if possible
@@ -2098,9 +2117,17 @@ void CompileBroker::collect_statistics(CompilerThread* thread, elapsedTimer time
       if (is_osr) {
         _t_osr_compilation.add(time);
         _sum_osr_bytes_compiled += method->code_size() + task->num_inlined_bytecodes();
+#ifdef GRAAL
+        compiler(task->comp_level())->stats()->_t_osr_compilation.add(time);
+        compiler(task->comp_level())->stats()->_sum_osr_bytes_compiled += method->code_size() + task->num_inlined_bytecodes();
+#endif
       } else {
         _t_standard_compilation.add(time);
         _sum_standard_bytes_compiled += method->code_size() + task->num_inlined_bytecodes();
+#ifdef GRAAL
+        compiler(task->comp_level())->stats()->_t_standard_compilation.add(time);
+        compiler(task->comp_level())->stats()->_sum_standard_bytes_compiled += method->code_size() + task->num_inlined_bytecodes();
+#endif
       }
     }
 
@@ -2185,8 +2212,25 @@ void CompileBroker::print_times() {
   tty->print_cr("  Total compiled bytecodes : %6d bytes", tcb);
   tty->print_cr("    Standard compilation   : %6d bytes", CompileBroker::_sum_standard_bytes_compiled);
   tty->print_cr("    On stack replacement   : %6d bytes", CompileBroker::_sum_osr_bytes_compiled);
-  int bps = (int)(tcb / CompileBroker::_t_total_compilation.seconds());
+  double tcs = CompileBroker::_t_total_compilation.seconds();
+  int bps = tcs == 0.0 ? 0 : (int)(tcb / tcs);
   tty->print_cr("  Average compilation speed: %6d bytes/s", bps);
+#ifdef GRAAL
+  for (unsigned int i = 0; i < sizeof(_compilers) / sizeof(AbstractCompiler*); i++) {
+    AbstractCompiler* comp = _compilers[i];
+    if (comp != NULL) {
+      CompilerStatistics* stats = comp->stats();
+      int bytecodes = stats->_sum_osr_bytes_compiled + stats->_sum_standard_bytes_compiled;
+      if (bytecodes != 0) {
+        double seconds = stats->_t_osr_compilation.seconds() + stats->_t_standard_compilation.seconds();
+        int bps = seconds == 0.0 ? 0 : (int) (bytecodes / seconds);
+        tty->print_cr("  %7s compilation speed: %6d bytes/s {standard: %6.3f s, %6d bytes; osr: %6.3f s, %6d bytes}",
+            comp->name(), bps, stats->_t_standard_compilation.seconds(), stats->_sum_standard_bytes_compiled,
+            stats->_t_osr_compilation.seconds(), stats->_sum_osr_bytes_compiled);
+      }
+    }
+  }
+#endif
   tty->cr();
   tty->print_cr("  nmethod code size        : %6d bytes", CompileBroker::_sum_nmethod_code_size);
   tty->print_cr("  nmethod total size       : %6d bytes", CompileBroker::_sum_nmethod_size);

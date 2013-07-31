@@ -40,6 +40,9 @@
 #ifdef COMPILER2
 #include "opto/runtime.hpp"
 #endif
+#ifdef GRAAL
+#include "graal/graalJavaAccess.hpp"
+#endif
 
 #define __ masm->
 
@@ -126,6 +129,7 @@ class RegisterSaver {
   static int rax_offset_in_bytes(void)    { return BytesPerInt * rax_off; }
   static int rdx_offset_in_bytes(void)    { return BytesPerInt * rdx_off; }
   static int rbx_offset_in_bytes(void)    { return BytesPerInt * rbx_off; }
+  static int r10_offset_in_bytes(void)    { return BytesPerInt * r10_off; }
   static int xmm0_offset_in_bytes(void)   { return BytesPerInt * xmm0_off; }
   static int return_offset_in_bytes(void) { return BytesPerInt * return_off; }
 
@@ -734,6 +738,16 @@ static void gen_i2c_adapter(MacroAssembler *masm,
   // Will jump to the compiled code just as if compiled code was doing it.
   // Pre-load the register-jump target early, to schedule it better.
   __ movptr(r11, Address(rbx, in_bytes(Method::from_compiled_offset())));
+
+#ifdef GRAAL
+  // check if this call should be routed towards a specific entry point
+  __ cmpptr(Address(r15_thread, in_bytes(JavaThread::graal_alternate_call_target_offset())), 0);
+  Label no_alternative_target;
+  __ jcc(Assembler::equal, no_alternative_target);
+  __ movptr(r11, Address(r15_thread, in_bytes(JavaThread::graal_alternate_call_target_offset())));
+  __ movptr(Address(r15_thread, in_bytes(JavaThread::graal_alternate_call_target_offset())), 0);
+  __ bind(no_alternative_target);
+#endif
 
   // Now generate the shuffle code.  Pick up all register args and move the
   // rest through the floating point stack top.
@@ -1662,6 +1676,30 @@ static void gen_special_dispatch(MacroAssembler* masm,
                                  const VMRegPair* regs) {
   verify_oop_args(masm, method, sig_bt, regs);
   vmIntrinsics::ID iid = method->intrinsic_id();
+
+#ifdef GRAAL
+  if (iid == vmIntrinsics::_CompilerToVMImpl_executeCompiledMethod) {
+    // We are called from compiled code here. The three object arguments
+    // are already in the correct registers (j_rarg0, jrarg1, jrarg2). The
+    // fourth argument (j_rarg3) is a pointer to the HotSpotInstalledCode object.
+
+    // Load the nmethod pointer from the HotSpotInstalledCode object
+    __ movq(j_rarg4, Address(j_rarg3, sizeof(oopDesc)));
+
+    // Check whether the nmethod was invalidated
+    __ testq(j_rarg4, j_rarg4);
+    Label invalid_nmethod;
+    __ jcc(Assembler::zero, invalid_nmethod);
+
+    // Perform a tail call to the verified entry point of the nmethod.
+    __ jmp(Address(j_rarg4, nmethod::verified_entry_point_offset()));
+
+    __ bind(invalid_nmethod);
+
+    __ jump(RuntimeAddress(StubRoutines::throw_InvalidInstalledCodeException_entry()));
+    return;
+  }
+#endif
 
   // Now write the args into the outgoing interpreter space
   bool     has_receiver   = false;
@@ -3330,6 +3368,10 @@ void SharedRuntime::generate_deopt_blob() {
   __ jmp(cont);
 
   int reexecute_offset = __ pc() - start;
+#ifdef GRAALVM
+  // Graal does not use this kind of deoptimization
+  __ should_not_reach_here();
+#endif
 
   // Reexecute case
   // return address is the pc describes what bci to do re-execute at
@@ -3339,6 +3381,31 @@ void SharedRuntime::generate_deopt_blob() {
 
   __ movl(r14, Deoptimization::Unpack_reexecute); // callee-saved
   __ jmp(cont);
+
+#ifdef GRAAL
+  int implicit_exception_uncommon_trap_offset = __ pc() - start;
+  __ pushptr(Address(r15_thread, in_bytes(JavaThread::graal_implicit_exception_pc_offset())));
+
+  int uncommon_trap_offset = __ pc() - start;
+
+  // Save everything in sight.
+  RegisterSaver::save_live_registers(masm, 0, &frame_size_in_words);
+  // fetch_unroll_info needs to call last_java_frame()
+  __ set_last_Java_frame(noreg, noreg, NULL);
+
+  __ movl(c_rarg1, Address(r15_thread, in_bytes(ThreadShadow::pending_deoptimization_offset())));
+  __ movl(Address(r15_thread, in_bytes(ThreadShadow::pending_deoptimization_offset())), -1);
+
+  __ movl(r14, (int32_t)Deoptimization::Unpack_reexecute);
+  __ mov(c_rarg0, r15_thread);
+  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, Deoptimization::uncommon_trap)));
+  oop_maps->add_gc_map( __ pc()-start, map->deep_copy());
+
+  __ reset_last_Java_frame(false, false);
+
+  Label after_fetch_unroll_info_call;
+  __ jmp(after_fetch_unroll_info_call);
+#endif // GRAAL
 
   int exception_offset = __ pc() - start;
 
@@ -3424,6 +3491,10 @@ void SharedRuntime::generate_deopt_blob() {
   oop_maps->add_gc_map(__ pc() - start, map);
 
   __ reset_last_Java_frame(false, false);
+
+#ifdef GRAAL
+  __ bind(after_fetch_unroll_info_call);
+#endif
 
   // Load UnrollBlock* into rdi
   __ mov(rdi, rax);
@@ -3594,6 +3665,10 @@ void SharedRuntime::generate_deopt_blob() {
 
   _deopt_blob = DeoptimizationBlob::create(&buffer, oop_maps, 0, exception_offset, reexecute_offset, frame_size_in_words);
   _deopt_blob->set_unpack_with_exception_in_tls_offset(exception_in_tls_offset);
+#ifdef GRAAL
+  _deopt_blob->set_uncommon_trap_offset(uncommon_trap_offset);
+  _deopt_blob->set_implicit_exception_uncommon_trap_offset(implicit_exception_uncommon_trap_offset);
+#endif
 }
 
 #ifdef COMPILER2

@@ -29,6 +29,9 @@
 #include "classfile/vmSymbols.hpp"
 #include "code/scopeDesc.hpp"
 #include "compiler/compileBroker.hpp"
+#ifdef GRAAL
+#include "graal/graalCompiler.hpp"
+#endif
 #include "interpreter/interpreter.hpp"
 #include "interpreter/linkResolver.hpp"
 #include "interpreter/oopMapCache.hpp"
@@ -50,6 +53,7 @@
 #include "runtime/deoptimization.hpp"
 #include "runtime/fprofiler.hpp"
 #include "runtime/frame.inline.hpp"
+#include "runtime/gpu.hpp"
 #include "runtime/init.hpp"
 #include "runtime/interfaceSupport.hpp"
 #include "runtime/java.hpp"
@@ -1414,7 +1418,8 @@ void JavaThread::initialize() {
 
   // Set the claimed par_id to -1 (ie not claiming any par_ids)
   set_claimed_par_id(-1);
-
+  
+  _buffer_blob = NULL;
   set_saved_exception_pc(NULL);
   set_threadObj(NULL);
   _anchor.clear();
@@ -1442,6 +1447,9 @@ void JavaThread::initialize() {
   _in_deopt_handler = 0;
   _doing_unsafe_access = false;
   _stack_guard_state = stack_guard_unused;
+#ifdef GRAAL
+  _graal_alternate_call_target = NULL;
+#endif
   _exception_oop = NULL;
   _exception_pc  = 0;
   _exception_handler_pc = 0;
@@ -1460,6 +1468,7 @@ void JavaThread::initialize() {
   _do_not_unlock_if_synchronized = false;
   _cached_monitor_info = NULL;
   _parker = Parker::Allocate(this) ;
+  _scanned_nmethod = NULL;
 
 #ifndef PRODUCT
   _jmp_ring_index = 0;
@@ -2210,7 +2219,7 @@ void JavaThread::send_thread_stop(oop java_throwable)  {
           RegisterMap reg_map(this, UseBiasedLocking);
           frame compiled_frame = f.sender(&reg_map);
           if (!StressCompiledExceptionHandlers && compiled_frame.can_be_deoptimized()) {
-            Deoptimization::deoptimize(this, compiled_frame, &reg_map);
+            Deoptimization::deoptimize(this, compiled_frame, &reg_map, Deoptimization::Reason_constraint);
           }
         }
       }
@@ -2643,7 +2652,7 @@ void JavaThread::deoptimize() {
         trace_frames();
         trace_stack();
       }
-      Deoptimization::deoptimize(this, *fst.current(), fst.register_map());
+      Deoptimization::deoptimize(this, *fst.current(), fst.register_map(), Deoptimization::Reason_constraint);
     }
   }
 
@@ -2679,7 +2688,7 @@ void JavaThread::deoptimized_wrt_marked_nmethods() {
                    this->name(), nm != NULL ? nm->compile_id() : -1);
       }
 
-      Deoptimization::deoptimize(this, *fst.current(), fst.register_map());
+      Deoptimization::deoptimize(this, *fst.current(), fst.register_map(), Deoptimization::Reason_constraint);
     }
   }
 }
@@ -2785,6 +2794,13 @@ void JavaThread::oops_do(OopClosure* f, CLDToOopClosure* cld_f, CodeBlobClosure*
 
   if (jvmti_thread_state() != NULL) {
     jvmti_thread_state()->oops_do(f);
+  }
+
+  if (_scanned_nmethod != NULL && cf != NULL) {
+    // Safepoints can occur when the sweeper is scanning an nmethod so
+    // process it here to make sure it isn't unloaded in the middle of
+    // a scan.
+    cf->do_code_blob(_scanned_nmethod);
   }
 }
 
@@ -3235,22 +3251,10 @@ CompilerThread::CompilerThread(CompileQueue* queue, CompilerCounters* counters)
   _task  = NULL;
   _queue = queue;
   _counters = counters;
-  _buffer_blob = NULL;
-  _scanned_nmethod = NULL;
 
 #ifndef PRODUCT
   _ideal_graph_printer = NULL;
 #endif
-}
-
-void CompilerThread::oops_do(OopClosure* f, CLDToOopClosure* cld_f, CodeBlobClosure* cf) {
-  JavaThread::oops_do(f, cld_f, cf);
-  if (_scanned_nmethod != NULL && cf != NULL) {
-    // Safepoints can occur when the sweeper is scanning an nmethod so
-    // process it here to make sure it isn't unloaded in the middle of
-    // a scan.
-    cf->do_code_blob(_scanned_nmethod);
-  }
 }
 
 // ======= Threads ========
@@ -3315,6 +3319,10 @@ jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
 
   // Initialize the os module before using TLS
   os::init();
+
+  // Probe for existance of supported GPU and initialize it if one
+  // exists.
+  gpu::init();
 
   // Initialize system properties.
   Arguments::init_system_properties();
@@ -3632,7 +3640,7 @@ jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
   }
 
   // initialize compiler(s)
-#if defined(COMPILER1) || defined(COMPILER2) || defined(SHARK)
+#if defined(COMPILER1) || defined(COMPILER2) || defined(SHARK) || defined(GRAALVM)
   CompileBroker::compilation_init();
 #endif
 

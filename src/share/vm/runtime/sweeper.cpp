@@ -359,14 +359,22 @@ void NMethodSweeper::sweep_code_cache() {
 
 class NMethodMarker: public StackObj {
  private:
+#ifdef GRAAL
+  JavaThread* _thread;
+#else
   CompilerThread* _thread;
+#endif
  public:
   NMethodMarker(nmethod* nm) {
+#ifdef GRAAL
+    _thread = JavaThread::current();
+#else
     _thread = CompilerThread::current();
+#endif
     if (!nm->is_zombie() && !nm->is_unloaded()) {
       // Only expose live nmethods for scanning
-    _thread->set_scanned_nmethod(nm);
-  }
+      _thread->set_scanned_nmethod(nm);
+    }
   }
   ~NMethodMarker() {
     _thread->set_scanned_nmethod(NULL);

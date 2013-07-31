@@ -128,10 +128,14 @@ ifeq ($(USE_CLANG),)
   LIBS += -pthread
 endif
 
+ifeq ($(OS_VENDOR),Darwin)
+  LIBS         += -framework ApplicationServices -framework IOKit
+endif
+
 # By default, link the *.o into the library, not the executable.
 LINK_INTO$(LINK_INTO) = LIBJVM
 
-JDK_LIBDIR = $(JAVA_HOME)/jre/lib/$(LIBARCH)
+JDK_LIBDIR = $(JAVA_HOME)/jre/lib
 
 #----------------------------------------------------------------------
 # jvm_db & dtrace
@@ -151,7 +155,7 @@ else
   LIBJVM   = lib$(JVM).so
 endif
 
-SPECIAL_PATHS:=adlc c1 gc_implementation opto shark libadt
+SPECIAL_PATHS:=adlc c1 gc_implementation opto shark libadt graal
 
 SOURCE_PATHS=\
   $(shell find $(HS_COMMON_SRC)/share/vm/* -type d \! \
@@ -160,6 +164,8 @@ SOURCE_PATHS+=$(HS_COMMON_SRC)/os/$(Platform_os_family)/vm
 SOURCE_PATHS+=$(HS_COMMON_SRC)/os/posix/vm
 SOURCE_PATHS+=$(HS_COMMON_SRC)/cpu/$(Platform_arch)/vm
 SOURCE_PATHS+=$(HS_COMMON_SRC)/os_cpu/$(Platform_os_arch)/vm
+SOURCE_PATHS+=$(HS_COMMON_SRC)/gpu/ptx/vm
+SOURCE_PATHS+=$(HS_COMMON_SRC)/os_gpu/bsd_ptx/vm
 
 CORE_PATHS=$(foreach path,$(SOURCE_PATHS),$(call altsrc,$(path)) $(path))
 CORE_PATHS+=$(GENERATED)/jvmtifiles $(GENERATED)/tracefiles
@@ -181,13 +187,19 @@ COMPILER2_PATHS += $(GENERATED)/adfiles
 
 SHARK_PATHS := $(GAMMADIR)/src/share/vm/shark
 
+GRAAL_PATHS += $(call altsrc,$(HS_COMMON_SRC)/share/vm/graal)
+GRAAL_PATHS += $(call altsrc,$(HS_COMMON_SRC)/gpu/ptx/vm)
+GRAAL_PATHS += $(HS_COMMON_SRC)/share/vm/graal
+GRAAL_PATHS += $(HS_COMMON_SRC)/gpu/ptx/vm
+
 # Include dirs per type.
 Src_Dirs/CORE      := $(CORE_PATHS)
-Src_Dirs/COMPILER1 := $(CORE_PATHS) $(COMPILER1_PATHS)
-Src_Dirs/COMPILER2 := $(CORE_PATHS) $(COMPILER2_PATHS)
-Src_Dirs/TIERED    := $(CORE_PATHS) $(COMPILER1_PATHS) $(COMPILER2_PATHS)
+Src_Dirs/COMPILER1 := $(CORE_PATHS) $(COMPILER1_PATHS) $(GRAAL_PATHS)
+Src_Dirs/COMPILER2 := $(CORE_PATHS) $(COMPILER2_PATHS) $(GRAAL_PATHS)
+Src_Dirs/TIERED    := $(CORE_PATHS) $(COMPILER1_PATHS) $(COMPILER2_PATHS) $(GRAAL_PATHS)
 Src_Dirs/ZERO      := $(CORE_PATHS)
 Src_Dirs/SHARK     := $(CORE_PATHS) $(SHARK_PATHS)
+Src_Dirs/GRAAL     := $(CORE_PATHS) $(GRAAL_PATHS)
 Src_Dirs := $(Src_Dirs/$(TYPE))
 
 COMPILER2_SPECIFIC_FILES := opto libadt bcEscapeAnalyzer.cpp c2_\* runtime_\*
@@ -195,16 +207,23 @@ COMPILER1_SPECIFIC_FILES := c1_\*
 SHARK_SPECIFIC_FILES     := shark
 ZERO_SPECIFIC_FILES      := zero
 
+ifneq ($(INCLUDE_GRAAL), true)
+  GRAAL_SPECIFIC_FILES   := graal\*
+else
+  GRAAL_SPECIFIC_FILES   :=
+endif
+
 # Always exclude these.
 Src_Files_EXCLUDE += jsig.c jvmtiEnvRecommended.cpp jvmtiEnvStub.cpp
 
 # Exclude per type.
-Src_Files_EXCLUDE/CORE      := $(COMPILER1_SPECIFIC_FILES) $(COMPILER2_SPECIFIC_FILES) $(ZERO_SPECIFIC_FILES) $(SHARK_SPECIFIC_FILES) ciTypeFlow.cpp
-Src_Files_EXCLUDE/COMPILER1 := $(COMPILER2_SPECIFIC_FILES) $(ZERO_SPECIFIC_FILES) $(SHARK_SPECIFIC_FILES) ciTypeFlow.cpp
-Src_Files_EXCLUDE/COMPILER2 := $(COMPILER1_SPECIFIC_FILES) $(ZERO_SPECIFIC_FILES) $(SHARK_SPECIFIC_FILES)
-Src_Files_EXCLUDE/TIERED    := $(ZERO_SPECIFIC_FILES) $(SHARK_SPECIFIC_FILES)
-Src_Files_EXCLUDE/ZERO      := $(COMPILER1_SPECIFIC_FILES) $(COMPILER2_SPECIFIC_FILES) $(SHARK_SPECIFIC_FILES) ciTypeFlow.cpp
-Src_Files_EXCLUDE/SHARK     := $(COMPILER1_SPECIFIC_FILES) $(COMPILER2_SPECIFIC_FILES) $(ZERO_SPECIFIC_FILES)
+Src_Files_EXCLUDE/CORE      := $(COMPILER1_SPECIFIC_FILES) $(COMPILER2_SPECIFIC_FILES) $(ZERO_SPECIFIC_FILES) $(SHARK_SPECIFIC_FILES) $(GRAAL_SPECIFIC_FILES) ciTypeFlow.cpp
+Src_Files_EXCLUDE/COMPILER1 := $(COMPILER2_SPECIFIC_FILES) $(ZERO_SPECIFIC_FILES) $(SHARK_SPECIFIC_FILES) $(GRAAL_SPECIFIC_FILES) ciTypeFlow.cpp
+Src_Files_EXCLUDE/COMPILER2 := $(COMPILER1_SPECIFIC_FILES) $(ZERO_SPECIFIC_FILES) $(SHARK_SPECIFIC_FILES) $(GRAAL_SPECIFIC_FILES)
+Src_Files_EXCLUDE/TIERED    := $(ZERO_SPECIFIC_FILES) $(SHARK_SPECIFIC_FILES) $(GRAAL_SPECIFIC_FILES)
+Src_Files_EXCLUDE/ZERO      := $(COMPILER1_SPECIFIC_FILES) $(COMPILER2_SPECIFIC_FILES) $(SHARK_SPECIFIC_FILES) $(GRAAL_SPECIFIC_FILES) ciTypeFlow.cpp
+Src_Files_EXCLUDE/SHARK     := $(COMPILER1_SPECIFIC_FILES) $(COMPILER2_SPECIFIC_FILES) $(ZERO_SPECIFIC_FILES) $(GRAAL_SPECIFIC_FILES)
+Src_Files_EXCLUDE/GRAAL     := $(COMPILER1_SPECIFIC_FILES) $(COMPILER2_SPECIFIC_FILES) $(ZERO_SPECIFIC_FILES) $(SHARK_SPECIFIC_FILES) ciTypeFlow.cpp
 
 Src_Files_EXCLUDE +=  $(Src_Files_EXCLUDE/$(TYPE))
 

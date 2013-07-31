@@ -482,6 +482,12 @@ address SharedRuntime::raw_exception_handler_for_return_address(JavaThread* thre
   // Reset method handle flag.
   thread->set_is_method_handle_return(false);
 
+#ifdef GRAAL
+  // Graal's ExceptionHandlerStub expects the thread local exception PC to be clear
+  // and other exception handler continuations do not read it
+  thread->set_exception_pc(NULL);
+#endif
+
   // The fastest case first
   CodeBlob* blob = CodeCache::find_blob(return_address);
   nmethod* nm = (blob != NULL) ? blob->as_nmethod_or_null() : NULL;
@@ -631,6 +637,27 @@ address SharedRuntime::compute_compiled_exc_handler(nmethod* nm, address ret_pc,
   assert(nm != NULL, "must exist");
   ResourceMark rm;
 
+#ifdef GRAAL
+  if (nm->is_compiled_by_graal()) {
+    // lookup exception handler for this pc
+    int catch_pco = ret_pc - nm->code_begin();
+    ExceptionHandlerTable table(nm);
+    HandlerTableEntry *t = table.entry_for(catch_pco, -1, 0);
+    if (t != NULL) {
+      return nm->code_begin() + t->pco();
+    } else {
+      // there is no exception handler for this pc => deoptimize
+      nm->make_not_entrant();
+      JavaThread* thread = JavaThread::current();
+      RegisterMap reg_map(thread);
+      frame runtime_frame = thread->last_frame();
+      frame caller_frame = runtime_frame.sender(&reg_map);
+      Deoptimization::deoptimize_frame(thread, caller_frame.id(), Deoptimization::Reason_not_compiled_exception_handler);
+      return SharedRuntime::deopt_blob()->unpack_with_exception_in_tls();
+    }
+  }
+#endif
+
   ScopeDesc* sd = nm->scope_desc_at(ret_pc);
   // determine handler bci, if any
   EXCEPTION_MARK;
@@ -723,6 +750,11 @@ JRT_ENTRY(void, SharedRuntime::throw_IncompatibleClassChangeError(JavaThread* th
   throw_and_post_jvmti_exception(thread, vmSymbols::java_lang_IncompatibleClassChangeError(), "vtable stub");
 JRT_END
 
+JRT_ENTRY(void, SharedRuntime::throw_InvalidInstalledCodeException(JavaThread* thread))
+  // These errors occur only at call sites
+  throw_and_post_jvmti_exception(thread, vmSymbols::com_oracle_graal_api_code_InvalidInstalledCodeException());
+JRT_END
+
 JRT_ENTRY(void, SharedRuntime::throw_ArithmeticException(JavaThread* thread))
   throw_and_post_jvmti_exception(thread, vmSymbols::java_lang_ArithmeticException(), "/ by zero");
 JRT_END
@@ -748,6 +780,15 @@ JRT_ENTRY(void, SharedRuntime::throw_StackOverflowError(JavaThread* thread))
   }
   throw_and_post_jvmti_exception(thread, exception);
 JRT_END
+
+#ifdef GRAAL
+address SharedRuntime::deoptimize_for_implicit_exception(JavaThread* thread, address pc, nmethod* nm, int deopt_reason) {
+  assert(deopt_reason > Deoptimization::Reason_none && deopt_reason < Deoptimization::Reason_LIMIT, "invalid deopt reason");
+  thread->set_graal_implicit_exception_pc(pc);
+  thread->set_pending_deoptimization(Deoptimization::make_trap_request((Deoptimization::DeoptReason)deopt_reason, Deoptimization::Action_reinterpret));
+  return (SharedRuntime::deopt_blob()->implicit_exception_uncommon_trap());
+}
+#endif
 
 address SharedRuntime::continuation_for_implicit_exception(JavaThread* thread,
                                                            address pc,
@@ -843,7 +884,15 @@ address SharedRuntime::continuation_for_implicit_exception(JavaThread* thread,
 #ifndef PRODUCT
           _implicit_null_throws++;
 #endif
+#ifdef GRAAL
+          if (nm->is_compiled_by_graal()) {
+            target_pc = deoptimize_for_implicit_exception(thread, pc, nm, Deoptimization::Reason_null_check);
+          } else {
+#endif
           target_pc = nm->continuation_for_implicit_exception(pc);
+#ifdef GRAAL
+          }
+#endif
           // If there's an unexpected fault, target_pc might be NULL,
           // in which case we want to fall through into the normal
           // error handling code.
@@ -859,7 +908,15 @@ address SharedRuntime::continuation_for_implicit_exception(JavaThread* thread,
 #ifndef PRODUCT
         _implicit_div0_throws++;
 #endif
+#ifdef GRAAL
+        if (nm->is_compiled_by_graal()) {
+          target_pc = deoptimize_for_implicit_exception(thread, pc, nm, Deoptimization::Reason_div0_check);
+        } else {
+#endif
         target_pc = nm->continuation_for_implicit_exception(pc);
+#ifdef GRAAL
+        }
+#endif
         // If there's an unexpected fault, target_pc might be NULL,
         // in which case we want to fall through into the normal
         // error handling code.
@@ -930,6 +987,11 @@ JRT_END
 
 
 JRT_ENTRY_NO_ASYNC(void, SharedRuntime::register_finalizer(JavaThread* thread, oopDesc* obj))
+#ifdef GRAAL
+  if (!obj->klass()->has_finalizer()) {
+    return;
+  }
+#endif
   assert(obj->is_oop(), "must be a valid oop");
   assert(obj->klass()->has_finalizer(), "shouldn't be here otherwise");
   InstanceKlass::register_finalizer(instanceOop(obj), CHECK);

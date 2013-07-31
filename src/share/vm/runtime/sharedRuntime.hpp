@@ -185,6 +185,7 @@ class SharedRuntime: AllStatic {
   };
   static void    throw_AbstractMethodError(JavaThread* thread);
   static void    throw_IncompatibleClassChangeError(JavaThread* thread);
+  static void    throw_InvalidInstalledCodeException(JavaThread* thread);
   static void    throw_ArithmeticException(JavaThread* thread);
   static void    throw_NullPointerException(JavaThread* thread);
   static void    throw_NullPointerException_at_call(JavaThread* thread);
@@ -192,6 +193,9 @@ class SharedRuntime: AllStatic {
   static address continuation_for_implicit_exception(JavaThread* thread,
                                                      address faulting_pc,
                                                      ImplicitExceptionKind exception_kind);
+#ifdef GRAAL
+  static address deoptimize_for_implicit_exception(JavaThread* thread, address pc, nmethod* nm, int deopt_reason);
+#endif
 
   // Shared stub locations
   static address get_poll_stub(address pc);

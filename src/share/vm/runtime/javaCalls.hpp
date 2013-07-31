@@ -100,6 +100,9 @@ class JavaCallArguments : public StackObj {
   int         _size;
   int         _max_size;
   bool        _start_at_zero;      // Support late setting of receiver
+#ifdef GRAAL
+  nmethod*    _alternative_target; // Nmethod that should be called instead of normal target
+#endif
 
   void initialize() {
     // Starts at first element to support set_receiver.
@@ -109,6 +112,7 @@ class JavaCallArguments : public StackObj {
     _max_size = _default_size;
     _size = 0;
     _start_at_zero = false;
+    GRAAL_ONLY(_alternative_target = NULL;)
   }
 
  public:
@@ -130,10 +134,21 @@ class JavaCallArguments : public StackObj {
       _max_size = max_size;
       _size = 0;
       _start_at_zero = false;
+      GRAAL_ONLY(_alternative_target = NULL;)
     } else {
       initialize();
     }
   }
+
+#ifdef GRAAL
+  void set_alternative_target(nmethod* target) {
+    _alternative_target = target;
+  }
+
+  nmethod* alternative_target() {
+    return _alternative_target;
+  }
+#endif
 
   inline void push_oop(Handle h)    { _is_oop[_size] = true;
                                JNITypes::put_obj((oop)h.raw_value(), _value, _size); }
@@ -194,6 +209,12 @@ class JavaCalls: AllStatic {
   static void call_special(JavaValue* result, Handle receiver, KlassHandle klass, Symbol* name, Symbol* signature, TRAPS); // No args
   static void call_special(JavaValue* result, Handle receiver, KlassHandle klass, Symbol* name, Symbol* signature, Handle arg1, TRAPS);
   static void call_special(JavaValue* result, Handle receiver, KlassHandle klass, Symbol* name, Symbol* signature, Handle arg1, Handle arg2, TRAPS);
+
+  // interface call
+  // ------------
+
+  // The receiver must be first oop in argument list
+  static void call_interface(JavaValue* result, KlassHandle spec_klass, Symbol* name, Symbol* signature, JavaCallArguments* args, TRAPS);
 
   // virtual call
   // ------------
