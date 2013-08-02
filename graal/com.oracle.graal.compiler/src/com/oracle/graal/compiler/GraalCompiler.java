@@ -62,12 +62,6 @@ public class GraalCompiler {
     public static final OptionValue<Boolean> Inline = new OptionValue<>(true);
     // @formatter:on
 
-    private static boolean maxineHackDisableCE;
-
-    public static void setMaxineHackDisableCE(boolean b) {
-        maxineHackDisableCE = b;
-    }
-
     /**
      * Requests compilation of a given graph.
      *
@@ -163,11 +157,9 @@ public class GraalCompiler {
                 InliningPhaseFactory.create(runtime, null, replacements, assumptions, cache, plan, optimisticOpts).apply(graph);
                 new DeadCodeEliminationPhase().apply(graph);
 
-                if (!maxineHackDisableCE) {
                 if (ConditionalElimination.getValue() && OptCanonicalizer.getValue()) {
                     canonicalizer.apply(graph, highTierContext);
                     new IterativeConditionalEliminationPhase().apply(graph, highTierContext);
-                }
                 }
             }
         }
