@@ -634,18 +634,20 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
             graph.replaceFixedWithFixed(storeIndexed, memoryWrite);
 
         } else if (n instanceof UnsafeLoadNode) {
-            UnsafeLoadNode load = (UnsafeLoadNode) n;
-            assert load.kind() != Kind.Illegal;
-            boolean compressible = (!load.object().isNullConstant() && load.accessKind() == Kind.Object);
-            if (addReadBarrier(load, tool)) {
-                unsafeLoadSnippets.lower(load, tool);
-            } else {
-                IndexedLocationNode location = IndexedLocationNode.create(ANY_LOCATION, load.accessKind(), load.displacement(), load.offset(), graph, 1);
-                ReadNode memoryRead = graph.add(new ReadNode(load.object(), location, load.stamp(), BarrierType.NONE, compressible));
-                // An unsafe read must not float outside its block otherwise
-                // it may float above an explicit null check on its object.
-                memoryRead.setGuard(AbstractBeginNode.prevBegin(load));
-                graph.replaceFixedWithFixed(load, memoryRead);
+            if (tool.getLoweringType() != LoweringType.BEFORE_GUARDS) {
+                UnsafeLoadNode load = (UnsafeLoadNode) n;
+                assert load.kind() != Kind.Illegal;
+                boolean compressible = (!load.object().isNullConstant() && load.accessKind() == Kind.Object);
+                if (addReadBarrier(load, tool)) {
+                    unsafeLoadSnippets.lower(load, tool);
+                } else {
+                    IndexedLocationNode location = IndexedLocationNode.create(ANY_LOCATION, load.accessKind(), load.displacement(), load.offset(), graph, 1);
+                    ReadNode memoryRead = graph.add(new ReadNode(load.object(), location, load.stamp(), BarrierType.NONE, compressible));
+                    // An unsafe read must not float outside its block otherwise
+                    // it may float above an explicit null check on its object.
+                    memoryRead.setGuard(AbstractBeginNode.prevBegin(load));
+                    graph.replaceFixedWithFixed(load, memoryRead);
+                }
             }
         } else if (n instanceof UnsafeStoreNode) {
             UnsafeStoreNode store = (UnsafeStoreNode) n;
@@ -885,7 +887,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
 
     private static BarrierType getFieldStoreBarrierType(StoreFieldNode storeField) {
         BarrierType barrierType = BarrierType.NONE;
-        if (storeField.field().getKind() == Kind.Object && !storeField.value().objectStamp().alwaysNull()) {
+        if (storeField.field().getKind() == Kind.Object) {
             barrierType = BarrierType.IMPRECISE;
         }
         return barrierType;
@@ -893,7 +895,7 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
 
     private static BarrierType getArrayStoreBarrierType(StoreIndexedNode store) {
         BarrierType barrierType = BarrierType.NONE;
-        if (store.elementKind() == Kind.Object && !store.value().objectStamp().alwaysNull()) {
+        if (store.elementKind() == Kind.Object) {
             barrierType = BarrierType.PRECISE;
         }
         return barrierType;
@@ -901,12 +903,12 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
 
     private static BarrierType getUnsafeStoreBarrierType(UnsafeStoreNode store) {
         BarrierType barrierType = BarrierType.NONE;
-        if (store.value().kind() == Kind.Object && !store.value().objectStamp().alwaysNull()) {
+        if (store.value().kind() == Kind.Object) {
             ResolvedJavaType type = store.object().objectStamp().type();
-            if (type != null && type.isArray()) {
-                barrierType = BarrierType.PRECISE;
-            } else {
+            if (type != null && !type.isArray()) {
                 barrierType = BarrierType.IMPRECISE;
+            } else {
+                barrierType = BarrierType.PRECISE;
             }
         }
         return barrierType;
@@ -914,12 +916,12 @@ public abstract class HotSpotRuntime implements GraalCodeCacheProvider, Disassem
 
     private static BarrierType getCompareAndSwapBarrier(CompareAndSwapNode cas) {
         BarrierType barrierType = BarrierType.NONE;
-        if (cas.expected().kind() == Kind.Object && !cas.newValue().objectStamp().alwaysNull()) {
+        if (cas.expected().kind() == Kind.Object) {
             ResolvedJavaType type = cas.object().objectStamp().type();
-            if (type != null && type.isArray()) {
-                barrierType = BarrierType.PRECISE;
-            } else {
+            if (type != null && !type.isArray()) {
                 barrierType = BarrierType.IMPRECISE;
+            } else {
+                barrierType = BarrierType.PRECISE;
             }
         }
         return barrierType;
