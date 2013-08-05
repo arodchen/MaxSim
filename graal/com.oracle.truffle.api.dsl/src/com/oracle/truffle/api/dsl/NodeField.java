@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,36 +20,24 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.hotspot.nodes;
+package com.oracle.truffle.api.dsl;
 
-import com.oracle.graal.hotspot.replacements.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.replacements.nodes.*;
+import java.lang.annotation.*;
+
+import com.oracle.truffle.api.nodes.*;
 
 /**
- * {@link MacroNode Macro node} for {@link Class#isInterface()}.
- * 
- * @see ClassSubstitutions#isInterface(Class)
+ * A {@link NodeField} element defines a field for the generated {@link Node}. A {@link Node}
+ * contains multiple {@link NodeFields} specified in linear declaration order. The field can be
+ * accessed by declaring an abstract getter named
+ * <code>"get" + firstLetterUpperCase({@link #name()})()</code>.
  */
-public class ClassIsInterfaceNode extends MacroNode implements Canonicalizable {
+@Retention(RetentionPolicy.CLASS)
+@Target({ElementType.TYPE})
+public @interface NodeField {
 
-    public ClassIsInterfaceNode(Invoke invoke) {
-        super(invoke);
-    }
+    String name();
 
-    private ValueNode getJavaClass() {
-        return arguments.get(0);
-    }
+    Class<?> type();
 
-    public ValueNode canonical(CanonicalizerTool tool) {
-        ValueNode javaClass = getJavaClass();
-        if (javaClass.isConstant()) {
-            Class c = (Class) javaClass.asConstant().asObject();
-            if (c != null) {
-                return ConstantNode.forBoolean(c.isInterface(), graph());
-            }
-        }
-        return this;
-    }
 }
