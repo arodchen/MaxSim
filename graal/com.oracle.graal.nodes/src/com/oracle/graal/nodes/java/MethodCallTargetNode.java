@@ -143,7 +143,7 @@ public class MethodCallTargetNode extends CallTargetNode implements Node.Iterabl
         if (!isStatic()) {
             ValueNode receiver = receiver();
             if (receiver != null && receiver.objectStamp().isExactType()) {
-                if (invokeKind == InvokeKind.Interface || invokeKind == InvokeKind.Virtual && isResolved()) {
+                if ((invokeKind == InvokeKind.Interface || invokeKind == InvokeKind.Virtual) && isResolved()) {
                     ResolvedJavaMethod method = receiver.objectStamp().type().resolveMethod(targetMethod());
                     if (method != null) {
                         invokeKind = InvokeKind.Special;
