@@ -118,16 +118,8 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
                     condition = typeTest;
                     stamp = stamp.join(StampFactory.objectNonNull());
                 } else {
-                    double shortCircuitProbability;
-                    if (profile == null) {
-                        shortCircuitProbability = NOT_FREQUENT_PROBABILITY;
-                    } else {
-                        // Tell the instanceof it does not need to do a null check
-                        typeTest.setProfile(new JavaTypeProfile(TriState.FALSE, profile.getNotRecordedProbability(), profile.getTypes()));
-
-                        // TODO (ds) replace with probability of null-seen when available
-                        shortCircuitProbability = NOT_FREQUENT_PROBABILITY;
-                    }
+                    // TODO (ds) replace with probability of null-seen when available
+                    double shortCircuitProbability = NOT_FREQUENT_PROBABILITY;
                     condition = graph().unique(new ShortCircuitOrNode(graph().unique(new IsNullNode(object)), false, typeTest, false, shortCircuitProbability));
                 }
             }
@@ -154,7 +146,8 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
             return object();
         }
 
-        // remove checkcast if next node is a more specific checkcast
+        // if the previous node is also a checkcast, with a less precise and compatible type,
+        // replace both with one checkcast checking the more specific type.
         if (predecessor() instanceof CheckCastNode) {
             CheckCastNode ccn = (CheckCastNode) predecessor();
             if (ccn != null && ccn.type != null && ccn == object && ccn.forStoreCheck == forStoreCheck && ccn.type.isAssignableFrom(type)) {

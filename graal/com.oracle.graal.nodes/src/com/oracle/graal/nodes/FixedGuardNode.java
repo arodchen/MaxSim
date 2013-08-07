@@ -90,18 +90,22 @@ public class FixedGuardNode extends DeoptimizingFixedWithNextNode implements Sim
     public void simplify(SimplifierTool tool) {
         if (condition instanceof LogicConstantNode) {
             LogicConstantNode c = (LogicConstantNode) condition;
-            if (c.getValue() != negated) {
-                this.replaceAtUsages(BeginNode.prevBegin(this));
-                graph().removeFixed(this);
-            } else {
-                if (!suppressDeoptimize) {
-                    FixedWithNextNode predecessor = (FixedWithNextNode) predecessor();
+            if (c.getValue() == negated) {
+                if (suppressDeoptimize) {
+                    return;
+                } else {
+                    FixedNode next = this.next();
+                    if (next != null) {
+                        tool.deleteBranch(next);
+                    }
+
                     DeoptimizeNode deopt = graph().add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, reason));
                     deopt.setDeoptimizationState(getDeoptimizationState());
-                    tool.deleteBranch(this);
-                    predecessor.setNext(deopt);
+                    setNext(deopt);
                 }
             }
+            this.replaceAtUsages(BeginNode.prevBegin(this));
+            graph().removeFixed(this);
         }
     }
 

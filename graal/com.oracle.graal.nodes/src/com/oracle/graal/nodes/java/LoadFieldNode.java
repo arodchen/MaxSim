@@ -22,8 +22,11 @@
  */
 package com.oracle.graal.nodes.java;
 
+import java.lang.reflect.*;
+
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -58,17 +61,52 @@ public final class LoadFieldNode extends AccessFieldNode implements Canonicaliza
     public ValueNode canonical(CanonicalizerTool tool) {
         MetaAccessProvider runtime = tool.runtime();
         if (tool.canonicalizeReads() && runtime != null) {
-            Constant constant = null;
-            if (isStatic()) {
-                constant = field().readConstantValue(null);
-            } else if (object().isConstant() && !object().isNullConstant()) {
-                constant = field().readConstantValue(object().asConstant());
-            }
+            ConstantNode constant = asConstant(runtime);
             if (constant != null) {
-                return ConstantNode.forConstant(constant, runtime, graph());
+                return constant;
+            }
+            PhiNode phi = asPhi(runtime);
+            if (phi != null) {
+                return phi;
             }
         }
         return this;
+    }
+
+    /**
+     * Gets a constant value for this load if possible.
+     */
+    public ConstantNode asConstant(MetaAccessProvider runtime) {
+        Constant constant = null;
+        if (isStatic()) {
+            constant = field().readConstantValue(null);
+        } else if (object().isConstant() && !object().isNullConstant()) {
+            constant = field().readConstantValue(object().asConstant());
+        }
+        if (constant != null) {
+            return ConstantNode.forConstant(constant, runtime, graph());
+        }
+        return null;
+    }
+
+    private PhiNode asPhi(MetaAccessProvider runtime) {
+        if (!isStatic() && Modifier.isFinal(field.getModifiers()) && object() instanceof PhiNode && ((PhiNode) object()).values().filter(NodePredicates.isNotA(ConstantNode.class)).isEmpty()) {
+            PhiNode phi = (PhiNode) object();
+            Constant[] constants = new Constant[phi.valueCount()];
+            for (int i = 0; i < phi.valueCount(); i++) {
+                Constant constantValue = field().readConstantValue(phi.valueAt(i).asConstant());
+                if (constantValue == null) {
+                    return null;
+                }
+                constants[i] = constantValue;
+            }
+            PhiNode newPhi = graph().add(new PhiNode(stamp(), phi.merge()));
+            for (int i = 0; i < phi.valueCount(); i++) {
+                newPhi.addInput(ConstantNode.forConstant(constants[i], runtime, graph()));
+            }
+            return newPhi;
+        }
+        return null;
     }
 
     @Override

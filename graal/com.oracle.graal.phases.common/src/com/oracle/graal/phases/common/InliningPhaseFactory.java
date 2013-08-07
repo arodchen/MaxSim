@@ -22,19 +22,13 @@
  */
 package com.oracle.graal.phases.common;
 
-import java.util.*;
-
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.phases.*;
-
 
 /**
  * A factory that permits subclasses of {@link InliningPhase} to be created. To create instances of a {@code InliningPhase} subclass,
  * register the custom factory with {@link #registerFactory(InliningPhaseFactory)}. This is a workaround for the fact that the creation of
  * {@link InliningPhase} is currently wired into the compiler and not handled in a {@link Suite}.
+ *
+ * TODO Since the phase is now in a Suite handle it that way.
  */
 public class InliningPhaseFactory {
 
@@ -57,9 +51,8 @@ public class InliningPhaseFactory {
     /**
      * Subclasses override this method to instantiate objects of an {@link InliningPhase} subclass.
       */
-    protected InliningPhase newInliningPhase(MetaAccessProvider runtime, Map<Invoke, Double> hints, Replacements replacements, Assumptions assumptions, GraphCache cache, PhasePlan plan,
-                    OptimisticOptimizations optimisticOpts) {
-        return new InliningPhase(runtime, hints, replacements, assumptions, cache, plan, optimisticOpts);
+    protected InliningPhase newInliningPhase() {
+        return new InliningPhase();
     }
 
     public static void registerFactory(InliningPhaseFactory inliningPhaseFactory) {
@@ -69,8 +62,7 @@ public class InliningPhaseFactory {
     /**
      * Creates an {@link InliningPhase} instance using the factory.
      */
-    public static InliningPhase create(MetaAccessProvider runtime, Map<Invoke, Double> hints, Replacements replacements, Assumptions assumptions, GraphCache cache, PhasePlan plan,
-                    OptimisticOptimizations optimisticOpts) {
-        return checkInstance().newInliningPhase(runtime, hints, replacements, assumptions, cache, plan, optimisticOpts);
+    public static InliningPhase create() {
+        return checkInstance().newInliningPhase();
     }
 }

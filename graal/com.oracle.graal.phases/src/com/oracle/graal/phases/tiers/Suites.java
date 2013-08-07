@@ -124,4 +124,8 @@ public final class Suites {
         return new Suites(config);
     }
 
+    public static Suites createSuites(CompilerConfiguration config) {
+        return new Suites(config);
+    }
+
 }

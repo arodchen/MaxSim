@@ -181,7 +181,7 @@ public class HSAILLIRGenerator extends LIRGenerator {
     }
 
     private static boolean isCompressCandidate(DeoptimizingNode access) {
-        return access != null && ((HeapAccess) access).compress();
+        return access != null && ((HeapAccess) access).isCompressible();
     }
 
     @Override
@@ -690,7 +690,7 @@ public class HSAILLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void visitCompareAndSwap(CompareAndSwapNode node) {
+    public void visitCompareAndSwap(LoweredCompareAndSwapNode node, Value address) {
         throw new InternalError("NYI");
     }
 

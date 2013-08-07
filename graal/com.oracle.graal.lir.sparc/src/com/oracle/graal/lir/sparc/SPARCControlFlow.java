@@ -61,6 +61,9 @@ public class SPARCControlFlow {
                 case NE:
                     new Bpne(CC.Xcc, destination.label()).emit(masm);
                     break;
+                case LT:
+                    new Bpl(CC.Xcc, destination.label()).emit(masm);
+                    break;
                 case BE:
                     new Bpleu(CC.Xcc, destination.label()).emit(masm);
                     break;
@@ -72,6 +75,9 @@ public class SPARCControlFlow {
                     break;
                 case GT:
                     new Bpg(CC.Xcc, destination.label()).emit(masm);
+                    break;
+                case AT:
+                    new Bpgu(CC.Xcc, destination.label()).emit(masm);
                     break;
                 default:
                     throw GraalInternalError.shouldNotReachHere();

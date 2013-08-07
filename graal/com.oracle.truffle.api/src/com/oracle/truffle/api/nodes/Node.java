@@ -33,11 +33,6 @@ import com.oracle.truffle.api.nodes.NodeInfo.Kind;
  */
 public abstract class Node implements Cloneable {
 
-    /**
-     * Utility constant representing an empty node array.
-     */
-    public static final Node[] EMPTY_ARRAY = new Node[0];
-
     private Node parent;
 
     private SourceSection sourceSection;
@@ -193,6 +188,22 @@ public abstract class Node implements Cloneable {
     }
 
     /**
+     * Checks if this node is properly adopted by a parent and can be replaced.
+     * 
+     * @return {@code true} if it is safe to replace this node.
+     */
+    public final boolean isReplaceable() {
+        if (getParent() != null) {
+            for (Node sibling : getParent().getChildren()) {
+                if (sibling == this) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
      * Intended to be implemented by subclasses of {@link Node} to receive a notification when the
      * node is rewritten. This method is invoked before the actual replace has happened.
      * 
@@ -200,6 +211,12 @@ public abstract class Node implements Cloneable {
      * @param reason the reason the replace supplied
      */
     protected void onReplace(Node newNode, String reason) {
+        RootNode rootNode = NodeUtil.findParent(this, RootNode.class);
+        if (rootNode != null) {
+            if (rootNode.getCallTarget() instanceof ReplaceObserver) {
+                ((ReplaceObserver) rootNode.getCallTarget()).nodeReplaced();
+            }
+        }
         if (TruffleOptions.TraceRewrites) {
             Class<? extends Node> from = getClass();
             Class<? extends Node> to = newNode.getClass();

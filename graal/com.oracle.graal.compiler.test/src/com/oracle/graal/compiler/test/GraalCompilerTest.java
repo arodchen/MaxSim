@@ -30,6 +30,7 @@ import java.util.*;
 import java.util.concurrent.*;
 
 import org.junit.*;
+import org.junit.internal.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CallingConvention.Type;
@@ -193,6 +194,8 @@ public abstract class GraalCompilerTest extends GraalTest {
                 Assert.assertArrayEquals((long[]) expected, (long[]) actual);
             } else if (expected instanceof double[]) {
                 Assert.assertArrayEquals((double[]) expected, (double[]) actual, 0.0d);
+            } else if (expected instanceof boolean[]) {
+                new ExactComparisonCriteria().arrayEquals(null, expected, actual);
             } else if (expected instanceof Object[]) {
                 Assert.assertArrayEquals((Object[]) expected, (Object[]) actual);
             } else {
@@ -400,16 +403,6 @@ public abstract class GraalCompilerTest extends GraalTest {
     }
 
     /**
-     * Can be overridden to modify the compilation phases applied for a test.
-     * 
-     * @param method the method being compiled
-     * @param graph the graph being compiled
-     * @param phasePlan the phase plan to be edited
-     */
-    protected void editPhasePlan(ResolvedJavaMethod method, StructuredGraph graph, PhasePlan phasePlan) {
-    }
-
-    /**
      * Gets installed code for a given method and graph, compiling it first if necessary.
      * 
      * @param forceCompile specifies whether to ignore any previous code cached for the (method,
@@ -439,7 +432,6 @@ public abstract class GraalCompilerTest extends GraalTest {
                 PhasePlan phasePlan = new PhasePlan();
                 GraphBuilderPhase graphBuilderPhase = new GraphBuilderPhase(runtime, GraphBuilderConfiguration.getDefault(), OptimisticOptimizations.ALL);
                 phasePlan.addPhase(PhasePosition.AFTER_PARSING, graphBuilderPhase);
-                editPhasePlan(method, graph, phasePlan);
                 CallingConvention cc = getCallingConvention(runtime, Type.JavaCallee, graph.method(), false);
                 final CompilationResult compResult = GraalCompiler.compileGraph(graph, cc, method, runtime, replacements, backend, runtime().getTarget(), null, phasePlan, OptimisticOptimizations.ALL,
                                 new SpeculationLog(), suites, new CompilationResult());
