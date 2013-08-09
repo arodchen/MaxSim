@@ -3411,7 +3411,7 @@ _argParser = ArgParser()
 
 def _findPrimarySuite():
     def is_suite_dir(d):
-        for f in os.listdir('.'):
+        for f in os.listdir(d):
             if fnmatch.fnmatch(f, 'mx*'):
                 mxDir = join(d, f)
                 if exists(mxDir) and isdir(mxDir) and exists(join(mxDir, 'projects')):
