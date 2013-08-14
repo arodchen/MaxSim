@@ -892,13 +892,25 @@ def sorted_deps(projectNames=None, includeLibs=False, includeAnnotationProcessor
     """
     deps = []
     if projectNames is None:
-        projects = _projects.values()
+        projects = opt_limit_to_suite(_projects.values())
     else:
         projects = [project(name) for name in projectNames]
 
     for p in projects:
         p.all_deps(deps, includeLibs=includeLibs, includeAnnotationProcessors=includeAnnotationProcessors)
     return deps
+
+def opt_limit_to_suite(projects):
+    if _opts.specific_suite is None:
+        return projects
+    else:
+        result=[]
+        for p in projects:
+            s = p.suite
+            if s.name == _opts.specific_suite:
+                result.append(p)
+        return result;
+    
 
 class ArgParser(ArgumentParser):
 
@@ -924,6 +936,7 @@ class ArgParser(ArgumentParser):
         self.add_argument('--user-home', help='users home directory', metavar='<path>', default=os.path.expanduser('~'))
         self.add_argument('--java-home', help='JDK installation directory (must be JDK 6 or later)', metavar='<path>')
         self.add_argument('--ignore-project', action='append', dest='ignored_projects', help='name of project to ignore', metavar='<name>', default=[])
+        self.add_argument('--suite', dest='specific_suite', help='limit command to given suite', default=None)
         if get_os() != 'windows':
             # Time outs are (currently) implemented with Unix specific functionality
             self.add_argument('--timeout', help='Timeout (in seconds) for command', type=int, default=0, metavar='<secs>')
