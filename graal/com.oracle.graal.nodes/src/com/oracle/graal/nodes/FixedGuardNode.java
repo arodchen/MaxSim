@@ -106,24 +106,19 @@ public final class FixedGuardNode extends DeoptimizingFixedWithNextNode implemen
         } else {
             FixedNode next = next();
             setNext(null);
-            if (next instanceof AbstractBeginNode) {
-                // e.g. LoopExitNode. This will cause the predecessor of next to be set to the IfNode
-                // which will cause a cast exception in our caller, because IfNode short circuits this case.
-                // So we force the BeginNode here
-                AbstractBeginNode begin = graph().add(new BeginNode());
-                begin.setNext(next);
-                next = begin;
-            }
             DeoptimizeNode deopt = graph().add(new DeoptimizeNode(action, reason));
             deopt.setDeoptimizationState(getDeoptimizationState());
             IfNode ifNode;
+            AbstractBeginNode noDeoptSuccessor;
             if (negated) {
                 ifNode = graph().add(new IfNode(condition, deopt, next, 0));
+                noDeoptSuccessor = ifNode.falseSuccessor();
             } else {
                 ifNode = graph().add(new IfNode(condition, next, deopt, 1));
+                noDeoptSuccessor = ifNode.trueSuccessor();
             }
             ((FixedWithNextNode) predecessor()).setNext(ifNode);
-            this.replaceAtUsages(next.predecessor());
+            this.replaceAtUsages(noDeoptSuccessor);
             GraphUtil.killWithUnusedFloatingInputs(this);
         }
     }

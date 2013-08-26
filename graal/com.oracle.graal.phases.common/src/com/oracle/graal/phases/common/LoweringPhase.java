@@ -258,7 +258,16 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
                     ((Lowerable) node).lower(loweringTool, loweringType);
                 }
 
-                loweringTool.setLastFixedNode((FixedWithNextNode) nextNode.predecessor());
+                if (!nextNode.isAlive()) {
+                    break;
+                } else {
+                    Node nextLastFixed = nextNode.predecessor();
+                    if (nextLastFixed instanceof FixedWithNextNode) {
+                        loweringTool.setLastFixedNode((FixedWithNextNode) nextLastFixed);
+                    } else {
+                        loweringTool.setLastFixedNode((FixedWithNextNode) nextNode);
+                    }
+                }
             }
         }
 
@@ -269,7 +278,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
          * the context of a usage that dominates all other usages. The fixed nodes resulting from
          * lowering are attached to the fixed node context of the dominating usage. This ensures the
          * post-lowering graph still has a valid schedule.
-         * 
+         *
          * @param node a {@link Lowerable} node
          */
         private boolean checkUsagesAreScheduled(Node node) {
