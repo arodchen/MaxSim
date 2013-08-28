@@ -30,6 +30,19 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
 
+/**
+ * This phase will find branches which always end with a {@link DeoptimizeNode} and replace their
+ * {@link ControlSplitNode ControlSplitNodes} with {@link FixedGuardNode FixedGuardNodes}.
+ * 
+ * This is useful because {@link FixedGuardNode FixedGuardNodes FixedGuardNodess} will be lowered to
+ * {@link GuardNode GuardNodes} which can later be optimized more aggressively than control-flow
+ * constructs.
+ * 
+ * This is currently only done for branches that start from a {@link IfNode}. If it encounters a
+ * branch starting at an other kind of {@link ControlSplitNode}, it will only bring the
+ * {@link DeoptimizeNode} as close to the {@link ControlSplitNode} as possible.
+ * 
+ */
 public class ConvertDeoptimizeToGuardPhase extends Phase {
 
     private static AbstractBeginNode findBeginNode(Node startNode) {
@@ -79,10 +92,28 @@ public class ConvertDeoptimizeToGuardPhase extends Phase {
             LogicNode conditionNode = ifNode.condition();
             FixedGuardNode guard = graph.add(new FixedGuardNode(conditionNode, deopt.reason(), deopt.action(), deoptBegin == ifNode.trueSuccessor()));
             FixedWithNextNode pred = (FixedWithNextNode) ifNode.predecessor();
+            AbstractBeginNode survivingSuccessor;
             if (deoptBegin == ifNode.trueSuccessor()) {
-                graph.removeSplitPropagate(ifNode, ifNode.falseSuccessor());
+                survivingSuccessor = ifNode.falseSuccessor();
             } else {
-                graph.removeSplitPropagate(ifNode, ifNode.trueSuccessor());
+                survivingSuccessor = ifNode.trueSuccessor();
+            }
+            graph.removeSplitPropagate(ifNode, survivingSuccessor);
+            ProxyNode proxyGuard = null;
+            for (Node n : survivingSuccessor.usages().snapshot()) {
+                if (n instanceof GuardNode || n instanceof ProxyNode) {
+                    // Keep wired to the begin node.
+                } else {
+                    // Rewire to the fixed guard.
+                    if (survivingSuccessor instanceof LoopExitNode) {
+                        if (proxyGuard == null) {
+                            proxyGuard = ProxyNode.forGuard(guard, survivingSuccessor, graph);
+                        }
+                        n.replaceFirstInput(survivingSuccessor, proxyGuard);
+                    } else {
+                        n.replaceFirstInput(survivingSuccessor, guard);
+                    }
+                }
             }
             Debug.log("Converting %s on %-5s branch of %s to guard for remaining branch %s.", deopt, deoptBegin == ifNode.trueSuccessor() ? "true" : "false", ifNode, otherBegin);
             FixedNode next = pred.next();

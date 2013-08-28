@@ -142,6 +142,7 @@ Property values can use environment variables with Bash syntax (e.g. ${HOME}).
 """
 
 import sys, os, errno, time, subprocess, shlex, types, urllib2, contextlib, StringIO, zipfile, signal, xml.sax.saxutils, tempfile, fnmatch
+import textwrap
 import xml.parsers.expat
 import shutil, re, xml.dom.minidom
 from collections import Callable
@@ -205,6 +206,9 @@ class Dependency:
 
     def isLibrary(self):
         return isinstance(self, Library)
+    
+    def isProject(self):
+        return isinstance(self, Project)
 
 class Project(Dependency):
     def __init__(self, suite, name, srcDirs, deps, javaCompliance, workingSets, d):
@@ -236,18 +240,9 @@ class Project(Dependency):
             return deps
         for name in childDeps:
             assert name != self.name
-            dep = _libs.get(name, None)
-            if dep is not None:
-                if includeLibs and not dep in deps:
-                    deps.append(dep)
-            else:
-                dep = _projects.get(name, None)
-                if dep is None:
-                    if name in _opts.ignored_projects:
-                        abort('project named ' + name + ' required by ' + self.name + ' is ignored')
-                    abort('dependency named ' + name + ' required by ' + self.name + ' is not found')
-                if not dep in deps:
-                    dep.all_deps(deps, includeLibs=includeLibs, includeAnnotationProcessors=includeAnnotationProcessors)
+            dep = dependency(name)
+            if not dep in deps and (includeLibs or not dep.isLibrary()):
+                dep.all_deps(deps, includeLibs=includeLibs, includeAnnotationProcessors=includeAnnotationProcessors)
         if not self in deps and includeSelf:
             deps.append(self)
         return deps
@@ -352,14 +347,15 @@ class Project(Dependency):
                             assert pkg is not None
                             if pkgRoot is None or pkg.startswith(pkgRoot):
                                 pkgOutputDir = join(outputDir, pkg.replace('.', os.path.sep))
-                                for e in os.listdir(pkgOutputDir):
-                                    if includeInnerClasses:
-                                        if e.endswith('.class') and (e.startswith(basename) or e.startswith(basename + '$')):
-                                            className = pkg + '.' + e[:-len('.class')]
-                                            result[className] = source 
-                                    elif e == basename + '.class':
-                                        className = pkg + '.' + basename
-                                        result[className] = source 
+                                if exists(pkgOutputDir):
+                                    for e in os.listdir(pkgOutputDir):
+                                        if includeInnerClasses:
+                                            if e.endswith('.class') and (e.startswith(basename) or e.startswith(basename + '$')):
+                                                className = pkg + '.' + e[:-len('.class')]
+                                                result[className] = source
+                                        elif e == basename + '.class':
+                                            className = pkg + '.' + basename
+                                            result[className] = source
         return result
     
     def _init_packages_and_imports(self):
@@ -485,6 +481,12 @@ class Library(Dependency):
         path = self.get_path(resolve)
         if exists(path) or not resolve:
             cp.append(path)
+            
+    def all_deps(self, deps, includeLibs, includeSelf=True, includeAnnotationProcessors=False):
+        if not includeLibs or not includeSelf:
+            return deps
+        deps.append(self)
+        return deps
 
 class Suite:
     def __init__(self, d, mxDir, primary):
@@ -792,10 +794,12 @@ def annotation_processors():
     """
     global _annotationProcessors
     if _annotationProcessors is None:
-        ap = set()
+        aps = set()
         for p in projects():
-            ap.update(p.annotation_processors())
-        _annotationProcessors = list(ap)
+            for ap in p.annotation_processors():
+                if project(ap, False):
+                    aps.add(ap)
+        _annotationProcessors = list(aps)
     return _annotationProcessors
 
 def distribution(name, fatalIfMissing=True):
@@ -806,6 +810,20 @@ def distribution(name, fatalIfMissing=True):
     d = _dists.get(name)
     if d is None and fatalIfMissing:
         abort('distribution named ' + name + ' not found')
+    return d
+
+def dependency(name, fatalIfMissing=True):
+    """
+    Get the project or library for a given name. This will abort if a project  or library does
+    not exist for 'name' and 'fatalIfMissing' is true.
+    """
+    d = _projects.get(name)
+    if d is None:
+        d = _libs.get(name)
+    if d is None and fatalIfMissing:
+        if name in _opts.ignored_projects:
+            abort('project named ' + name + ' is ignored')
+        abort('project or library named ' + name + ' not found')
     return d
 
 def project(name, fatalIfMissing=True):
@@ -842,7 +860,7 @@ def _as_classpath(deps, resolve):
 
 def classpath(names=None, resolve=True, includeSelf=True, includeBootClasspath=False):
     """
-    Get the class path for a list of given projects, resolving each entry in the
+    Get the class path for a list of given dependencies, resolving each entry in the
     path (e.g. downloading a missing library) if 'resolve' is true.
     """
     if names is None:
@@ -850,10 +868,9 @@ def classpath(names=None, resolve=True, includeSelf=True, includeBootClasspath=F
     else:
         deps = []
         if isinstance(names, types.StringTypes):
-            project(names).all_deps(deps, True, includeSelf)
-        else:
-            for n in names:
-                project(n).all_deps(deps, True, includeSelf)
+            names = [names]
+        for n in names:
+            dependency(n).all_deps(deps, True, includeSelf)
         result = _as_classpath(deps, resolve)
     if includeBootClasspath:
         result = os.pathsep.join([java().bootclasspath(), result])
@@ -911,6 +928,46 @@ def opt_limit_to_suite(projects):
                 result.append(p)
         return result;
     
+def _handle_missing_java_home():
+    if not sys.stdout.isatty():
+        abort('Could not find bootstrap JDK. Use --java-home option or ensure JAVA_HOME environment variable is set.')
+ 
+    candidateJdks = []
+    if get_os() == 'darwin':
+        base = '/Library/Java/JavaVirtualMachines'
+        candidateJdks = [join(base, n, 'Contents/Home') for n in os.listdir(base) if exists(join(base, n, 'Contents/Home'))]
+    elif get_os() == 'linux':
+        base = '/usr/lib/jvm'
+        candidateJdks = [join(base, n) for n in os.listdir(base) if exists(join(base, n, 'jre/lib/rt.jar'))]
+    elif get_os() == 'solaris':
+        base = '/usr/jdk/instances'
+        candidateJdks = [join(base, n) for n in os.listdir(base) if exists(join(base, n, 'jre/lib/rt.jar'))]
+    elif get_os() == 'windows':
+        base = r'C:\Program Files\Java'
+        candidateJdks = [join(base, n) for n in os.listdir(base) if exists(join(base, n, r'jre\lib\rt.jar'))]
+        
+    javaHome = None
+    if len(candidateJdks) != 0:
+        javaHome = select_items(candidateJdks + ['<other>'], allowMultiple=False)
+        if javaHome == '<other>':
+            javaHome = None
+            
+    while javaHome is None:
+        javaHome = raw_input('Enter path of bootstrap JDK: ')
+        rtJarPath = join(javaHome, 'jre', 'lib', 'rt.jar')
+        if not exists(rtJarPath):
+            log('Does not appear to be a valid JDK as ' + rtJarPath + ' does not exist')
+            javaHome = None
+        else:
+            break
+    
+    envPath = join(_mainSuite.dir, 'mx', 'env')
+    answer = raw_input('Persist this setting by adding "JAVA_HOME=' + javaHome + '" to ' + envPath + '? [Yn]: ')
+    if not answer.lower().startswith('n'):
+        with open(envPath, 'a') as fp:
+            print >> fp, 'JAVA_HOME=' + javaHome
+            
+    return javaHome
 
 class ArgParser(ArgumentParser):
 
@@ -934,13 +991,13 @@ class ArgParser(ArgumentParser):
         self.add_argument('--Jp', action='append', dest='java_args_pfx', help='prefix Java VM arguments (e.g. --Jp @-dsa)', metavar='@<args>', default=[])
         self.add_argument('--Ja', action='append', dest='java_args_sfx', help='suffix Java VM arguments (e.g. --Ja @-dsa)', metavar='@<args>', default=[])
         self.add_argument('--user-home', help='users home directory', metavar='<path>', default=os.path.expanduser('~'))
-        self.add_argument('--java-home', help='JDK installation directory (must be JDK 6 or later)', metavar='<path>')
+        self.add_argument('--java-home', help='bootstrap JDK installation directory (must be JDK 6 or later)', metavar='<path>')
         self.add_argument('--ignore-project', action='append', dest='ignored_projects', help='name of project to ignore', metavar='<name>', default=[])
         self.add_argument('--suite', dest='specific_suite', help='limit command to given suite', default=None)
         if get_os() != 'windows':
             # Time outs are (currently) implemented with Unix specific functionality
-            self.add_argument('--timeout', help='Timeout (in seconds) for command', type=int, default=0, metavar='<secs>')
-            self.add_argument('--ptimeout', help='Timeout (in seconds) for subprocesses', type=int, default=0, metavar='<secs>')
+            self.add_argument('--timeout', help='timeout (in seconds) for command', type=int, default=0, metavar='<secs>')
+            self.add_argument('--ptimeout', help='timeout (in seconds) for subprocesses', type=int, default=0, metavar='<secs>')
 
     def _parse_cmd_line(self, args=None):
         if args is None:
@@ -961,7 +1018,7 @@ class ArgParser(ArgumentParser):
             opts.java_home = os.environ.get('JAVA_HOME')
 
         if opts.java_home is None or opts.java_home == '':
-            abort('Could not find Java home. Use --java-home option or ensure JAVA_HOME environment variable is set.')
+            opts.java_home = _handle_missing_java_home()
 
         if opts.user_home is None or opts.user_home == '':
             abort('Could not find user home. Use --user-home option or ensure HOME environment variable is set.')
@@ -1146,9 +1203,18 @@ def exe_suffix(name):
         return name + '.exe'
     return name
 
-def lib_suffix(name):
+def add_lib_prefix(name):
     """
-    Gets the platform specific suffix for a library
+    Adds the platform specific library prefix to a name
+    """
+    os = get_os();
+    if os == 'linux' or os == 'solaris' or os == 'darwin':
+        return 'lib' + name
+    return name
+
+def add_lib_suffix(name):
+    """
+    Adds the platform specific library suffix to a name
     """
     os = get_os();
     if os == 'windows':
@@ -2455,8 +2521,7 @@ def eclipseinit(args, suite=None, buildProcessorJars=True):
             out.open('factorypath')
             out.element('factorypathentry', {'kind' : 'PLUGIN', 'id' : 'org.eclipse.jst.ws.annotations.core', 'enabled' : 'true', 'runInBatchMode' : 'false'})
             for ap in p.annotation_processors():
-                apProject = project(ap)
-                for dep in apProject.all_deps([], True):
+                for dep in dependency(ap).all_deps([], True):
                     if dep.isLibrary():
                         if not hasattr(dep, 'eclipse.container') and not hasattr(dep, 'eclipse.project'):
                             if dep.mustExist:
@@ -2827,10 +2892,10 @@ source.encoding=UTF-8""".replace(':', os.pathsep).replace('/', os.sep)
         annotationProcessorOnlyDeps = []
         if len(p.annotation_processors()) > 0:
             for ap in p.annotation_processors():
-                apProject = project(ap)
-                if not apProject in deps:
-                    deps.append(apProject)
-                    annotationProcessorOnlyDeps.append(apProject)
+                apDep = dependency(ap)
+                if not apDep in deps:
+                    deps.append(apDep)
+                    annotationProcessorOnlyDeps.append(apDep)
         
         annotationProcessorReferences = [];
         
@@ -3336,25 +3401,49 @@ def findclass(args, logToConsole=True):
                         log(classname)
     return matches
 
-def select_items(candidates):
+def select_items(items, descriptions=None, allowMultiple=True):
     """
-    Presents a command line interface for selecting one or more items from a sequence.
+    Presents a command line interface for selecting one or more (if allowMultiple is true) items.
+    
     """
-    if len(candidates) == 0:
-        return []
-    elif len(candidates) > 1:
-        log('[0] <all>')
-        for i in range(0, len(candidates)):
-            log('[{0}] {1}'.format(i + 1, candidates[i]))
-        s = raw_input('Enter number of selection: ')
-        try:
-            si = int(s)
-        except:
-            si = 0
-        if si == 0 or si not in range(1, len(candidates) + 1):
-            return candidates
-        else:
-            return [candidates[si - 1]]
+    if len(items) <= 1:
+        return items
+    else:
+        if allowMultiple:
+            log('[0] <all>')
+        for i in range(0, len(items)):
+            if descriptions is None:
+                log('[{0}] {1}'.format(i + 1, items[i]))
+            else:
+                assert len(items) == len(descriptions)
+                wrapper = textwrap.TextWrapper(subsequent_indent='    ')
+                log('\n'.join(wrapper.wrap('[{0}] {1} - {2}'.format(i + 1, items[i], descriptions[i]))))
+        while True:
+            if allowMultiple:
+                s = raw_input('Enter number(s) of selection (separate multiple choices with spaces): ').split()
+            else:
+                s = [raw_input('Enter number of selection: ')]
+            try:
+                s = [int(x) for x in s]
+            except:
+                log('Selection contains non-numeric characters: "' + ' '.join(s) + '"')
+                continue
+            
+            if allowMultiple and 0 in s:
+                return items
+            
+            indexes = []
+            for n in s:
+                if n not in range(1, len(items) + 1):
+                    log('Invalid selection: ' + str(n))
+                    continue
+                else:
+                    indexes.append(n - 1)
+            if allowMultiple:
+                return [items[i] for i in indexes]
+            if len(indexes) == 1:
+                return items[indexes[0]]
+            return None
 
 def javap(args):
     """disassemble classes matching given pattern with javap"""

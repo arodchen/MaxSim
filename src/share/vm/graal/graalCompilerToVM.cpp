@@ -788,6 +788,7 @@ C2V_ENTRY(void, initializeConfiguration, (JNIEnv *env, jobject, jobject config))
   set_address("aescryptDecryptBlockStub", StubRoutines::aescrypt_decryptBlock());
   set_address("cipherBlockChainingEncryptAESCryptStub", StubRoutines::cipherBlockChaining_encryptAESCrypt());
   set_address("cipherBlockChainingDecryptAESCryptStub", StubRoutines::cipherBlockChaining_decryptAESCrypt());
+  set_address("updateBytesCRC32Stub", StubRoutines::updateBytesCRC32());
 
   set_address("newInstanceAddress", GraalRuntime::new_instance);
   set_address("newArrayAddress", GraalRuntime::new_array);
@@ -815,6 +816,7 @@ C2V_ENTRY(void, initializeConfiguration, (JNIEnv *env, jobject, jobject config))
   set_address("arithmeticSinAddress", CAST_FROM_FN_PTR(address, SharedRuntime::dsin));
   set_address("arithmeticCosAddress", CAST_FROM_FN_PTR(address, SharedRuntime::dcos));
   set_address("arithmeticTanAddress", CAST_FROM_FN_PTR(address, SharedRuntime::dtan));
+  set_address("crcTableAddress", StubRoutines::crc_table_addr());
 
   set_int("deoptReasonNone", Deoptimization::Reason_none);
   set_int("deoptReasonNullCheck", Deoptimization::Reason_null_check);
@@ -926,35 +928,17 @@ C2V_VMENTRY(jint, installCode0, (JNIEnv *jniEnv, jobject, jobject compiled_code,
         if (TraceGPUInteraction) {
           tty->print_cr("installCode0: ExternalCompilationResult");
         }
-        HotSpotInstalledCode::set_start(installed_code_handle, ExternalCompilationResult::entryPoint(comp_result));
+        HotSpotInstalledCode::set_codeStart(installed_code_handle, ExternalCompilationResult::entryPoint(comp_result));
       } else {
-        HotSpotInstalledCode::set_start(installed_code_handle, (jlong) cb->code_begin());
+        HotSpotInstalledCode::set_size(installed_code_handle, cb->size());
+        HotSpotInstalledCode::set_codeStart(installed_code_handle, (jlong) cb->code_begin());
+        HotSpotInstalledCode::set_codeSize(installed_code_handle, cb->code_size());
       }
       nmethod* nm = cb->as_nmethod_or_null();
       assert(nm == NULL || !installed_code_handle->is_scavengable() || nm->on_scavenge_root_list(), "nm should be scavengable if installed_code is scavengable");
     }
   }
   return result;
-C2V_END
-
-C2V_VMENTRY(jobject, getCode, (JNIEnv *jniEnv, jobject,  jlong codeBlob))
-  ResourceMark rm;
-  HandleMark hm;
-
-  CodeBlob* cb = (CodeBlob*) (address) codeBlob;
-  if (cb == NULL) {
-    return NULL;
-  }
-  if (cb->is_nmethod()) {
-    nmethod* nm = (nmethod*) cb;
-    if (!nm->is_alive()) {
-      return NULL;
-    }
-  }
-  int length = cb->code_size();
-  arrayOop codeCopy = oopFactory::new_byteArray(length, CHECK_0);
-  memcpy(codeCopy->base(T_BYTE), cb->code_begin(), length);
-  return JNIHandles::make_local(codeCopy);
 C2V_END
 
 C2V_VMENTRY(jobject, disassembleCodeBlob, (JNIEnv *jniEnv, jobject, jlong codeBlob))
@@ -1242,7 +1226,6 @@ JNINativeMethod CompilerToVM_methods[] = {
   {CC"getJavaField",                  CC"("REFLECT_FIELD")"HS_RESOLVED_FIELD,                           FN_PTR(getJavaField)},
   {CC"initializeConfiguration",       CC"("HS_CONFIG")V",                                               FN_PTR(initializeConfiguration)},
   {CC"installCode0",                  CC"("HS_COMPILED_CODE HS_INSTALLED_CODE"[Z)I",                    FN_PTR(installCode0)},
-  {CC"getCode",                       CC"(J)[B",                                                        FN_PTR(getCode)},
   {CC"disassembleCodeBlob",           CC"(J)"STRING,                                                    FN_PTR(disassembleCodeBlob)},
   {CC"executeCompiledMethodVarargs",  CC"(["OBJECT HS_INSTALLED_CODE")"OBJECT,                          FN_PTR(executeCompiledMethodVarargs)},
   {CC"getDeoptedLeafGraphIds",        CC"()[J",                                                         FN_PTR(getDeoptedLeafGraphIds)},

@@ -67,9 +67,6 @@ public class VMToCompilerImpl implements VMToCompiler {
     @Option(help = "Print compilation queue activity periodically")
     private static final OptionValue<Boolean> PrintQueue = new OptionValue<>(false);
 
-    @Option(help = "")
-    public static final OptionValue<Integer> SlowQueueCutoff = new OptionValue<>(100000);
-
     @Option(help = "Time limit in milliseconds for bootstrap (-1 for no limit)")
     private static final OptionValue<Integer> TimedBootstrap = new OptionValue<>(-1);
 
@@ -174,6 +171,19 @@ public class VMToCompilerImpl implements VMToCompiler {
 
         if (DebugEnabled.getValue()) {
             DebugEnvironment.initialize(log);
+
+            String summary = DebugValueSummary.getValue();
+            if (summary != null) {
+                switch (summary) {
+                    case "Name":
+                    case "Partial":
+                    case "Complete":
+                    case "Thread":
+                        break;
+                    default:
+                        throw new GraalInternalError("Unsupported value for DebugSummaryValue: %s", summary);
+                }
+            }
         }
 
         assert VerifyHotSpotOptionsPhase.checkOptions();
@@ -446,29 +456,43 @@ public class VMToCompilerImpl implements VMToCompiler {
                 ArrayList<DebugValue> sortedValues = new ArrayList<>(debugValues);
                 Collections.sort(sortedValues);
 
-                if (SummarizeDebugValues.getValue()) {
-                    printSummary(topLevelMaps, sortedValues);
-                } else if (PerThreadDebugValues.getValue()) {
-                    for (DebugValueMap map : topLevelMaps) {
-                        TTY.println("Showing the results for thread: " + map.getName());
-                        map.group();
-                        map.normalize();
-                        printMap(map, sortedValues, 0);
-                    }
-                } else {
-                    DebugValueMap globalMap = new DebugValueMap("Global");
-                    for (DebugValueMap map : topLevelMaps) {
-                        if (SummarizePerPhase.getValue()) {
+                String summary = DebugValueSummary.getValue();
+                if (summary == null) {
+                    summary = "Complete";
+                }
+                switch (summary) {
+                    case "Name":
+                        printSummary(topLevelMaps, sortedValues);
+                        break;
+                    case "Partial": {
+                        DebugValueMap globalMap = new DebugValueMap("Global");
+                        for (DebugValueMap map : topLevelMaps) {
                             flattenChildren(map, globalMap);
-                        } else {
+                        }
+                        globalMap.normalize();
+                        printMap(new DebugValueScope(null, globalMap), sortedValues);
+                        break;
+                    }
+                    case "Complete": {
+                        DebugValueMap globalMap = new DebugValueMap("Global");
+                        for (DebugValueMap map : topLevelMaps) {
                             globalMap.addChild(map);
                         }
-                    }
-                    if (!SummarizePerPhase.getValue()) {
                         globalMap.group();
+                        globalMap.normalize();
+                        printMap(new DebugValueScope(null, globalMap), sortedValues);
+                        break;
                     }
-                    globalMap.normalize();
-                    printMap(globalMap, sortedValues, 0);
+                    case "Thread":
+                        for (DebugValueMap map : topLevelMaps) {
+                            TTY.println("Showing the results for thread: " + map.getName());
+                            map.group();
+                            map.normalize();
+                            printMap(new DebugValueScope(null, map), sortedValues);
+                        }
+                        break;
+                    default:
+                        throw new GraalInternalError("Unknown summary type: %s", summary);
                 }
             }
         }
@@ -501,7 +525,7 @@ public class VMToCompilerImpl implements VMToCompiler {
             long total = collectTotal(topLevelMaps, index);
             result.setCurrentValue(index, total);
         }
-        printMap(result, debugValues, 0);
+        printMap(new DebugValueScope(null, result), debugValues);
     }
 
     static long collectTotal(DebugValue value) {
@@ -526,21 +550,48 @@ public class VMToCompilerImpl implements VMToCompiler {
         return total;
     }
 
-    private static void printMap(DebugValueMap map, List<DebugValue> debugValues, int level) {
+    /**
+     * Tracks the scope when printing a {@link DebugValueMap}, allowing "empty" scopes to be
+     * omitted. An empty scope is one in which there are no (nested) non-zero debug values.
+     */
+    static class DebugValueScope {
 
-        printIndent(level);
-        TTY.println("%s", map.getName());
+        final DebugValueScope parent;
+        final int level;
+        final DebugValueMap map;
+        private boolean printed;
+
+        public DebugValueScope(DebugValueScope parent, DebugValueMap map) {
+            this.parent = parent;
+            this.map = map;
+            this.level = parent == null ? 0 : parent.level + 1;
+        }
+
+        public void print() {
+            if (!printed) {
+                printed = true;
+                if (parent != null) {
+                    parent.print();
+                }
+                printIndent(level);
+                TTY.println("%s", map.getName());
+            }
+        }
+    }
+
+    private static void printMap(DebugValueScope scope, List<DebugValue> debugValues) {
 
         for (DebugValue value : debugValues) {
-            long l = map.getCurrentValue(value.getIndex());
+            long l = scope.map.getCurrentValue(value.getIndex());
             if (l != 0) {
-                printIndent(level + 1);
+                scope.print();
+                printIndent(scope.level + 1);
                 TTY.println(value.getName() + "=" + value.toString(l));
             }
         }
 
-        for (DebugValueMap child : map.getChildren()) {
-            printMap(child, debugValues, level + 1);
+        for (DebugValueMap child : scope.map.getChildren()) {
+            printMap(new DebugValueScope(scope, child), debugValues);
         }
     }
 

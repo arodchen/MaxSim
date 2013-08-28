@@ -88,11 +88,11 @@ C2V_VMENTRY(jobject, executeExternalMethodVarargs, (JNIEnv *env, jobject, jobjec
   jca.set_alternative_target(nm);
 
   // start value is the kernel
-  jlong startValue = HotSpotInstalledCode::start(hotspotInstalledCode);
+  jlong startValue = HotSpotInstalledCode::codeStart(hotspotInstalledCode);
 
-  // JavaCalls::call(&result, mh, &jca, CHECK_NULL);
-  tty->print_cr("executeExternalMethodVarargs: start: %x", (address)startValue);
-  gpu::execute_kernel((address)startValue);
+  if (!gpu::execute_kernel((address)startValue, &jca)) {
+    return NULL;
+  }
 
   if (jap.get_ret_type() == T_VOID) {
     return NULL;

@@ -30,22 +30,81 @@ import com.oracle.graal.debug.*;
 
 public final class DebugScope {
 
+    private final class IndentImpl implements Indent {
+
+        private static final String INDENTATION_INCREMENT = "  ";
+
+        final String indent;
+        boolean enabled;
+        final IndentImpl parentIndent;
+
+        IndentImpl(IndentImpl parentIndent, boolean enabled) {
+            this.parentIndent = parentIndent;
+            this.indent = (parentIndent == null ? "" : parentIndent.indent + INDENTATION_INCREMENT);
+            this.enabled = enabled;
+        }
+
+        private void printScopeName() {
+            if (logScopeName) {
+                if (parentIndent != null) {
+                    parentIndent.printScopeName();
+                }
+                output.println(indent + "[thread:" + Thread.currentThread().getId() + "] scope: " + qualifiedName);
+                logScopeName = false;
+            }
+        }
+
+        @Override
+        public void log(String msg, Object... args) {
+            if (enabled) {
+                printScopeName();
+                output.println(indent + String.format(msg, args));
+                lastUsedIndent = this;
+            }
+        }
+
+        @Override
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        @Override
+        public Indent indent() {
+            lastUsedIndent = new IndentImpl(this, enabled);
+            return lastUsedIndent;
+        }
+
+        @Override
+        public Indent logIndent(String msg, Object... args) {
+            log(msg, args);
+            return indent();
+        }
+
+        @Override
+        public Indent outdent() {
+            if (parentIndent != null) {
+                lastUsedIndent = parentIndent;
+            }
+            return lastUsedIndent;
+        }
+    }
+
     private static ThreadLocal<DebugScope> instanceTL = new ThreadLocal<>();
     private static ThreadLocal<DebugConfig> configTL = new ThreadLocal<>();
     private static ThreadLocal<Throwable> lastExceptionThrownTL = new ThreadLocal<>();
-    private static ThreadLocal<DebugScope> lastLogScope = new ThreadLocal<>();
     private static DebugTimer scopeTime = Debug.timer("ScopeTime");
 
     private final DebugScope parent;
+    private IndentImpl lastUsedIndent;
+    private boolean logScopeName;
 
     private Object[] context;
 
-    private DebugValueMap valueMap;
-    private String qualifiedName;
+    private final DebugValueMap valueMap;
+    private final String qualifiedName;
 
     private static final char SCOPE_SEP = '.';
 
-    private boolean logEnabled;
     private boolean meterEnabled;
     private boolean timeEnabled;
     private boolean dumpEnabled;
@@ -72,6 +131,17 @@ public final class DebugScope {
         this.parent = parent;
         this.context = context;
         this.qualifiedName = qualifiedName;
+        if (parent != null) {
+            lastUsedIndent = new IndentImpl(parent.lastUsedIndent, parent.isLogEnabled());
+            logScopeName = !parent.qualifiedName.equals(qualifiedName);
+        } else {
+            lastUsedIndent = new IndentImpl(null, false);
+            logScopeName = true;
+        }
+
+        // Be pragmatic: provide a default log stream to prevent a crash if the stream is not
+        // set while logging
+        this.output = System.out;
         assert context != null;
 
         if (parent != null) {
@@ -93,7 +163,11 @@ public final class DebugScope {
     }
 
     public boolean isLogEnabled() {
-        return logEnabled;
+        return lastUsedIndent.enabled;
+    }
+
+    public void setLogEnabled(boolean enabled) {
+        lastUsedIndent.setEnabled(enabled);
     }
 
     public boolean isMeterEnabled() {
@@ -105,21 +179,12 @@ public final class DebugScope {
     }
 
     public void log(String msg, Object... args) {
-        if (isLogEnabled()) {
-            if (lastLogScope.get() == null || !lastLogScope.get().qualifiedName.equals(this.qualifiedName)) {
-                output.println("scope: " + qualifiedName);
-                lastLogScope.set(this);
-            }
-            output.println(String.format(msg, args));
-        }
+        lastUsedIndent.log(msg, args);
     }
 
     public void printf(String msg, Object... args) {
         if (isLogEnabled()) {
-            if (lastLogScope.get() == null || !lastLogScope.get().qualifiedName.equals(this.qualifiedName)) {
-                output.println("scope: " + qualifiedName);
-                lastLogScope.set(this);
-            }
+            lastUsedIndent.printScopeName();
             output.printf(msg, args);
         }
     }
@@ -164,6 +229,7 @@ public final class DebugScope {
     public <T> T scope(String newName, Runnable runnable, Callable<T> callable, boolean sandbox, DebugConfig sandboxConfig, Object[] newContext) {
         DebugScope oldContext = getInstance();
         DebugConfig oldConfig = getConfig();
+        boolean oldLogEnabled = oldContext.isLogEnabled();
         DebugScope newChild = null;
         if (sandbox) {
             newChild = new DebugScope(newName, newName, null, newContext);
@@ -173,12 +239,14 @@ public final class DebugScope {
         }
         instanceTL.set(newChild);
         newChild.updateFlags();
+        newChild.setLogEnabled(oldContext.isLogEnabled());
         try (TimerCloseable a = scopeTime.start()) {
             return executeScope(runnable, callable);
         } finally {
             newChild.context = null;
             instanceTL.set(oldContext);
             setConfig(oldConfig);
+            setLogEnabled(oldLogEnabled);
         }
     }
 
@@ -211,13 +279,14 @@ public final class DebugScope {
     private void updateFlags() {
         DebugConfig config = getConfig();
         if (config == null) {
-            logEnabled = false;
             meterEnabled = false;
             timeEnabled = false;
             dumpEnabled = false;
-            output = null;
+
+            // Be pragmatic: provide a default log stream to prevent a crash if the stream is not
+            // set while logging
+            output = System.out;
         } else {
-            logEnabled = config.isLogEnabled();
             meterEnabled = config.isMeterEnabled();
             timeEnabled = config.isTimeEnabled();
             dumpEnabled = config.isDumpEnabled();
@@ -321,9 +390,15 @@ public final class DebugScope {
     public void setConfig(DebugConfig newConfig) {
         configTL.set(newConfig);
         updateFlags();
+        setLogEnabled(newConfig != null && newConfig.isLogEnabled());
     }
 
     public String getQualifiedName() {
         return qualifiedName;
+    }
+
+    public Indent pushIndentLogger() {
+        lastUsedIndent = (IndentImpl) lastUsedIndent.indent();
+        return lastUsedIndent;
     }
 }

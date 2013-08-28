@@ -58,13 +58,20 @@ public final class IntegerBelowThanNode extends CompareNode {
         if (x() == y()) {
             return LogicConstantNode.contradiction(graph());
         } else {
-            IntegerStamp xStamp = x().integerStamp();
-            IntegerStamp yStamp = y().integerStamp();
-            if (yStamp.isPositive()) {
-                if (xStamp.isPositive() && xStamp.upperBound() < yStamp.lowerBound()) {
-                    return LogicConstantNode.tautology(graph());
-                } else if (xStamp.isStrictlyNegative() || xStamp.lowerBound() >= yStamp.upperBound()) {
-                    return LogicConstantNode.contradiction(graph());
+            if (x().isConstant() && x().asConstant().asLong() == 0) {
+                // 0 |<| y is the same as 0 != y
+                return graph().unique(new LogicNegationNode(CompareNode.createCompareNode(Condition.EQ, x(), y())));
+            }
+
+            if (x().stamp() instanceof IntegerStamp && y().stamp() instanceof IntegerStamp) {
+                IntegerStamp xStamp = (IntegerStamp) x().stamp();
+                IntegerStamp yStamp = (IntegerStamp) y().stamp();
+                if (yStamp.isPositive()) {
+                    if (xStamp.isPositive() && xStamp.upperBound() < yStamp.lowerBound()) {
+                        return LogicConstantNode.tautology(graph());
+                    } else if (xStamp.isStrictlyNegative() || xStamp.lowerBound() >= yStamp.upperBound()) {
+                        return LogicConstantNode.contradiction(graph());
+                    }
                 }
             }
         }

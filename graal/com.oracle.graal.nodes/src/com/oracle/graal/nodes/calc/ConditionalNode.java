@@ -28,17 +28,22 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * The {@code ConditionalNode} class represents a comparison that yields one of two values. Note
  * that these nodes are not built directly from the bytecode but are introduced by canonicalization.
  */
-public final class ConditionalNode extends BinaryNode implements Canonicalizable, LIRLowerable, Negatable {
+public final class ConditionalNode extends BinaryNode implements Canonicalizable, LIRLowerable {
 
     @Input private LogicNode condition;
 
     public LogicNode condition() {
         return condition;
+    }
+
+    public ConditionalNode(LogicNode condition) {
+        this(condition, ConstantNode.forInt(1, condition.graph()), ConstantNode.forInt(0, condition.graph()));
     }
 
     public ConditionalNode(LogicNode condition, ValueNode trueValue, ValueNode falseValue) {
@@ -62,11 +67,17 @@ public final class ConditionalNode extends BinaryNode implements Canonicalizable
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
+        if (condition instanceof LogicNegationNode) {
+            LogicNegationNode negated = (LogicNegationNode) condition;
+            return graph().unique(new ConditionalNode(negated.getInput(), falseValue(), trueValue()));
+        }
+
         // this optimizes the case where a value that can only be 0 or 1 is materialized to 0 or 1
         if (x().isConstant() && y().isConstant() && condition instanceof IntegerEqualsNode) {
             IntegerEqualsNode equals = (IntegerEqualsNode) condition;
-            if (equals.y().isConstant() && equals.y().asConstant().equals(Constant.INT_0)) {
-                if (equals.x().integerStamp().mask() == 1) {
+            if (equals.y().isConstant() && equals.y().asConstant().equals(Constant.INT_0) && equals.x().stamp() instanceof IntegerStamp) {
+                IntegerStamp equalsXStamp = (IntegerStamp) equals.x().stamp();
+                if (equalsXStamp.upMask() == 1) {
                     if (x().asConstant().equals(Constant.INT_0) && y().asConstant().equals(Constant.INT_1)) {
                         return equals.x();
                     }
@@ -78,6 +89,13 @@ public final class ConditionalNode extends BinaryNode implements Canonicalizable
             if (c.getValue()) {
                 return trueValue();
             } else {
+                return falseValue();
+            }
+        }
+        if (condition instanceof CompareNode && ((CompareNode) condition).condition() == Condition.EQ) {
+            // optimize the pattern (x == y) ? x : y
+            CompareNode compare = (CompareNode) condition;
+            if ((compare.x() == trueValue() && compare.y() == falseValue()) || (compare.x() == falseValue() && compare.y() == trueValue())) {
                 return falseValue();
             }
         }
@@ -93,20 +111,12 @@ public final class ConditionalNode extends BinaryNode implements Canonicalizable
         generator.emitConditional(this);
     }
 
-    @Override
-    public Negatable negate(LogicNode cond) {
-        assert condition() == cond;
-        ConditionalNode replacement = graph().unique(new ConditionalNode(condition, falseValue(), trueValue()));
-        graph().replaceFloating(this, replacement);
-        return replacement;
-    }
-
     private ConditionalNode(Condition condition, ValueNode x, ValueNode y) {
-        this(createCompareNode(condition, x, y), ConstantNode.forInt(1, x.graph()), ConstantNode.forInt(0, x.graph()));
+        this(createCompareNode(condition, x, y));
     }
 
     private ConditionalNode(ValueNode type, ValueNode object) {
-        this(type.graph().add(new InstanceOfDynamicNode(type, object)), ConstantNode.forInt(1, type.graph()), ConstantNode.forInt(0, type.graph()));
+        this(type.graph().add(new InstanceOfDynamicNode(type, object)));
     }
 
     @NodeIntrinsic

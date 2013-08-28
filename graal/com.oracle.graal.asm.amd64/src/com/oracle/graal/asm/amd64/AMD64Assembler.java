@@ -1189,6 +1189,12 @@ public class AMD64Assembler extends AbstractAssembler {
         emitByte(0xD8 | encode);
     }
 
+    public final void notl(Register dst) {
+        int encode = prefixAndEncode(dst.encoding);
+        emitByte(0xF7);
+        emitByte(0xD0 | encode);
+    }
+
     public final void ensureUniquePC() {
         nop();
     }
@@ -1516,6 +1522,15 @@ public class AMD64Assembler extends AbstractAssembler {
         int encode = prefixAndEncode(dst.encoding);
         emitByte(0xD3);
         emitByte(0xE8 | encode);
+    }
+
+    public final void sqrtsd(Register dst, AMD64Address src) {
+        assert dst.getRegisterCategory() == AMD64.XMM;
+        emitByte(0xF2);
+        prefix(src, dst);
+        emitByte(0x0F);
+        emitByte(0x51);
+        emitOperandHelper(dst, src);
     }
 
     public final void sqrtsd(Register dst, Register src) {
@@ -2201,6 +2216,12 @@ public class AMD64Assembler extends AbstractAssembler {
         int encode = prefixqAndEncode(dst.encoding);
         emitByte(0xF7);
         emitByte(0xD8 | encode);
+    }
+
+    public final void notq(Register dst) {
+        int encode = prefixqAndEncode(dst.encoding);
+        emitByte(0xF7);
+        emitByte(0xD0 | encode);
     }
 
     public final void orq(Register dst, int imm32) {

@@ -36,6 +36,7 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.HeapAccess.BarrierType;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.Snippet.ConstantParameter;
@@ -53,7 +54,7 @@ public class WriteBarrierSnippets implements Snippets {
     private static final SnippetCounter g1AttemptedPostWriteBarrierCounter = new SnippetCounter(countersWriteBarriers, "g1AttemptedPostWriteBarrierCounter",
                     "Number of attempted G1 Post Write Barriers");
     private static final SnippetCounter g1AttemptedPreWriteBarrierCounter = new SnippetCounter(countersWriteBarriers, "g1AttemptedPreWriteBarrierCounter", "Number of G1 attempted Pre Write Barriers");
-    private static final SnippetCounter g1AttemptedRefFieldBarrierCounter = new SnippetCounter(countersWriteBarriers, "g1AttemptedPreWriteBarrierCounter",
+    private static final SnippetCounter g1AttemptedRefFieldBarrierCounter = new SnippetCounter(countersWriteBarriers, "g1AttemptedRefFieldBarrierCounter",
                     "Number of G1 attempted Ref Field Read Barriers");
     private static final SnippetCounter g1EffectivePostWriteBarrierCounter = new SnippetCounter(countersWriteBarriers, "g1EffectivePostWriteBarrierCounter",
                     "Number of effective G1 Post Write Barriers");
@@ -322,7 +323,7 @@ public class WriteBarrierSnippets implements Snippets {
     public static final ForeignCallDescriptor G1WBPOSTCALL = new ForeignCallDescriptor("write_barrier_post", void.class, Word.class);
 
     @NodeIntrinsic(ForeignCallNode.class)
-    private static native void g1PostBarrierStub(@ConstantNodeParameter ForeignCallDescriptor descriptor, Word card);
+    public static native void g1PostBarrierStub(@ConstantNodeParameter ForeignCallDescriptor descriptor, Word card);
 
     public static class Templates extends AbstractTemplates {
 
@@ -343,7 +344,7 @@ public class WriteBarrierSnippets implements Snippets {
             args.add("object", writeBarrier.getObject());
             args.add("location", writeBarrier.getLocation());
             args.addConst("usePrecise", writeBarrier.usePrecise());
-            args.addConst("alwaysNull", writeBarrier.getValue().objectStamp().alwaysNull());
+            args.addConst("alwaysNull", ObjectStamp.isObjectAlwaysNull(writeBarrier.getValue()));
             template(args).instantiate(runtime, writeBarrier, DEFAULT_REPLACER, args);
         }
 
@@ -383,7 +384,7 @@ public class WriteBarrierSnippets implements Snippets {
             args.add("value", writeBarrierPost.getValue());
             args.add("location", writeBarrierPost.getLocation());
             args.addConst("usePrecise", writeBarrierPost.usePrecise());
-            args.addConst("alwaysNull", writeBarrierPost.getValue().objectStamp().alwaysNull());
+            args.addConst("alwaysNull", ObjectStamp.isObjectAlwaysNull(writeBarrierPost.getValue()));
             args.addConst("trace", traceBarrier());
             template(args).instantiate(runtime, writeBarrierPost, DEFAULT_REPLACER, args);
         }
@@ -408,25 +409,25 @@ public class WriteBarrierSnippets implements Snippets {
     /**
      * Log method of debugging purposes.
      */
-    private static void log(boolean enabled, String format, long value) {
+    public static void log(boolean enabled, String format, long value) {
         if (enabled) {
             Log.printf(format, value);
         }
     }
 
-    private static void log(boolean enabled, String format, long value1, long value2) {
+    public static void log(boolean enabled, String format, long value1, long value2) {
         if (enabled) {
             Log.printf(format, value1, value2);
         }
     }
 
-    private static void log(boolean enabled, String format, long value1, long value2, long value3) {
+    public static void log(boolean enabled, String format, long value1, long value2, long value3) {
         if (enabled) {
             Log.printf(format, value1, value2, value3);
         }
     }
 
-    private static boolean traceBarrier() {
+    public static boolean traceBarrier() {
         return GraalOptions.GCDebugStartCycle.getValue() > 0 && ((int) Word.unsigned(HotSpotReplacementsUtil.gcTotalCollectionsAddress()).readLong(0) > GraalOptions.GCDebugStartCycle.getValue());
     }
 
@@ -436,7 +437,7 @@ public class WriteBarrierSnippets implements Snippets {
      * in a valid heap region. If an object is stale, an invalid access is performed in order to
      * prematurely crash the VM and debug the stack trace of the faulty method.
      */
-    private static void validateObject(Object parent, Object child) {
+    public static void validateObject(Object parent, Object child) {
         if (verifyOops() && child != null && !validateOop(VALIDATE_OBJECT, parent, child)) {
             log(true, "Verification ERROR, Parent: %p Child: %p\n", Word.fromObject(parent).rawValue(), Word.fromObject(child).rawValue());
             DirectObjectStoreNode.storeWord(null, 0, 0, Word.zero());

@@ -354,20 +354,22 @@ public abstract class GraalCompilerTest extends GraalTest {
         if (runtime == null) {
             return;
         }
-        test(method, expect, receiver, args);
+        testAgainstExpected(method, expect, receiver, args);
     }
 
-    protected void test(Method method, Result expect, Object receiver, Object... args) {
-        test(method, expect, Collections.<DeoptimizationReason> emptySet(), receiver, args);
+    protected void testAgainstExpected(Method method, Result expect, Object receiver, Object... args) {
+        testAgainstExpected(method, expect, Collections.<DeoptimizationReason> emptySet(), receiver, args);
     }
 
     protected Result executeActualCheckDeopt(Method method, Set<DeoptimizationReason> shouldNotDeopt, Object receiver, Object... args) {
         Map<DeoptimizationReason, Integer> deoptCounts = new EnumMap<>(DeoptimizationReason.class);
-        ProfilingInfo profile = runtime.lookupJavaMethod(method).getProfilingInfo();
+        ResolvedJavaMethod javaMethod = runtime.lookupJavaMethod(method);
+        ProfilingInfo profile = javaMethod.getProfilingInfo();
         for (DeoptimizationReason reason : shouldNotDeopt) {
             deoptCounts.put(reason, profile.getDeoptimizationCount(reason));
         }
         Result actual = executeActual(method, receiver, args);
+        profile = javaMethod.getProfilingInfo(); // profile can change after execution
         for (DeoptimizationReason reason : shouldNotDeopt) {
             Assert.assertEquals((int) deoptCounts.get(reason), profile.getDeoptimizationCount(reason));
         }
@@ -388,7 +390,7 @@ public abstract class GraalCompilerTest extends GraalTest {
         }
     }
 
-    protected void test(Method method, Result expect, Set<DeoptimizationReason> shouldNotDeopt, Object receiver, Object... args) {
+    protected void testAgainstExpected(Method method, Result expect, Set<DeoptimizationReason> shouldNotDeopt, Object receiver, Object... args) {
         Result actual = executeActualCheckDeopt(method, shouldNotDeopt, receiver, args);
         assertEquals(expect, actual);
     }
@@ -448,6 +450,15 @@ public abstract class GraalCompilerTest extends GraalTest {
                         }
                         if (Debug.isDumpEnabled()) {
                             Debug.dump(new Object[]{compResult, code}, "After code installation");
+                        }
+                        if (Debug.isLogEnabled()) {
+                            DisassemblerProvider dis = Graal.getRuntime().getCapability(DisassemblerProvider.class);
+                            if (dis != null) {
+                                String text = dis.disassemble(code);
+                                if (text != null) {
+                                    Debug.log("Code installed for %s%n%s", method, text);
+                                }
+                            }
                         }
 
                         return code;

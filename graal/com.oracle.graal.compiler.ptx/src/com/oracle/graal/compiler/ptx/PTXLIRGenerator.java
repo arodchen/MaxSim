@@ -30,24 +30,18 @@ import static com.oracle.graal.lir.ptx.PTXCompare.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.NumUtil;
-import com.oracle.graal.compiler.gen.LIRGenerator;
-import com.oracle.graal.compiler.target.LIRGenLowerable;
-import com.oracle.graal.graph.GraalInternalError;
-import com.oracle.graal.lir.FrameMap;
-import com.oracle.graal.lir.LIR;
-import com.oracle.graal.lir.LIRFrameState;
-import com.oracle.graal.lir.LIRInstruction;
-import com.oracle.graal.lir.LIRValueUtil;
-import com.oracle.graal.lir.LabelRef;
+import com.oracle.graal.asm.*;
+import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.JumpOp;
-import com.oracle.graal.lir.Variable;
-import com.oracle.graal.lir.ptx.PTXAddressValue;
+import com.oracle.graal.lir.ptx.*;
 import com.oracle.graal.lir.ptx.PTXArithmetic.Op1Stack;
 import com.oracle.graal.lir.ptx.PTXArithmetic.Op2Reg;
 import com.oracle.graal.lir.ptx.PTXArithmetic.Op2Stack;
 import com.oracle.graal.lir.ptx.PTXArithmetic.ShiftOp;
-import com.oracle.graal.lir.ptx.PTXBitManipulationOp;
+import com.oracle.graal.lir.ptx.PTXArithmetic.Unary1Op;
+import com.oracle.graal.lir.ptx.PTXArithmetic.Unary2Op;
 import com.oracle.graal.lir.ptx.PTXCompare.CompareOp;
 import com.oracle.graal.lir.ptx.PTXControlFlow.BranchOp;
 import com.oracle.graal.lir.ptx.PTXControlFlow.CondMoveOp;
@@ -60,8 +54,7 @@ import com.oracle.graal.lir.ptx.PTXMove.MoveFromRegOp;
 import com.oracle.graal.lir.ptx.PTXMove.MoveToRegOp;
 import com.oracle.graal.lir.ptx.PTXMove.StoreOp;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.Condition;
-import com.oracle.graal.nodes.calc.ConvertNode;
+import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.java.*;
 
 /**
@@ -83,15 +76,6 @@ public class PTXLIRGenerator extends LIRGenerator {
     public PTXLIRGenerator(StructuredGraph graph, CodeCacheProvider runtime, TargetDescription target, FrameMap frameMap, CallingConvention cc, LIR lir) {
         super(graph, runtime, target, frameMap, cc, lir);
         lir.spillMoveFactory = new PTXSpillMoveFactory();
-    }
-
-    @Override
-    protected void emitNode(ValueNode node) {
-        if (node instanceof LIRGenLowerable) {
-            ((LIRGenLowerable) node).generate(this);
-        } else {
-            super.emitNode(node);
-        }
     }
 
     @Override
@@ -323,6 +307,22 @@ public class PTXLIRGenerator extends LIRGenerator {
                 break;
             case Double:
                 append(new Op1Stack(DNEG, result, input));
+                break;
+            default:
+                throw GraalInternalError.shouldNotReachHere();
+        }
+        return result;
+    }
+
+    @Override
+    public Variable emitNot(Value input) {
+        Variable result = newVariable(input.getKind());
+        switch (input.getKind()) {
+            case Int:
+                append(new Op1Stack(INOT, result, input));
+                break;
+            case Long:
+                append(new Op1Stack(LNOT, result, input));
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere();
@@ -666,32 +666,32 @@ public class PTXLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void emitMathAbs(Variable result, Variable input) {
+    public Value emitMathAbs(Value input) {
         throw new InternalError("NYI");
     }
 
     @Override
-    public void emitMathSqrt(Variable result, Variable input) {
+    public Value emitMathSqrt(Value input) {
         throw new InternalError("NYI");
     }
 
     @Override
-    public void emitMathLog(Variable result, Variable input, boolean base10) {
+    public Value emitMathLog(Value input, boolean base10) {
         throw new InternalError("NYI");
     }
 
     @Override
-    public void emitMathCos(Variable result, Variable input) {
+    public Value emitMathCos(Value input) {
         throw new InternalError("NYI");
     }
 
     @Override
-    public void emitMathSin(Variable result, Variable input) {
+    public Value emitMathSin(Value input) {
         throw new InternalError("NYI");
     }
 
     @Override
-    public void emitMathTan(Variable result, Variable input) {
+    public Value emitMathTan(Value input) {
         throw new InternalError("NYI");
     }
 

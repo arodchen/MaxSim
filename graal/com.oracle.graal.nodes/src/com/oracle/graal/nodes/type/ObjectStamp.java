@@ -23,8 +23,10 @@
 package com.oracle.graal.nodes.type;
 
 import java.lang.reflect.*;
+import java.util.*;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.nodes.*;
 
 public class ObjectStamp extends Stamp {
 
@@ -35,27 +37,11 @@ public class ObjectStamp extends Stamp {
 
     public ObjectStamp(ResolvedJavaType type, boolean exactType, boolean nonNull, boolean alwaysNull) {
         super(Kind.Object);
-        assert isValid(type, exactType, nonNull, alwaysNull);
+        assert !exactType || (type != null && (!Modifier.isAbstract(type.getModifiers()) || type.isArray()));
         this.type = type;
         this.exactType = exactType;
         this.nonNull = nonNull;
         this.alwaysNull = alwaysNull;
-    }
-
-    public static boolean isValid(ResolvedJavaType type, boolean exactType, boolean nonNull, boolean alwaysNull) {
-        if (exactType && type == null) {
-            return false;
-        }
-
-        if (exactType && Modifier.isAbstract(type.getModifiers()) && !type.isArray()) {
-            return false;
-        }
-
-        if (nonNull && alwaysNull) {
-            return false;
-        }
-
-        return true;
     }
 
     @Override
@@ -66,7 +52,6 @@ public class ObjectStamp extends Stamp {
         return metaAccess.lookupJavaType(Object.class);
     }
 
-    @Override
     public boolean nonNull() {
         return nonNull;
     }
@@ -92,25 +77,15 @@ public class ObjectStamp extends Stamp {
     }
 
     @Override
-    public boolean alwaysDistinct(Stamp otherStamp) {
-        ObjectStamp other = (ObjectStamp) otherStamp;
-        if ((alwaysNull && other.nonNull) || (nonNull && other.alwaysNull)) {
-            return true;
-        }
-        if (other.type == null || type == null) {
-            // We have no type information for one of the values.
-            return false;
-        } else if (other.nonNull || nonNull) {
-            // One of the two values cannot be null.
-            return !other.type.isInterface() && !type.isInterface() && !type.isAssignableFrom(other.type) && !other.type.isAssignableFrom(type);
-        }
-        return false;
-    }
-
-    @Override
     public Stamp meet(Stamp otherStamp) {
         if (this == otherStamp) {
             return this;
+        }
+        if (otherStamp instanceof IllegalStamp) {
+            return otherStamp.meet(this);
+        }
+        if (!(otherStamp instanceof ObjectStamp)) {
+            return StampFactory.illegal(Kind.Illegal);
         }
         ObjectStamp other = (ObjectStamp) otherStamp;
         ResolvedJavaType meetType;
@@ -144,15 +119,44 @@ public class ObjectStamp extends Stamp {
     }
 
     @Override
-    public ObjectStamp join(Stamp otherStamp) {
+    public Stamp join(Stamp otherStamp) {
+        return join0(otherStamp, false);
+    }
+
+    /**
+     * Returns the stamp representing the type of this stamp after a cast to the type represented by
+     * the {@code to} stamp. While this is very similar to a {@link #join} operation, in the case
+     * where both types are not obviously related, the cast operation will prefer the type of the
+     * {@code to} stamp. This is necessary as long as ObjectStamps are not able to accurately
+     * represent intersection types.
+     * 
+     * For example when joining the {@link RandomAccess} type with the {@link AbstractList} type,
+     * without intersection types, this would result in the most generic type ({@link Object} ). For
+     * this reason, in some cases a {@code castTo} operation is preferable in order to keep at least
+     * the {@link AbstractList} type.
+     * 
+     * @param to the stamp this stamp should be casted to
+     * @return This stamp casted to the {@code to} stamp
+     */
+    public Stamp castTo(ObjectStamp to) {
+        return join0(to, true);
+    }
+
+    private Stamp join0(Stamp otherStamp, boolean castToOther) {
         if (this == otherStamp) {
             return this;
         }
+        if (otherStamp instanceof IllegalStamp) {
+            return otherStamp.join(this);
+        }
+        if (!(otherStamp instanceof ObjectStamp)) {
+            return StampFactory.illegal(Kind.Illegal);
+        }
         ObjectStamp other = (ObjectStamp) otherStamp;
         ResolvedJavaType joinType;
-        boolean joinExactType = exactType || other.exactType;
-        boolean joinNonNull = nonNull || other.nonNull;
         boolean joinAlwaysNull = alwaysNull || other.alwaysNull;
+        boolean joinNonNull = nonNull || other.nonNull;
+        boolean joinExactType = exactType || other.exactType;
         if (type == other.type) {
             joinType = type;
         } else if (type == null && other.type == null) {
@@ -162,26 +166,47 @@ public class ObjectStamp extends Stamp {
         } else if (other.type == null) {
             joinType = type;
         } else {
-            // both types are != null
+            // both types are != null and different
             if (type.isAssignableFrom(other.type)) {
                 joinType = other.type;
-            } else {
+                if (exactType) {
+                    joinAlwaysNull = true;
+                }
+            } else if (other.type.isAssignableFrom(type)) {
                 joinType = type;
+                if (other.exactType) {
+                    joinAlwaysNull = true;
+                }
+            } else {
+                if (castToOther) {
+                    joinType = other.type;
+                    joinExactType = other.exactType;
+                } else {
+                    joinType = null;
+                }
+                if (joinExactType || (!type.isInterface() && !other.type.isInterface())) {
+                    joinAlwaysNull = true;
+                }
             }
         }
-
+        if (joinAlwaysNull) {
+            joinType = null;
+            joinExactType = false;
+        }
+        if (joinExactType && joinType == null) {
+            return StampFactory.illegal(Kind.Object);
+        }
+        if (joinAlwaysNull && joinNonNull) {
+            return StampFactory.illegal(Kind.Object);
+        } else if (joinExactType && Modifier.isAbstract(joinType.getModifiers()) && !joinType.isArray()) {
+            return StampFactory.illegal(Kind.Object);
+        }
         if (joinType == type && joinExactType == exactType && joinNonNull == nonNull && joinAlwaysNull == alwaysNull) {
             return this;
         } else if (joinType == other.type && joinExactType == other.exactType && joinNonNull == other.nonNull && joinAlwaysNull == other.alwaysNull) {
             return other;
         } else {
-            if (isValid(joinType, joinExactType, joinNonNull, joinAlwaysNull)) {
-                return new ObjectStamp(joinType, joinExactType, joinNonNull, joinAlwaysNull);
-            } else {
-                // This situation can happen in case the compiler wants to join two contradicting
-                // stamps.
-                return null;
-            }
+            return new ObjectStamp(joinType, joinExactType, joinNonNull, joinAlwaysNull);
         }
     }
 
@@ -201,6 +226,7 @@ public class ObjectStamp extends Stamp {
         int result = 1;
         result = prime * result + (exactType ? 1231 : 1237);
         result = prime * result + (nonNull ? 1231 : 1237);
+        result = prime * result + (alwaysNull ? 1231 : 1237);
         result = prime * result + ((type == null) ? 0 : type.hashCode());
         return result;
     }
@@ -214,7 +240,7 @@ public class ObjectStamp extends Stamp {
             return false;
         }
         ObjectStamp other = (ObjectStamp) obj;
-        if (exactType != other.exactType || nonNull != other.nonNull) {
+        if (exactType != other.exactType || nonNull != other.nonNull || alwaysNull != other.alwaysNull) {
             return false;
         }
         if (type == null) {
@@ -225,5 +251,43 @@ public class ObjectStamp extends Stamp {
             return false;
         }
         return true;
+    }
+
+    public static boolean isObjectAlwaysNull(ValueNode node) {
+        return isObjectAlwaysNull(node.stamp());
+    }
+
+    public static boolean isObjectAlwaysNull(Stamp stamp) {
+        return (stamp instanceof ObjectStamp && ((ObjectStamp) stamp).alwaysNull());
+    }
+
+    public static boolean isObjectNonNull(ValueNode node) {
+        return isObjectNonNull(node.stamp());
+    }
+
+    public static boolean isObjectNonNull(Stamp stamp) {
+        return (stamp instanceof ObjectStamp && ((ObjectStamp) stamp).nonNull());
+    }
+
+    public static ResolvedJavaType typeOrNull(ValueNode node) {
+        return typeOrNull(node.stamp());
+    }
+
+    public static ResolvedJavaType typeOrNull(Stamp stamp) {
+        if (stamp instanceof ObjectStamp) {
+            return ((ObjectStamp) stamp).type();
+        }
+        return null;
+    }
+
+    public static boolean isExactType(ValueNode node) {
+        return isExactType(node.stamp());
+    }
+
+    public static boolean isExactType(Stamp stamp) {
+        if (stamp instanceof ObjectStamp) {
+            return ((ObjectStamp) stamp).isExactType();
+        }
+        return false;
     }
 }

@@ -33,6 +33,7 @@ public class StampFactory {
     // JaCoCo Exclude
 
     private static final Stamp[] stampCache = new Stamp[Kind.values().length];
+    private static final Stamp[] illegalStampCache = new Stamp[Kind.values().length];
     private static final Stamp objectStamp = new ObjectStamp(null, false, false, false);
     private static final Stamp objectNonNullStamp = new ObjectStamp(null, false, true, false);
     private static final Stamp objectAlwaysNullStamp = new ObjectStamp(null, false, false, true);
@@ -43,7 +44,7 @@ public class StampFactory {
     private static final Stamp voidStamp = new GenericStamp(GenericStampType.Void);
     private static final Stamp nodeIntrinsicStamp = new ObjectStamp(null, false, false, false);
     private static final Stamp wordStamp = new ObjectStamp(null, false, false, false);
-    private static final Stamp positiveInt = forInteger(Kind.Int, 0, Integer.MAX_VALUE, Integer.MAX_VALUE);
+    private static final Stamp positiveInt = forInteger(Kind.Int, 0, Integer.MAX_VALUE, 0, Integer.MAX_VALUE);
 
     private static void setCache(Kind kind, Stamp stamp) {
         stampCache[kind.ordinal()] = stamp;
@@ -62,6 +63,9 @@ public class StampFactory {
 
         setCache(Kind.Object, objectStamp);
         setCache(Kind.Void, voidStamp);
+        for (Kind k : Kind.values()) {
+            illegalStampCache[k.ordinal()] = new IllegalStamp(k);
+        }
     }
 
     public static Stamp forKind(Kind kind) {
@@ -113,21 +117,45 @@ public class StampFactory {
         return positiveInt;
     }
 
-    public static Stamp forInteger(Kind kind, long lowerBound, long upperBound, long mask) {
-        return new IntegerStamp(kind, lowerBound, upperBound, mask);
+    public static Stamp illegal(Kind kind) {
+        return illegalStampCache[kind.ordinal()];
     }
 
-    public static Stamp forInteger(Kind kind, long lowerBound, long upperBound) {
-        long mask;
-        if (lowerBound < 0) {
-            mask = IntegerStamp.defaultMask(kind);
-        } else {
-            mask = -1 >>> Long.numberOfLeadingZeros(upperBound);
+    public static IntegerStamp forInteger(Kind kind, long lowerBound, long upperBound, long downMask, long upMask) {
+        return new IntegerStamp(kind, lowerBound, upperBound, downMask, upMask);
+    }
+
+    public static IntegerStamp forInteger(Kind kind, long lowerBound, long upperBound) {
+        long defaultMask = IntegerStamp.defaultMask(kind);
+        if (lowerBound == upperBound) {
+            return new IntegerStamp(kind, lowerBound, lowerBound, lowerBound & defaultMask, lowerBound & defaultMask);
         }
-        return forInteger(kind, lowerBound, upperBound, mask);
+        final long downMask;
+        final long upMask;
+        if (lowerBound >= 0) {
+            int upperBoundLeadingZeros = Long.numberOfLeadingZeros(upperBound);
+            long differentBits = lowerBound ^ upperBound;
+            int sameBitCount = Long.numberOfLeadingZeros(differentBits << upperBoundLeadingZeros);
+
+            upMask = upperBound | -1L >>> (upperBoundLeadingZeros + sameBitCount);
+            downMask = upperBound & ~(-1L >>> (upperBoundLeadingZeros + sameBitCount));
+        } else {
+            if (upperBound >= 0) {
+                upMask = defaultMask;
+                downMask = 0;
+            } else {
+                int lowerBoundLeadingOnes = Long.numberOfLeadingZeros(~lowerBound);
+                long differentBits = lowerBound ^ upperBound;
+                int sameBitCount = Long.numberOfLeadingZeros(differentBits << lowerBoundLeadingOnes);
+
+                upMask = lowerBound | -1L >>> (lowerBoundLeadingOnes + sameBitCount) | ~(-1L >>> lowerBoundLeadingOnes);
+                downMask = lowerBound & ~(-1L >>> (lowerBoundLeadingOnes + sameBitCount)) | ~(-1L >>> lowerBoundLeadingOnes);
+            }
+        }
+        return forInteger(kind, lowerBound, upperBound, downMask & defaultMask, upMask & defaultMask);
     }
 
-    public static Stamp forFloat(Kind kind, double lowerBound, double upperBound, boolean nonNaN) {
+    public static FloatStamp forFloat(Kind kind, double lowerBound, double upperBound, boolean nonNaN) {
         return new FloatStamp(kind, lowerBound, upperBound, nonNaN);
     }
 
@@ -140,7 +168,8 @@ public class StampFactory {
             case Short:
             case Int:
             case Long:
-                return forInteger(kind.getStackKind(), value.asLong(), value.asLong(), value.asLong() & IntegerStamp.defaultMask(kind));
+                long mask = value.asLong() & IntegerStamp.defaultMask(kind);
+                return forInteger(kind.getStackKind(), value.asLong(), value.asLong(), mask, mask);
             case Float:
                 return forFloat(kind, value.asFloat(), value.asFloat(), !Float.isNaN(value.asFloat()));
             case Double:
@@ -198,5 +227,9 @@ public class StampFactory {
 
     public static Stamp exactNonNull(ResolvedJavaType type) {
         return new ObjectStamp(type, true, true, false);
+    }
+
+    public static Stamp exact(ResolvedJavaType type) {
+        return new ObjectStamp(type, true, false, false);
     }
 }
