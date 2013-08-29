@@ -25,36 +25,102 @@ package com.oracle.graal.graph;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.Map.Entry;
+import java.util.concurrent.*;
 
 import com.oracle.graal.graph.Graph.DuplicationReplacement;
+import com.oracle.graal.graph.Node.Input;
+import com.oracle.graal.graph.Node.IterableNodeType;
+import com.oracle.graal.graph.Node.Successor;
 import com.oracle.graal.graph.Node.Verbosity;
 
-public class NodeClass extends FieldIntrospection {
+/**
+ * Lazily associated metadata for every {@link Node} type. The metadata includes:
+ * <ul>
+ * <li>The offsets of fields annotated with {@link Input} and {@link Successor} as well as methods
+ * for iterating over such fields.</li>
+ * <li>The identifier for an {@link IterableNodeType} class.</li>
+ * </ul>
+ */
+public final class NodeClass extends FieldIntrospection {
 
-    public static final NodeClass get(Class<?> c) {
-        NodeClass clazz = (NodeClass) allClasses.get(c);
-        if (clazz != null) {
-            return clazz;
-        }
+    /**
+     * Maps {@link Class} values (for {@link Node} types) to {@link NodeClass} values.
+     * 
+     * Only a single Registry instance can be created. If a runtime creates a specialized registry,
+     * it must do so before the class initializer of {@link NodeClass} is executed.
+     */
+    public static class Registry {
 
-        /*
-         * Using putIfAbsent doesn't work here, because the creation of NodeClass needs to be
-         * serialized. (the NodeClass constructor looks at allClasses, and it also uses the static
-         * field nextIterableId)
-         *
-         * The fact that ConcurrentHashMap.put and .get are used should make the double-checked
-         * locking idiom work, since it internally uses volatile.
+        private static Registry instance;
+
+        /**
+         * Gets the singleton {@link Registry} instance, creating it first if necessary.
          */
-
-        synchronized (allClasses) {
-            clazz = (NodeClass) allClasses.get(c);
-            if (clazz == null) {
-                clazz = new NodeClass(c);
-                NodeClass oldClass = (NodeClass) allClasses.putIfAbsent(c, clazz);
-                assert oldClass == null;
+        static synchronized Registry instance() {
+            if (instance == null) {
+                return new Registry();
             }
-            return clazz;
+            return instance;
         }
+
+        protected Registry() {
+            assert instance == null : "exactly one registry can be created";
+            instance = this;
+        }
+
+        /**
+         * @return the {@link NodeClass} value for {@code key} or {@code null} if no such mapping
+         *         exists
+         */
+        protected NodeClass get(Class<? extends Node> key) {
+            return (NodeClass) allClasses.get(key);
+        }
+
+        /**
+         * Same as {@link #get(Class)} except that a {@link NodeClass} is created if no such mapping
+         * exists. The creation of a {@link NodeClass} must be serialized as
+         * {@link NodeClass#NodeClass(Class)} accesses both {@link FieldIntrospection#allClasses}
+         * and {@link NodeClass#nextIterableId}.
+         * <p>
+         * The fact that {@link ConcurrentHashMap#put} {@link ConcurrentHashMap#get} are used should
+         * make the double-checked locking idiom work in the way {@link NodeClass#get(Class)} uses
+         * this method and {@link #get(Class)}.
+         */
+        final synchronized NodeClass make(Class<? extends Node> key) {
+            NodeClass value = (NodeClass) allClasses.get(key);
+            if (value == null) {
+                value = new NodeClass(key);
+                Object old = allClasses.putIfAbsent(key, value);
+                assert old == null;
+                registered(key, value);
+            }
+            return value;
+        }
+
+        /**
+         * Hook for a subclass to be notified of a new mapping added to the registry.
+         * 
+         * @param key
+         * @param value
+         */
+        protected void registered(Class<? extends Node> key, NodeClass value) {
+
+        }
+    }
+
+    private static final Registry registry = Registry.instance();
+
+    /**
+     * Gets the {@link NodeClass} associated with a given {@link Class}.
+     */
+    @SuppressWarnings("unchecked")
+    public static NodeClass get(Class<?> c) {
+        Class<? extends Node> key = (Class<? extends Node>) c;
+        NodeClass value = registry.get(key);
+        if (value != null) {
+            return value;
+        }
+        return registry.make(key);
     }
 
     static final int NOT_ITERABLE = -1;
@@ -77,7 +143,7 @@ public class NodeClass extends FieldIntrospection {
     private final int iterableId;
     private int[] iterableIds;
 
-    public NodeClass(Class<?> clazz) {
+    private NodeClass(Class<?> clazz) {
         super(clazz);
         assert NODE_CLASS.isAssignableFrom(clazz);
 
@@ -252,7 +318,7 @@ public class NodeClass extends FieldIntrospection {
 
     /**
      * Describes an edge slot for a {@link NodeClass}.
-     *
+     * 
      * @see NodeClass#get(Node, Position)
      * @see NodeClass#getName(Position)
      */
@@ -343,7 +409,7 @@ public class NodeClass extends FieldIntrospection {
      * the fields are treated as {@link NodeList}s. All elements of these NodeLists will be visited
      * by the iterator as well. This iterator can be used to iterate over the inputs or successors
      * of a node.
-     *
+     * 
      * An iterator of this type will not return null values, unless the field values are modified
      * concurrently. Concurrent modifications are detected by an assertion on a best-effort basis.
      */
@@ -358,7 +424,7 @@ public class NodeClass extends FieldIntrospection {
 
         /**
          * Creates an iterator that will iterate over fields in the given node.
-         *
+         * 
          * @param node the node which contains the fields.
          * @param offsets the offsets of the fields.
          * @param directCount the number of fields that should be treated as fields of type
@@ -483,7 +549,7 @@ public class NodeClass extends FieldIntrospection {
 
     /**
      * Populates a given map with the names and values of all data fields.
-     *
+     * 
      * @param node the node from which to take the values.
      * @param properties a map that will be populated.
      */
@@ -697,7 +763,7 @@ public class NodeClass extends FieldIntrospection {
      * Clear all inputs in the given node. This is accomplished by setting input fields to null and
      * replacing input lists with new lists. (which is important so that this method can be used to
      * clear the inputs of cloned nodes.)
-     *
+     * 
      * @param node the node to be cleared
      */
     public void clearInputs(Node node) {
@@ -717,7 +783,7 @@ public class NodeClass extends FieldIntrospection {
      * Clear all successors in the given node. This is accomplished by setting successor fields to
      * null and replacing successor lists with new lists. (which is important so that this method
      * can be used to clear the successors of cloned nodes.)
-     *
+     * 
      * @param node the node to be cleared
      */
     public void clearSuccessors(Node node) {
@@ -736,7 +802,7 @@ public class NodeClass extends FieldIntrospection {
     /**
      * Copies the inputs from node to newNode. The nodes are expected to be of the exact same
      * NodeClass type.
-     *
+     * 
      * @param node the node from which the inputs should be copied.
      * @param newNode the node to which the inputs should be copied.
      */
@@ -758,7 +824,7 @@ public class NodeClass extends FieldIntrospection {
     /**
      * Copies the successors from node to newNode. The nodes are expected to be of the exact same
      * NodeClass type.
-     *
+     * 
      * @param node the node from which the successors should be copied.
      * @param newNode the node to which the successors should be copied.
      */
