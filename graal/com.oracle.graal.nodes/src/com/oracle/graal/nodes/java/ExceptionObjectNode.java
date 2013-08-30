@@ -99,9 +99,4 @@ public class ExceptionObjectNode extends DispatchBeginNode implements Lowerable,
         assertTrue(stateAfter() != null || stamp() == StampFactory.forVoid(), "an exception handler needs a frame state");
         return super.verify();
     }
-
-    @Override
-    public boolean hasSideEffect() {
-        return true;
-    }
 }

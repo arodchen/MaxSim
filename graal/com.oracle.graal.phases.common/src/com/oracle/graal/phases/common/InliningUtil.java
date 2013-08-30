@@ -1000,9 +1000,6 @@ public class InliningUtil {
 
         public AssumptionInlineInfo(Invoke invoke, ResolvedJavaMethod concrete, Assumption takenAssumption) {
             super(invoke, concrete);
-            if (takenAssumption instanceof Assumptions.ConcreteSubtype) {
-                System.console();
-            }
             this.takenAssumption = takenAssumption;
         }
 

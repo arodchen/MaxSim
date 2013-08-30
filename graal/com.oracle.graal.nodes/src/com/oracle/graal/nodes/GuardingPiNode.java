@@ -59,7 +59,7 @@ public class GuardingPiNode extends FixedWithNextNode implements Lowerable, Guar
 
     /**
      * Creates a guarding pi node.
-     *
+     * 
      * @param object the object whose type is refined if this guard succeeds
      * @param condition the condition to test
      * @param negateCondition the guard succeeds if {@code condition != negateCondition}
