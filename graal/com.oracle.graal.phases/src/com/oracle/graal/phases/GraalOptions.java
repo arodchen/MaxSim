@@ -260,7 +260,7 @@ public final class GraalOptions {
     @Option(help = "")
     public static final OptionValue<Boolean> OptAssumptions = new OptionValue<>(true);
     @Option(help = "")
-    public static final OptionValue<Boolean> OptConvertDeoptsToGuards = new OptionValue<>(true);
+    public static final OptionValue<Boolean> OptConvertDeoptsToGuards = new OptionValue<>(false);
     @Option(help = "")
     public static final OptionValue<Boolean> OptReadElimination = new OptionValue<>(true);
     @Option(help = "")
