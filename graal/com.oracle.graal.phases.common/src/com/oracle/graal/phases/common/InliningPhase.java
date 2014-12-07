@@ -223,7 +223,7 @@ public class InliningPhase extends AbstractInliningPhase {
         }
     }
 
-    private static Inlineable getInlineableElement(final ResolvedJavaMethod method, Invoke invoke, Assumptions assumptions, HighTierContext context) {
+    protected Inlineable getInlineableElement(final ResolvedJavaMethod method, Invoke invoke, Assumptions assumptions, HighTierContext context) {
         Class<? extends FixedWithNextNode> macroNodeClass = InliningUtil.getMacroNodeClass(context.getReplacements(), method);
         if (macroNodeClass != null) {
             return new InlineableMacroNode(macroNodeClass);
@@ -232,7 +232,7 @@ public class InliningPhase extends AbstractInliningPhase {
         }
     }
 
-    private static StructuredGraph buildGraph(final ResolvedJavaMethod method, final Invoke invoke, final Assumptions assumptions, final HighTierContext context) {
+    protected StructuredGraph buildGraph(final ResolvedJavaMethod method, final Invoke invoke, final Assumptions assumptions, final HighTierContext context) {
         final StructuredGraph newGraph;
         final boolean parseBytecodes;
 
