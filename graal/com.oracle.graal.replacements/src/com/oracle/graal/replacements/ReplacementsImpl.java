@@ -56,7 +56,7 @@ public class ReplacementsImpl implements Replacements {
     /**
      * The preprocessed replacement graphs.
      */
-    private final ConcurrentMap<ResolvedJavaMethod, StructuredGraph> graphs;
+    protected final ConcurrentMap<ResolvedJavaMethod, StructuredGraph> graphs;
 
     // These data structures are all fully initialized during single-threaded
     // compiler startup and so do not need to be concurrent.
@@ -196,7 +196,7 @@ public class ReplacementsImpl implements Replacements {
         return originalJavaMethod;
     }
 
-    private SnippetInliningPolicy inliningPolicy(ResolvedJavaMethod method) {
+    protected SnippetInliningPolicy inliningPolicy(ResolvedJavaMethod method) {
         Class<? extends SnippetInliningPolicy> policyClass = SnippetInliningPolicy.class;
         Snippet snippet = method.getAnnotation(Snippet.class);
         if (snippet != null) {
