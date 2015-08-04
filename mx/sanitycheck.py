@@ -178,7 +178,7 @@ def getSPECjvm2008(benchArgs=[]):
     success = re.compile(r"^(Noncompliant c|C)omposite result: [0-9]+((,|\.)[0-9]+)?( SPECjvm2008 (Base|Peak))? ops/m$", re.MULTILINE)
     matcher = ValuesMatcher(score, {'group' : 'SPECjvm2008', 'name' : '<benchmark>', 'score' : '<score>'})
     
-    return Test("SPECjvm2008", ['-jar', 'SPECjvm2008.jar'] + benchArgs, [success], [error], [matcher], vmOpts=['-Xms3g', '-XX:+'+gc, '-XX:-UseCompressedOops'], defaultCwd=specjvm2008)
+    return Test("SPECjvm2008", ['-jar', 'SPECjvm2008.jar'] + benchArgs, [success], [error], [matcher], vmOpts=[], defaultCwd=specjvm2008)
 
 def getDacapos(level=SanityCheckLevel.Normal, gateBuildLevel=None, dacapoArgs=[]):
     checks = []

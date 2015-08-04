@@ -45,6 +45,7 @@ _vmSourcesAvailable = exists(join(_graal_home, 'make')) and exists(join(_graal_h
 _vmChoices = {
     'graal' : 'All compilation is performed with Graal. This includes bootstrapping Graal itself unless -XX:-BootstrapGraal is used.',
     'server' : 'Normal compilation is performed with the tiered system (i.e., client + server), Truffle compilation is performed with Graal. Use this for optimal Truffle performance.',
+    'maxine' : 'MaxineVM is used instead of HotSpot, the combination of compilers used should have been already defined upon building the image',
     'client' : None, # normal compilation with client compiler, explicit compilation (e.g., by Truffle) with Graal
     'server-nograal' : None, # all compilation with tiered system (i.e., client + server), Graal omitted
     'client-nograal' : None, # all compilation with client compiler, Graal omitted
@@ -353,7 +354,7 @@ def _jdk(build='product', vmToCheck=None, create=False, installGraalJar=True):
             
     if installGraalJar:
         _installGraalJarInJdks(mx.distribution('GRAAL'))
-    
+    print vmToCheck
     if vmToCheck is not None:
         jvmCfg = _vmCfgInJdk(jdk)
         found = False
@@ -680,14 +681,17 @@ def vm(args, vm=None, nonZeroIsFatal=True, out=None, err=None, cwd=None, timeout
 
     if vm is None:
         vm = _get_vm()
-
+    
     if cwd is None:
         cwd = _vm_cwd
     elif _vm_cwd is not None and _vm_cwd != cwd:
         mx.abort("conflicting working directories: do not set --vmcwd for this command")
 
     build = vmbuild if vmbuild is not None else _vmbuild if _vmSourcesAvailable else 'product'
-    jdk = _jdk(build, vmToCheck=vm, installGraalJar=False)
+    if vm == 'maxine':
+        jdk = os.environ['MAXINE_HOME'] + '/com.oracle.max.vm.native/generated/' + mx.get_os()
+    else:
+        jdk = _jdk(build, vmToCheck=vm, installGraalJar=False)
     mx.expand_project_in_args(args)
     if _make_eclipse_launch:
         mx.make_eclipse_launch(args, 'graal-' + build, name=None, deps=mx.project('com.oracle.graal.hotspot').all_deps([], True))
@@ -712,18 +716,25 @@ def vm(args, vm=None, nonZeroIsFatal=True, out=None, err=None, cwd=None, timeout
                         'destfile' : 'jacoco.exec'
         }
         args = ['-javaagent:' + jacocoagent.get_path(True) + '=' + ','.join([k + '=' + v for k, v in agentOptions.items()])] + args
-    if '-d64' not in args:
-        args = ['-d64'] + args
+    if vm != 'maxine':
+        if '-d64' not in args:
+            args = ['-d64'] + args
 
-    exe = join(jdk, 'bin', mx.exe_suffix('java'))
+    if vm != 'maxine':
+        exe = join(jdk, 'bin', mx.exe_suffix('java'))
+    else:
+        exe = join(jdk, mx.exe_suffix('maxvm'))
+
     pfx = _vm_prefix.split() if _vm_prefix is not None else []
     
     if '-version' in args:
         ignoredArgs = args[args.index('-version')+1:]
         if  len(ignoredArgs) > 0:
             mx.log("Warning: The following options will be ignored by the vm because they come after the '-version' argument: " + ' '.join(ignoredArgs))
-    
-    return mx.run(pfx + [exe, '-' + vm] + args, nonZeroIsFatal=nonZeroIsFatal, out=out, err=err, cwd=cwd, timeout=timeout)
+    if vm == 'maxine':
+        return mx.run(pfx + [exe] + args, nonZeroIsFatal=nonZeroIsFatal, out=out, err=err, cwd=cwd, timeout=timeout)
+    else:
+        return mx.run(pfx + [exe, '-' + vm] + args, nonZeroIsFatal=nonZeroIsFatal, out=out, err=err, cwd=cwd, timeout=timeout)
 
 def _find_classes_with_annotations(p, pkgRoot, annotations, includeInnerClasses=False):
     """
