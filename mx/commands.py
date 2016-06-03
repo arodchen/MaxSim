@@ -1218,15 +1218,18 @@ def specjvm2008(args):
     
     availableBenchmarks = set(sanitycheck.specjvm2008Names)
     for name in sanitycheck.specjvm2008Names:
-        parts = name.rsplit('.', 1)
+        parts = name.split('.')
         if len(parts) > 1:
-            assert len(parts) == 2
             group = parts[0]
-            print group
-            availableBenchmarks.add(group)
+            if (group not in availableBenchmarks):
+                print group
+                availableBenchmarks.add(group)
+        else:
+            print name
+            availableBenchmarks.add(name)
 
     _run_benchmark(args, sorted(availableBenchmarks), launcher)
-    
+     
 def specjbb2013(args):
     """runs the composite SPECjbb2013 benchmark"""
     
