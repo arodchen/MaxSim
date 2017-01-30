@@ -40,6 +40,12 @@ def buildSim(cppFlags, dir, type, pgo=None):
        print "ERROR: You need to define the $PINPATH environment variable with Pin's path"
        sys.exit(1)
 
+    if "PROTOBUFPATH" in os.environ:
+        PROTOBUFPATH = os.environ["PROTOBUFPATH"]
+    else:
+       print "ERROR: You need to define the $PROTOBUFPATH environment variable with Protocol Buffer 2.6.1 path"
+       sys.exit(1)
+
     ROOT = Dir('.').abspath
 
     # NOTE: These flags are for the 28/02/2011 2.9 PIN kit (rev39599). Older versions will not build.
@@ -89,7 +95,7 @@ def buildSim(cppFlags, dir, type, pgo=None):
     # systems, Pin's libelf takes precedence over the system's, but it does not
     # include symbols that we need or it's a different variant (we need
     # libelfg0-dev in Ubuntu systems)
-    env["PINLIBPATH"] = ["/usr/lib", "/usr/lib/x86_64-linux-gnu", joinpath(PINPATH, "extras/" + xedName + "-intel64/lib"),
+    env["PINLIBPATH"] = [joinpath(PROTOBUFPATH, "lib"), "/usr/lib", "/usr/lib/x86_64-linux-gnu", joinpath(PINPATH, "extras/" + xedName + "-intel64/lib"),
             joinpath(PINPATH, "intel64/lib"), joinpath(PINPATH, "intel64/lib-ext")]
 
     # Libdwarf is provided in static and shared variants, Ubuntu only provides
@@ -140,6 +146,11 @@ def buildSim(cppFlags, dir, type, pgo=None):
         env["PINLIBS"] += ["dramsim"]
         env["CPPFLAGS"] += " -D_WITH_DRAMSIM_=1 "
 
+    # Protocol Buffers
+    env["LINKFLAGS"]  += " -Wl,-R" + joinpath(PROTOBUFPATH, "lib")
+    env["CPPPATH"] += [joinpath(PROTOBUFPATH, "include")]
+    env["PINLIBS"] += ["protobuf"]
+            
     env["CPPPATH"] += ["."]
 
     # HDF5
