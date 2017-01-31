@@ -696,6 +696,21 @@ void DDRMemory::initTech(const char* techName) {
         tWR = 7;
         tRFC = 59;
         tREFI = 4160;
+    } else if (tech == "DDR3-1066-CL7_EBJ10UE8BAFA-AE-E") {
+        // Elpida EBJ10UE8BAFA-AE-E
+        tCK = 1.875;
+        tBL = 8;
+        tCL = 7;
+        tRCD = 7;
+        tRTP = 4;
+        tRP = 7;
+        tRRD = 4;
+        tRAS = 20;
+        tFAW = 20;
+        tWTR = 4;
+        tWR = 8;
+        tRFC = 59;
+        tREFI = 4160;
     } else if (tech == "DDR3-1066-CL8") {
         // from DDR3_micron_16M_8B_x4_sg187.ini
         tCK = 1.875;
