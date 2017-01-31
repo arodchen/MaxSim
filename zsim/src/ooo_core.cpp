@@ -71,7 +71,7 @@ OOOCore::OOOCore(FilterCache* _l1i, FilterCache* _l1d, g_string& _name) : Core(_
     curCycleIssuedUops = 0;
     branchPc = 0;
 
-    instrs = uops = bbls = approxInstrs = mispredBranches = 0;
+    instrs = uops = branchUops = fpAddSubUops = fpMulDivUops = bbls = approxInstrs = mispredBranches = predBranches = 0;
 
     for (uint32_t i = 0; i < FWD_ENTRIES; i++) fwdArray[i].set((Address)(-1L), 0);
 }
@@ -92,20 +92,32 @@ void OOOCore::initStats(AggregateStat* parentStat) {
     instrsStat->init("instrs", "Simulated instructions", &instrs);
     ProxyStat* uopsStat = new ProxyStat();
     uopsStat->init("uops", "Retired micro-ops", &uops);
+    ProxyStat* branchUopsStat = new ProxyStat();
+    branchUopsStat->init("branchUops", "Retired branch micro-ops", &branchUops);
+    ProxyStat* fpAddSubUopsStat = new ProxyStat();
+    fpAddSubUopsStat->init("fpAddSubUops", "Retired floating point add and sub micro-ops", &fpAddSubUops);
+    ProxyStat* fpMulDivUopsStat = new ProxyStat();
+    fpMulDivUopsStat->init("fpMulDivUops", "Retired floating point mul and div micro-ops", &fpMulDivUops);
     ProxyStat* bblsStat = new ProxyStat();
     bblsStat->init("bbls", "Basic blocks", &bbls);
     ProxyStat* approxInstrsStat = new ProxyStat();
     approxInstrsStat->init("approxInstrs", "Instrs with approx uop decoding", &approxInstrs);
     ProxyStat* mispredBranchesStat = new ProxyStat();
     mispredBranchesStat->init("mispredBranches", "Mispredicted branches", &mispredBranches);
+    ProxyStat* predBranchesStat = new ProxyStat();
+    predBranchesStat->init("predBranches", "Predicted branches", &predBranches);
 
     coreStat->append(cyclesStat);
     coreStat->append(cCyclesStat);
     coreStat->append(instrsStat);
     coreStat->append(uopsStat);
+    coreStat->append(branchUopsStat);
+    coreStat->append(fpAddSubUopsStat);
+    coreStat->append(fpMulDivUopsStat);
     coreStat->append(bblsStat);
     coreStat->append(approxInstrsStat);
     coreStat->append(mispredBranchesStat);
+    coreStat->append(predBranchesStat);
 
 #ifdef OOO_STALL_STATS
     profFetchStalls.init("fetchStalls",  "Fetch stalls");  coreStat->append(&profFetchStalls);
@@ -346,6 +358,9 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
 
     instrs += bblInstrs;
     uops += bbl->uops;
+    branchUops += bbl->branchUops;
+    fpAddSubUops += bbl->fpAddSubUops;
+    fpMulDivUops += bbl->fpMulDivUops;
     bbls++;
     approxInstrs += bbl->approxInstrs;
 
@@ -415,6 +430,8 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
         }
 
         fetchCycle = lastCommitCycle;
+    } else if (branchPc) {
+        predBranches++;
     }
     branchPc = 0;  // clear for next BBL
 

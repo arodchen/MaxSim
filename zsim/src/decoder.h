@@ -63,6 +63,9 @@ struct DynBbl {
 #endif
     uint64_t addr;
     uint32_t uops;
+    uint32_t branchUops;
+    uint32_t fpAddSubUops;
+    uint32_t fpMulDivUops;
     uint32_t approxInstrs;
     DynUop uop[1];
 
@@ -70,9 +73,12 @@ struct DynBbl {
         return offsetof(DynBbl, uop) + sizeof(DynUop)*uops /*wtf... offsetof doesn't work with uop[uops]*/;
     }
 
-    void init(uint64_t _addr, uint32_t _uops, uint32_t _approxInstrs) {
+    void init(uint64_t _addr, uint32_t _uops, uint32_t _branchUops, uint32_t _fpAddSubUops, uint32_t _fpMulDivUops, uint32_t _approxInstrs) {
         // NOTE: this is a POD type, so we don't need to call a constructor; otherwise, we should use placement new
         uops = _uops;
+        branchUops = _branchUops;
+        fpAddSubUops = _fpAddSubUops;
+        fpMulDivUops = _fpMulDivUops;
         approxInstrs = _approxInstrs;
     }
 };

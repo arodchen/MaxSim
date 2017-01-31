@@ -84,6 +84,82 @@ static inline bool isFlagsReg(uint32_t reg) {
     return (reg == REG_EFLAGS || reg == REG_FLAGS || reg == REG_MXCSR);
 }
 
+enum OpcodeType {
+    OPCODE_TYPE_BRANCH,
+    OPCODE_TYPE_FP_ADDSUB,
+    OPCODE_TYPE_FP_MULDIV,
+    OPCODE_TYPE_UNTYPED
+};
+
+static int getOpcodeType(xed_iclass_enum_t opcode) {
+    switch (opcode) {
+        default:
+            return OPCODE_TYPE_UNTYPED;
+        case XO(CALL_FAR):
+        case XO(CALL_NEAR):
+        case XO(JB):
+        case XO(JBE):
+        case XO(JL):
+        case XO(JLE):
+        case XO(JMP):
+        case XO(JMP_FAR):
+        case XO(JNB):
+        case XO(JNBE):
+        case XO(JNL):
+        case XO(JNLE):
+        case XO(JNO):
+        case XO(JNP):
+        case XO(JNS):
+        case XO(JNZ):
+        case XO(JO):
+        case XO(JP):
+        case XO(JRCXZ):
+        case XO(JS):
+        case XO(JZ):
+        case XO(RET_FAR):
+        case XO(RET_NEAR):
+            return OPCODE_TYPE_BRANCH;
+        case XO(ADDPD):
+        case XO(ADDPS):
+        case XO(ADDSD):
+        case XO(ADDSS):
+        case XO(ADDSUBPD):
+        case XO(ADDSUBPS):
+        case XO(SUBPD):
+        case XO(SUBPS):
+        case XO(SUBSD):
+        case XO(SUBSS):
+        case XO(VADDPD):
+        case XO(VADDPS):
+        case XO(VADDSD):
+        case XO(VADDSS):
+        case XO(VADDSUBPD):
+        case XO(VADDSUBPS):
+        case XO(VSUBPD):
+        case XO(VSUBPS):
+        case XO(VSUBSD):
+        case XO(VSUBSS):
+            return OPCODE_TYPE_FP_ADDSUB;
+        case XO(MULPD):
+        case XO(MULPS):
+        case XO(MULSD):
+        case XO(MULSS):
+        case XO(DIVPD):
+        case XO(DIVPS):
+        case XO(DIVSD):
+        case XO(DIVSS):
+        case XO(VMULPD):
+        case XO(VMULPS):
+        case XO(VMULSD):
+        case XO(VMULSS):
+        case XO(VDIVPD):
+        case XO(VDIVPS):
+        case XO(VDIVSD):
+        case XO(VDIVSS):
+            return OPCODE_TYPE_FP_MULDIV;
+    }
+}
+
 void Decoder::Instr::reorderRegs(uint32_t* array, uint32_t regs) {
     if (regs == 0) return;
     //Unoptimized bubblesort -- when arrays are this short, regularity wins over O(n^2).
@@ -1265,6 +1341,9 @@ BblInfo* Decoder::decodeBbl(BBL bbl, bool oooDecoding) {
 
     if (oooDecoding) {
         //Decode BBL
+        uint32_t branchUops = 0;
+        uint32_t fpAddSubUops = 0;
+        uint32_t fpMulDivUops = 0;
         uint32_t approxInstrs = 0;
         uint32_t curIns = 0;
         DynUopVec uopVec;
@@ -1318,6 +1397,19 @@ BblInfo* Decoder::decodeBbl(BBL bbl, bool oooDecoding) {
 #ifdef PROFILE_ALL_INSTRS
             inaccurate = true; //uncomment to profile everything
 #endif
+            switch (getOpcodeType((xed_iclass_enum_t) INS_Opcode(ins))) {
+                default:
+                    break;
+                case OPCODE_TYPE_BRANCH:
+                    branchUops++;
+                    break;
+                case OPCODE_TYPE_FP_ADDSUB:
+                    fpAddSubUops++;
+                    break;
+                case OPCODE_TYPE_FP_MULDIV:
+                    fpMulDivUops++;
+                    break;
+            }
             if (inaccurate) {
                 approxInstrs++;
 #ifdef BBL_PROFILING
@@ -1425,6 +1517,9 @@ BblInfo* Decoder::decodeBbl(BBL bbl, bool oooDecoding) {
         DynBbl& dynBbl = bblInfo->oooBbl[0];
         dynBbl.addr = BBL_Address(bbl);
         dynBbl.uops = uopVec.size();
+        dynBbl.branchUops = branchUops;
+        dynBbl.fpAddSubUops = fpAddSubUops;
+        dynBbl.fpMulDivUops = fpMulDivUops;
         dynBbl.approxInstrs = approxInstrs;
         for (uint32_t i = 0; i < dynBbl.uops; i++) dynBbl.uop[i] = uopVec[i];
 
