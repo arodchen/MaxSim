@@ -39,6 +39,16 @@
 #define MAX_UOP_SRC_REGS 2
 #define MAX_UOP_DST_REGS 2
 
+//PORT defines. You might want to change these to affect scheduling
+#define PORT_0 (0x1)
+#define PORT_1 (0x2)
+#define PORT_2 (0x4)
+#define PORT_3 (0x8)
+#define PORT_4 (0x10)
+#define PORT_5 (0x20)
+
+#define PORTS_015 (PORT_0 | PORT_1 | PORT_5)
+
 /* NOTE this uses stronly typed enums, a C++11 feature. This saves a bunch of typecasts while keeping UopType enums 1-byte long.
  * If you use gcc < 4.6 or some other compiler, either go back to casting or lose compactness in the layout.
  */
