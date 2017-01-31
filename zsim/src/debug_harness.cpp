@@ -35,6 +35,18 @@
 #define QUOTED_(x) #x
 #define QUOTED(x) QUOTED_(x)
 
+//Debug with gdb or ddd
+#define DBG_GDB 1
+#define DBG_DDD 0
+
+#ifdef DBG_GDB
+#   define DBG_CMD "gdb"
+#   define DBG_EXEC_CMD_ARG "-ex"
+#elif DBG_DDD
+#   define DBG_CMD "ddd"
+#   define DBG_EXEC_CMD_ARG "--eval-command"
+#endif
+
 /* This file is pretty much self-contained, and has minimal external dependencies.
  * Please keep it this way, and ESPECIALLY don't include Pin headers since there
  * seem to be conflicts between those and some system headers.
@@ -47,12 +59,12 @@ int launchXtermDebugger(int targetPid, LibInfo* libzsimAddrs) {
         char symbolCmdStr[2048];
         snprintf(symbolCmdStr, sizeof(symbolCmdStr), "add-symbol-file %s %p -s .data %p -s .bss %p", QUOTED(ZSIM_PATH), libzsimAddrs->textAddr, libzsimAddrs->dataAddr, libzsimAddrs->bssAddr);
 
-        const char* const args[] = {"xterm", "-e", "gdb", "-p", targetPidStr.c_str(),
-            "-ex", "set confirm off", //we know what we're doing in the following 2 commands
-            "-ex", symbolCmdStr,
-            "-ex", "handle SIGTRAP nostop noprint", // For some reason we receive a lot of spurious sigtraps
-            "-ex", "set confirm on", //reenable confirmations
-            "-ex", "c", //start running
+        const char* const args[] = {"xterm", "-e", DBG_CMD, "-p", targetPidStr.c_str(),
+            DBG_EXEC_CMD_ARG, "set confirm off", //we know what we're doing in the following 2 commands
+            DBG_EXEC_CMD_ARG, symbolCmdStr,
+            DBG_EXEC_CMD_ARG, "handle SIGTRAP nostop noprint", // For some reason we receive a lot of spurious sigtraps
+            DBG_EXEC_CMD_ARG, "set confirm on", //reenable confirmations
+            //DBG_EXEC_CMD_ARG, "c", //start running
             nullptr};
         execvp(args[0], (char* const*)args);
         panic("shouldn't reach this...");
