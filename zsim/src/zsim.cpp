@@ -829,7 +829,7 @@ uint32_t CountActiveThreads() {
 }
 
 void SimThreadStart(THREADID tid) {
-    info("Thread %d starting", tid);
+    info("Thread %d starting, TID %ld", tid, syscall(SYS_gettid));
     if (tid > MAX_THREADS) panic("tid > MAX_THREADS");
     zinfo->sched->start(procIdx, tid, procTreeNode->getMask());
     activeThreads[tid] = true;
@@ -869,10 +869,10 @@ VOID ThreadStart(THREADID tid, CONTEXT *ctxt, INT32 flags, VOID *v) {
     }
 
     if (procTreeNode->isInFastForward()) {
-        info("FF thread %d starting", tid);
+        info("FF thread %d starting, TID %ld", tid, syscall(SYS_gettid));
         fPtrs[tid] = GetFFPtrs();
     } else if (zinfo->registerThreads) {
-        info("Shadow thread %d starting", tid);
+        info("Shadow thread %d starting, TID %ld", tid, syscall(SYS_gettid));
         fPtrs[tid] = nopPtrs;
     } else {
         //Start normal thread
