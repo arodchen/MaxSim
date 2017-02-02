@@ -35,8 +35,10 @@
  */
 class CacheArray : public GlobAlloc {
     public:
-        /* Returns tag's ID if present, -1 otherwise. If updateReplacement is set, call the replacement policy's update() on the line accessed*/
-        virtual int32_t lookup(const Address lineAddr, const MemReq* req, bool updateReplacement) = 0;
+        /* Returns tag's ID if present, -1 otherwise. If updateReplacement is set, call the replacement policy's update() on the line accessed.
+         * If fullyInvalidate is true lookup is done for full invalidation purposes.
+         */
+        virtual int32_t lookup(const Address lineAddr, const MemReq* req, bool updateReplacement, bool fullyInvalidate) = 0;
 
         /* Runs replacement scheme, returns tag ID of new pos and address of line to write back*/
         virtual uint32_t preinsert(const Address lineAddr, const MemReq* req, Address* wbLineAddr) = 0;
@@ -68,7 +70,7 @@ class SetAssocArray : public CacheArray {
     public:
         SetAssocArray(uint32_t _numLines, uint32_t _assoc, ReplPolicy* _rp, HashFamily* _hf);
 
-        int32_t lookup(const Address lineAddr, const MemReq* req, bool updateReplacement);
+        int32_t lookup(const Address lineAddr, const MemReq* req, bool updateReplacement, bool fullyInvalidate);
         uint32_t preinsert(const Address lineAddr, const MemReq* req, Address* wbLineAddr);
         void postinsert(const Address lineAddr, const MemReq* req, uint32_t candidate);
 };
@@ -97,7 +99,7 @@ class ZArray : public CacheArray {
     public:
         ZArray(uint32_t _numLines, uint32_t _ways, uint32_t _candidates, ReplPolicy* _rp, HashFamily* _hf);
 
-        int32_t lookup(const Address lineAddr, const MemReq* req, bool updateReplacement);
+        int32_t lookup(const Address lineAddr, const MemReq* req, bool updateReplacement, bool fullyInvalidate);
         uint32_t preinsert(const Address lineAddr, const MemReq* req, Address* wbLineAddr);
         void postinsert(const Address lineAddr, const MemReq* req, uint32_t candidate);
 

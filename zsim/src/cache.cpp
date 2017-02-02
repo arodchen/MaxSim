@@ -63,7 +63,7 @@ uint64_t Cache::access(MemReq& req) {
     bool skipAccess = cc->startAccess(req); //may need to skip access due to races (NOTE: may change req.type!)
     if (likely(!skipAccess)) {
         bool updateReplacement = (req.type == GETS) || (req.type == GETX);
-        int32_t lineId = array->lookup(req.lineAddr, &req, updateReplacement);
+        int32_t lineId = array->lookup(req.lineAddr, &req, updateReplacement, false);
         respCycle += accLat;
 
         if (lineId == -1 && cc->shouldAllocate(req)) {
@@ -130,7 +130,7 @@ void Cache::startInvalidate() {
 }
 
 uint64_t Cache::finishInvalidate(const InvReq& req) {
-    int32_t lineId = array->lookup(req.lineAddr, nullptr, false);
+    int32_t lineId = array->lookup(req.lineAddr, nullptr, false, req.type == INV);
     assert_msg(lineId != -1, "[%s] Invalidate on non-existing address 0x%lx type %s lineId %d, reqWriteback %d", name.c_str(), req.lineAddr, InvTypeName(req.type), lineId, *req.writeback);
     uint64_t respCycle = req.cycle + invLat;
     trace(Cache, "[%s] Invalidate start 0x%lx type %s lineId %d, reqWriteback %d", name.c_str(), req.lineAddr, InvTypeName(req.type), lineId, *req.writeback);

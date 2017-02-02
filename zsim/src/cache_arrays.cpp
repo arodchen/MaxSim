@@ -36,7 +36,7 @@ SetAssocArray::SetAssocArray(uint32_t _numLines, uint32_t _assoc, ReplPolicy* _r
     assert_msg(isPow2(numSets), "must have a power of 2 # sets, but you specified %d", numSets);
 }
 
-int32_t SetAssocArray::lookup(const Address lineAddr, const MemReq* req, bool updateReplacement) {
+int32_t SetAssocArray::lookup(const Address lineAddr, const MemReq* req, bool updateReplacement, bool fullyInvalidate) {
     uint32_t set = hf->hash(0, lineAddr) & setMask;
     uint32_t first = set*assoc;
     for (uint32_t id = first; id < first + assoc; id++) {
@@ -95,7 +95,7 @@ void ZArray::initStats(AggregateStat* parentStat) {
     parentStat->append(objStats);
 }
 
-int32_t ZArray::lookup(const Address lineAddr, const MemReq* req, bool updateReplacement) {
+int32_t ZArray::lookup(const Address lineAddr, const MemReq* req, bool updateReplacement, bool fullyInvalidate) {
     /* Be defensive: If the line is 0, panic instead of asserting. Now this can
      * only happen on a segfault in the main program, but when we move to full
      * system, phy page 0 might be used, and this will hit us in a very subtle

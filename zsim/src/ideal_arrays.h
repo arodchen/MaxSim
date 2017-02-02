@@ -78,7 +78,7 @@ class IdealLRUArray : public CacheArray {
             rp = new ProxyReplPolicy(this);
         }
 
-        int32_t lookup(const Address lineAddr, const MemReq* req, bool updateReplacement) {
+        int32_t lookup(const Address lineAddr, const MemReq* req, bool updateReplacement, bool fullyInvalidate) {
             g_unordered_map<Address, uint32_t>::iterator it = lineMap.find(lineAddr);
             if (it == lineMap.end()) return -1;
 
@@ -251,7 +251,7 @@ class IdealLRUPartArray : public CacheArray {
             lineAddrs = gm_calloc<Address>(numLines);
         }
 
-        int32_t lookup(const Address lineAddr, const MemReq* req, bool updateReplacement) {
+        int32_t lookup(const Address lineAddr, const MemReq* req, bool updateReplacement, bool fullyInvalidate) {
             g_unordered_map<Address, uint32_t>::iterator it = lineMap.find(lineAddr);
             if (it == lineMap.end()) return -1;
 

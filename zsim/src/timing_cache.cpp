@@ -124,7 +124,7 @@ uint64_t TimingCache::access(MemReq& req) {
     bool skipAccess = cc->startAccess(req); //may need to skip access due to races (NOTE: may change req.type!)
     if (likely(!skipAccess)) {
         bool updateReplacement = (req.type == GETS) || (req.type == GETX);
-        int32_t lineId = array->lookup(req.lineAddr, &req, updateReplacement);
+        int32_t lineId = array->lookup(req.lineAddr, &req, updateReplacement, false);
         respCycle += accLat;
 
         if (lineId == -1 /*&& cc->shouldAllocate(req)*/) {
