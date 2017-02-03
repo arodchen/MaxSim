@@ -145,11 +145,11 @@ void OOOCore::contextSwitch(int32_t gid) {
 
 InstrFuncPtrs OOOCore::GetFuncPtrs() {return {LoadFunc, StoreFunc, BblFunc, BranchFunc, PredLoadFunc, PredStoreFunc, FPTR_ANALYSIS, {0}};}
 
-inline void OOOCore::load(Address addr) {
+inline void OOOCore::load(Address addr, uint32_t size, Address base) {
     loadAddrs[loads++] = addr;
 }
 
-void OOOCore::store(Address addr) {
+void OOOCore::store(Address addr, uint32_t size, Address base) {
     storeAddrs[stores++] = addr;
 }
 
@@ -167,7 +167,7 @@ void OOOCore::branch(Address pc, bool taken, Address takenNpc, Address notTakenN
     branchNotTakenNpc = notTakenNpc;
 }
 
-inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
+inline void OOOCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
     if (!prevBbl) {
         // This is the 1st BBL since scheduled, nothing to simulate
         prevBbl = bblInfo;
@@ -501,24 +501,24 @@ void OOOCore::advance(uint64_t targetCycle) {
 
 // Pin interface code
 
-void OOOCore::LoadFunc(THREADID tid, ADDRINT addr) {static_cast<OOOCore*>(cores[tid])->load(addr);}
-void OOOCore::StoreFunc(THREADID tid, ADDRINT addr) {static_cast<OOOCore*>(cores[tid])->store(addr);}
+void OOOCore::LoadFunc(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base) {static_cast<OOOCore*>(cores[tid])->load(addr, size, base);}
+void OOOCore::StoreFunc(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base) {static_cast<OOOCore*>(cores[tid])->store(addr, size, base);}
 
-void OOOCore::PredLoadFunc(THREADID tid, ADDRINT addr, BOOL pred) {
+void OOOCore::PredLoadFunc(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base, BOOL pred) {
     OOOCore* core = static_cast<OOOCore*>(cores[tid]);
-    if (pred) core->load(addr);
+    if (pred) core->load(addr, size, base);
     else core->predFalseMemOp();
 }
 
-void OOOCore::PredStoreFunc(THREADID tid, ADDRINT addr, BOOL pred) {
+void OOOCore::PredStoreFunc(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base, BOOL pred) {
     OOOCore* core = static_cast<OOOCore*>(cores[tid]);
-    if (pred) core->store(addr);
+    if (pred) core->store(addr, size, base);
     else core->predFalseMemOp();
 }
 
 void OOOCore::BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
     OOOCore* core = static_cast<OOOCore*>(cores[tid]);
-    core->bbl(bblAddr, bblInfo);
+    core->bbl(tid, bblAddr, bblInfo);
 
     while (core->curCycle > core->phaseEndCycle) {
         core->phaseEndCycle += zinfo->phaseLength;

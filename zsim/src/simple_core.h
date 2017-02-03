@@ -59,15 +59,15 @@ class SimpleCore : public Core {
 
     protected:
         //Simulation functions
-        inline void load(Address addr);
-        inline void store(Address addr);
+        inline void load(Address addr, uint8_t size, Address base);
+        inline void store(Address addr, uint8_t size, Address base);
         inline void bbl(Address bblAddr, BblInfo* bblInstrs);
 
-        static void LoadFunc(THREADID tid, ADDRINT addr);
-        static void StoreFunc(THREADID tid, ADDRINT addr);
+        static void LoadFunc(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base);
+        static void StoreFunc(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base);
         static void BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo);
-        static void PredLoadFunc(THREADID tid, ADDRINT addr, BOOL pred);
-        static void PredStoreFunc(THREADID tid, ADDRINT addr, BOOL pred);
+        static void PredLoadFunc(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base, BOOL pred);
+        static void PredStoreFunc(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base, BOOL pred);
 
         static void BranchFunc(THREADID, ADDRINT, BOOL, ADDRINT, ADDRINT) {}
 }  ATTR_LINE_ALIGNED; //This needs to take up a whole cache line, or false sharing will be extremely frequent

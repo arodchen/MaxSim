@@ -77,13 +77,13 @@ void TimingCore::leave() {
     cRec.notifyLeave(curCycle);
 }
 
-void TimingCore::loadAndRecord(Address addr) {
+void TimingCore::loadAndRecord(Address addr, uint8_t size, Address base) {
     uint64_t startCycle = curCycle;
     curCycle = l1d->load(addr, curCycle);
     cRec.record(startCycle);
 }
 
-void TimingCore::storeAndRecord(Address addr) {
+void TimingCore::storeAndRecord(Address addr, uint8_t size, Address base) {
     uint64_t startCycle = curCycle;
     curCycle = l1d->store(addr, curCycle);
     cRec.record(startCycle);
@@ -106,12 +106,14 @@ InstrFuncPtrs TimingCore::GetFuncPtrs() {
     return {LoadAndRecordFunc, StoreAndRecordFunc, BblAndRecordFunc, BranchFunc, PredLoadAndRecordFunc, PredStoreAndRecordFunc, FPTR_ANALYSIS, {0}};
 }
 
-void TimingCore::LoadAndRecordFunc(THREADID tid, ADDRINT addr) {
-    static_cast<TimingCore*>(cores[tid])->loadAndRecord(addr);
+void TimingCore::LoadAndRecordFunc(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base) {
+    assert(size < 256);
+    static_cast<TimingCore*>(cores[tid])->loadAndRecord(addr, (uint8_t)size, base);
 }
 
-void TimingCore::StoreAndRecordFunc(THREADID tid, ADDRINT addr) {
-    static_cast<TimingCore*>(cores[tid])->storeAndRecord(addr);
+void TimingCore::StoreAndRecordFunc(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base) {
+    assert(size < 256);
+    static_cast<TimingCore*>(cores[tid])->storeAndRecord(addr, (uint8_t)size, base);
 }
 
 void TimingCore::BblAndRecordFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
@@ -126,11 +128,13 @@ void TimingCore::BblAndRecordFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInf
     }
 }
 
-void TimingCore::PredLoadAndRecordFunc(THREADID tid, ADDRINT addr, BOOL pred) {
-    if (pred) static_cast<TimingCore*>(cores[tid])->loadAndRecord(addr);
+void TimingCore::PredLoadAndRecordFunc(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base, BOOL pred) {
+    assert(size < 256);
+    if (pred) static_cast<TimingCore*>(cores[tid])->loadAndRecord(addr, size, base);
 }
 
-void TimingCore::PredStoreAndRecordFunc(THREADID tid, ADDRINT addr, BOOL pred) {
-    if (pred) static_cast<TimingCore*>(cores[tid])->storeAndRecord(addr);
+void TimingCore::PredStoreAndRecordFunc(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base, BOOL pred) {
+    assert(size < 256);
+    if (pred) static_cast<TimingCore*>(cores[tid])->storeAndRecord(addr, size, base);
 }
 

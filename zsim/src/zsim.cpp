@@ -167,12 +167,12 @@ VOID FFThread(VOID* arg);
 
 InstrFuncPtrs fPtrs[MAX_THREADS] ATTR_LINE_ALIGNED; //minimize false sharing
 
-VOID PIN_FAST_ANALYSIS_CALL IndirectLoadSingle(THREADID tid, ADDRINT addr) {
-    fPtrs[tid].loadPtr(tid, addr);
+VOID PIN_FAST_ANALYSIS_CALL IndirectLoadSingle(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base) {
+    fPtrs[tid].loadPtr(tid, addr, size, base);
 }
 
-VOID PIN_FAST_ANALYSIS_CALL IndirectStoreSingle(THREADID tid, ADDRINT addr) {
-    fPtrs[tid].storePtr(tid, addr);
+VOID PIN_FAST_ANALYSIS_CALL IndirectStoreSingle(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base) {
+    fPtrs[tid].storePtr(tid, addr, size, base);
 }
 
 VOID PIN_FAST_ANALYSIS_CALL IndirectBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
@@ -183,12 +183,12 @@ VOID PIN_FAST_ANALYSIS_CALL IndirectRecordBranch(THREADID tid, ADDRINT branchPc,
     fPtrs[tid].branchPtr(tid, branchPc, taken, takenNpc, notTakenNpc);
 }
 
-VOID PIN_FAST_ANALYSIS_CALL IndirectPredLoadSingle(THREADID tid, ADDRINT addr, BOOL pred) {
-    fPtrs[tid].predLoadPtr(tid, addr, pred);
+VOID PIN_FAST_ANALYSIS_CALL IndirectPredLoadSingle(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base, BOOL pred) {
+    fPtrs[tid].predLoadPtr(tid, addr, size, base, pred);
 }
 
-VOID PIN_FAST_ANALYSIS_CALL IndirectPredStoreSingle(THREADID tid, ADDRINT addr, BOOL pred) {
-    fPtrs[tid].predStorePtr(tid, addr, pred);
+VOID PIN_FAST_ANALYSIS_CALL IndirectPredStoreSingle(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base, BOOL pred) {
+    fPtrs[tid].predStorePtr(tid, addr, size, base, pred);
 }
 
 
@@ -209,14 +209,14 @@ void Join(uint32_t tid) {
     fPtrs[tid] = cores[tid]->GetFuncPtrs(); //back to normal pointers
 }
 
-VOID JoinAndLoadSingle(THREADID tid, ADDRINT addr) {
+VOID JoinAndLoadSingle(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base) {
     Join(tid);
-    fPtrs[tid].loadPtr(tid, addr);
+    fPtrs[tid].loadPtr(tid, addr, size, base);
 }
 
-VOID JoinAndStoreSingle(THREADID tid, ADDRINT addr) {
+VOID JoinAndStoreSingle(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base) {
     Join(tid);
-    fPtrs[tid].storePtr(tid, addr);
+    fPtrs[tid].storePtr(tid, addr, size, base);
 }
 
 VOID JoinAndBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
@@ -229,21 +229,21 @@ VOID JoinAndRecordBranch(THREADID tid, ADDRINT branchPc, BOOL taken, ADDRINT tak
     fPtrs[tid].branchPtr(tid, branchPc, taken, takenNpc, notTakenNpc);
 }
 
-VOID JoinAndPredLoadSingle(THREADID tid, ADDRINT addr, BOOL pred) {
+VOID JoinAndPredLoadSingle(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base, BOOL pred) {
     Join(tid);
-    fPtrs[tid].predLoadPtr(tid, addr, pred);
+    fPtrs[tid].predLoadPtr(tid, addr, size, base, pred);
 }
 
-VOID JoinAndPredStoreSingle(THREADID tid, ADDRINT addr, BOOL pred) {
+VOID JoinAndPredStoreSingle(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base, BOOL pred) {
     Join(tid);
-    fPtrs[tid].predStorePtr(tid, addr, pred);
+    fPtrs[tid].predStorePtr(tid, addr, size, base, pred);
 }
 
 // NOP variants: Do nothing
-VOID NOPLoadStoreSingle(THREADID tid, ADDRINT addr) {}
+VOID NOPLoadStoreSingle(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base) {}
 VOID NOPBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {}
 VOID NOPRecordBranch(THREADID tid, ADDRINT addr, BOOL taken, ADDRINT takenNpc, ADDRINT notTakenNpc) {}
-VOID NOPPredLoadStoreSingle(THREADID tid, ADDRINT addr, BOOL pred) {}
+VOID NOPPredLoadStoreSingle(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base, BOOL pred) {}
 
 // FF is basically NOP except for basic blocks
 VOID FFBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
@@ -530,6 +530,39 @@ static void PrintIp(THREADID tid, ADDRINT ip) {
 }
 #endif
 
+// Memory Access (MA) operands
+enum MA_OP {
+    MA_R,  // first  read MA operand
+    MA_R2, // second read MA operand
+    MA_W   //       write MA operand
+};
+
+// Returns a base register of an instruction MA operand
+REG GetBaseRegOfInsMAOp(INS ins, MA_OP maOp) {
+    for (UINT32 opIdx = 0; opIdx < INS_OperandCount(ins); opIdx++) {
+        if (!INS_OperandIsMemory(ins, opIdx)) {
+            continue;
+        }
+        if (maOp == MA_W) {
+            if (INS_OperandWritten(ins, opIdx)) {
+                return INS_OperandMemoryBaseReg(ins, opIdx);
+            }
+        }
+        if (maOp == MA_R || maOp == MA_R2) {
+            if (INS_OperandRead(ins, opIdx)) {
+                if (maOp == MA_R) {
+                    return INS_OperandMemoryBaseReg(ins, opIdx);
+                } else {
+                    maOp = MA_R;
+                }
+            }
+        }
+    }
+    // Control flow should not reach this point if the requested MA operand is present in the instruction.
+    assert(0);
+    return REG_INVALID();
+}
+
 VOID Instruction(INS ins) {
     //Uncomment to print an instruction trace
     //INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)PrintIp, IARG_THREAD_ID, IARG_REG_VALUE, REG_INST_PTR, IARG_END);
@@ -542,26 +575,68 @@ VOID Instruction(INS ins) {
         AFUNPTR PredStoreFuncPtr = (AFUNPTR) IndirectPredStoreSingle;
 
         if (INS_IsMemoryRead(ins)) {
+            REG baseReg = GetBaseRegOfInsMAOp(ins, MA_R);
+            bool hasBaseReg = (baseReg != REG_INVALID());
             if (!INS_IsPredicated(ins)) {
-                INS_InsertCall(ins, IPOINT_BEFORE, LoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD_EA, IARG_END);
+                if (hasBaseReg) {
+                    INS_InsertCall(ins, IPOINT_BEFORE, LoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID,
+                                   IARG_MEMORYREAD_EA, IARG_MEMORYREAD_SIZE, IARG_REG_VALUE, baseReg, IARG_END);
+                } else {
+                    INS_InsertCall(ins, IPOINT_BEFORE, LoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID,
+                                   IARG_MEMORYREAD_EA, IARG_MEMORYREAD_SIZE, IARG_MEMORYREAD_EA, IARG_END);
+                }
             } else {
-                INS_InsertCall(ins, IPOINT_BEFORE, PredLoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD_EA, IARG_EXECUTING, IARG_END);
+                if (hasBaseReg) {
+                    INS_InsertCall(ins, IPOINT_BEFORE, PredLoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID,
+                                   IARG_MEMORYREAD_EA, IARG_MEMORYREAD_SIZE, IARG_REG_VALUE, baseReg, IARG_EXECUTING, IARG_END);
+                } else {
+                    INS_InsertCall(ins, IPOINT_BEFORE, PredLoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID,
+                                   IARG_MEMORYREAD_EA, IARG_MEMORYREAD_SIZE, IARG_MEMORYREAD_EA, IARG_EXECUTING, IARG_END);
+                }
             }
         }
 
         if (INS_HasMemoryRead2(ins)) {
+            REG baseReg = GetBaseRegOfInsMAOp(ins, MA_R2);
+            bool hasBaseReg = (baseReg != REG_INVALID());
             if (!INS_IsPredicated(ins)) {
-                INS_InsertCall(ins, IPOINT_BEFORE, LoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD2_EA, IARG_END);
+                if (hasBaseReg) {
+                    INS_InsertCall(ins, IPOINT_BEFORE, LoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID,
+                                   IARG_MEMORYREAD2_EA, IARG_MEMORYREAD_SIZE, IARG_REG_VALUE, baseReg, IARG_END);
+                } else {
+                    INS_InsertCall(ins, IPOINT_BEFORE, LoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID,
+                                   IARG_MEMORYREAD2_EA, IARG_MEMORYREAD_SIZE, IARG_MEMORYREAD2_EA, IARG_END);
+                }
             } else {
-                INS_InsertCall(ins, IPOINT_BEFORE, PredLoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD2_EA, IARG_EXECUTING, IARG_END);
+                if (hasBaseReg) {
+                    INS_InsertCall(ins, IPOINT_BEFORE, PredLoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID,
+                                   IARG_MEMORYREAD2_EA, IARG_MEMORYREAD_SIZE, IARG_REG_VALUE, baseReg, IARG_EXECUTING, IARG_END);
+                } else {
+                    INS_InsertCall(ins, IPOINT_BEFORE, PredLoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID,
+                                   IARG_MEMORYREAD2_EA, IARG_MEMORYREAD_SIZE, IARG_MEMORYREAD2_EA, IARG_EXECUTING, IARG_END);
+                }
             }
         }
 
         if (INS_IsMemoryWrite(ins)) {
+            REG baseReg = GetBaseRegOfInsMAOp(ins, MA_W);
+            bool hasBaseReg = (baseReg != REG_INVALID());
             if (!INS_IsPredicated(ins)) {
-                INS_InsertCall(ins, IPOINT_BEFORE,  StoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_END);
+                if (hasBaseReg) {
+                    INS_InsertCall(ins, IPOINT_BEFORE, StoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID,
+                                   IARG_MEMORYWRITE_EA, IARG_MEMORYWRITE_SIZE, IARG_REG_VALUE, baseReg, IARG_END);
+                } else {
+                    INS_InsertCall(ins, IPOINT_BEFORE, StoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID,
+                                   IARG_MEMORYWRITE_EA, IARG_MEMORYWRITE_SIZE, IARG_MEMORYWRITE_EA, IARG_END);
+                }
             } else {
-                INS_InsertCall(ins, IPOINT_BEFORE,  PredStoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_EXECUTING, IARG_END);
+                if (hasBaseReg) {
+                    INS_InsertCall(ins, IPOINT_BEFORE, PredStoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID,
+                                   IARG_MEMORYWRITE_EA, IARG_MEMORYWRITE_SIZE, IARG_REG_VALUE, baseReg, IARG_EXECUTING, IARG_END);
+                } else {
+                    INS_InsertCall(ins, IPOINT_BEFORE, PredStoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID,
+                                   IARG_MEMORYWRITE_EA, IARG_MEMORYWRITE_SIZE, IARG_MEMORYWRITE_EA, IARG_EXECUTING, IARG_END);
+                }
             }
         }
 

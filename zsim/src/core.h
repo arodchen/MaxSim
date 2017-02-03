@@ -41,13 +41,13 @@ struct BblInfo {
  * As an artifact of having a shared code cache, we need these to be the same for different core types.
  */
 struct InstrFuncPtrs {  // NOLINT(whitespace)
-    void (*loadPtr)(THREADID, ADDRINT);
-    void (*storePtr)(THREADID, ADDRINT);
+    void (*loadPtr)(THREADID, ADDRINT, UINT32, ADDRINT);
+    void (*storePtr)(THREADID, ADDRINT, UINT32, ADDRINT);
     void (*bblPtr)(THREADID, ADDRINT, BblInfo*);
     void (*branchPtr)(THREADID, ADDRINT, BOOL, ADDRINT, ADDRINT);
     // Same as load/store functions, but last arg indicated whether op is executing
-    void (*predLoadPtr)(THREADID, ADDRINT, BOOL);
-    void (*predStorePtr)(THREADID, ADDRINT, BOOL);
+    void (*predLoadPtr)(THREADID, ADDRINT, UINT32, ADDRINT, BOOL);
+    void (*predStorePtr)(THREADID, ADDRINT, UINT32, ADDRINT, BOOL);
     uint64_t type;
     uint64_t pad[1];
     //NOTE: By having the struct be a power of 2 bytes, indirect calls are simpler (w/ gcc 4.4 -O3, 6->5 instructions, and those instructions are simpler)
