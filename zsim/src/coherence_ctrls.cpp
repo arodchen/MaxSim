@@ -26,6 +26,7 @@
 #include "coherence_ctrls.h"
 #include "cache.h"
 #include "network.h"
+#include "clu_stats.h"
 
 /* Do a simple XOR block hash on address to determine its bank. Hacky for now,
  * should probably have a class that deals with this with a real hash function
@@ -53,7 +54,8 @@ void MESIBottomCC::init(const g_vector<MemObject*>& _parents, Network* network, 
 }
 
 
-uint64_t MESIBottomCC::processEviction(Address wbLineAddr, uint32_t lineId, bool lowerLevelWriteback, uint64_t cycle, uint32_t srcId) {
+uint64_t MESIBottomCC::processEviction(Address wbLineAddr, uint32_t lineId, bool lowerLevelWriteback, uint64_t cycle, const MemReq& triggerReq) {
+    uint32_t srcId = triggerReq.srcId;
     MESIState* state = &array[lineId];
     if (lowerLevelWriteback) {
         //If this happens, when tcc issued the invalidations, it got a writeback. This means we have to do a PUTX, i.e. we have to transition to M if we are in E
@@ -67,13 +69,27 @@ uint64_t MESIBottomCC::processEviction(Address wbLineAddr, uint32_t lineId, bool
         case S:
         case E:
             {
-                MemReq req = {wbLineAddr, PUTS, selfId, state, cycle, &ccLock, *state, srcId, 0 /*no flags*/};
+                MemReq req = {wbLineAddr, PUTS, selfId, state, cycle, &ccLock, *state, srcId, 0 /*no flags*/
+#ifdef CLU_STATS_ENABLED
+                        , {UNDEF_VIRTUAL_ADDRESS, UNDEF_MA_SIZE, MAUndefined, triggerReq.statAttrs.replacedLineAddr, triggerReq.statAttrs.replacedLineAccessMask}
+#endif
+                    };
+#ifdef CLU_STATS_ENABLED
+                profCLE.inc();
+#endif
                 respCycle = parents[getParentId(wbLineAddr)]->access(req);
             }
             break;
         case M:
             {
-                MemReq req = {wbLineAddr, PUTX, selfId, state, cycle, &ccLock, *state, srcId, 0 /*no flags*/};
+                MemReq req = {wbLineAddr, PUTX, selfId, state, cycle, &ccLock, *state, srcId, 0 /*no flags*/
+#ifdef CLU_STATS_ENABLED
+                        , {UNDEF_VIRTUAL_ADDRESS, UNDEF_MA_SIZE, MAUndefined, triggerReq.statAttrs.replacedLineAddr, triggerReq.statAttrs.replacedLineAccessMask}
+#endif
+                    };
+#ifdef CLU_STATS_ENABLED
+                profCLE.inc();
+#endif
                 respCycle = parents[getParentId(wbLineAddr)]->access(req);
             }
             break;
@@ -84,7 +100,11 @@ uint64_t MESIBottomCC::processEviction(Address wbLineAddr, uint32_t lineId, bool
     return respCycle;
 }
 
-uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessType type, uint64_t cycle, uint32_t srcId, uint32_t flags) {
+uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessType type, uint64_t cycle, uint32_t srcId, uint32_t flags
+#ifdef CLU_STATS_ENABLED
+                                     , Address virtualAddr, uint8_t memoryAccessSize, MemReqStatType_t memReqStatType
+#endif
+                                     ) {
     uint64_t respCycle = cycle;
     MESIState* state = &array[lineId];
     switch (type) {
@@ -104,7 +124,11 @@ uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessTy
         case GETS:
             if (*state == I) {
                 uint32_t parentId = getParentId(lineAddr);
-                MemReq req = {lineAddr, GETS, selfId, state, cycle, &ccLock, *state, srcId, flags};
+                MemReq req = {lineAddr, GETS, selfId, state, cycle, &ccLock, *state, srcId, flags
+#ifdef CLU_STATS_ENABLED
+                        , {virtualAddr, memoryAccessSize, memReqStatType, UNDEF_CACHE_LINE_ADDRESS, CLU_STATS_ZERO_MASK}
+#endif
+                    };
                 uint32_t nextLevelLat = parents[parentId]->access(req) - cycle;
                 uint32_t netLat = parentRTTs[parentId];
                 profGETNextLevelLat.inc(nextLevelLat);
@@ -122,7 +146,11 @@ uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessTy
                 if (*state == I) profGETXMissIM.inc();
                 else profGETXMissSM.inc();
                 uint32_t parentId = getParentId(lineAddr);
-                MemReq req = {lineAddr, GETX, selfId, state, cycle, &ccLock, *state, srcId, flags};
+                MemReq req = {lineAddr, GETX, selfId, state, cycle, &ccLock, *state, srcId, flags
+#ifdef CLU_STATS_ENABLED
+                        , {virtualAddr, memoryAccessSize, memReqStatType, UNDEF_CACHE_LINE_ADDRESS, CLU_STATS_ZERO_MASK}
+#endif
+                    };
                 uint32_t nextLevelLat = parents[parentId]->access(req) - cycle;
                 uint32_t netLat = parentRTTs[parentId];
                 profGETNextLevelLat.inc(nextLevelLat);
@@ -190,7 +218,11 @@ uint64_t MESIBottomCC::processNonInclusiveWriteback(Address lineAddr, AccessType
     if (!nonInclusiveHack) panic("Non-inclusive %s on line 0x%lx, this cache should be inclusive", AccessTypeName(type), lineAddr);
 
     //info("Non-inclusive wback, forwarding");
-    MemReq req = {lineAddr, type, selfId, state, cycle, &ccLock, *state, srcId, flags | MemReq::NONINCLWB};
+    MemReq req = {lineAddr, type, selfId, state, cycle, &ccLock, *state, srcId, flags | MemReq::NONINCLWB
+#ifdef CLU_STATS_ENABLED
+            , {UNDEF_VIRTUAL_ADDRESS, UNDEF_MA_SIZE, MAUndefined, UNDEF_CACHE_LINE_ADDRESS, CLU_STATS_ZERO_MASK}
+#endif
+        };
     uint64_t respCycle = parents[getParentId(lineAddr)]->access(req);
     return respCycle;
 }

@@ -26,26 +26,68 @@
 #include "cache_arrays.h"
 #include "hash.h"
 #include "repl_policies.h"
+#include "clu_stats.h"
 
 /* Set-associative array implementation */
 
 SetAssocArray::SetAssocArray(uint32_t _numLines, uint32_t _assoc, ReplPolicy* _rp, HashFamily* _hf) : rp(_rp), hf(_hf), numLines(_numLines), assoc(_assoc)  {
     array = gm_calloc<Address>(numLines);
+#ifdef CLU_STATS_ENABLED
+    accessMask = gm_calloc<uint16_t>(numLines);
+#endif
     numSets = numLines/assoc;
     setMask = numSets - 1;
     assert_msg(isPow2(numSets), "must have a power of 2 # sets, but you specified %d", numSets);
 }
 
+void SetAssocArray::initStats(AggregateStat* parentStat) {
+#ifdef CLU_STATS_ENABLED
+    countUCLC.init("UCLC", "Utilized cache line chunks");
+    parentStat->append(&countUCLC);
+#endif
+}
+
+#ifdef CLU_STATS_ENABLED
+void SetAssocArray::processAccessCLUStats(const MemReq& req, const uint32_t lineIndex) {
+    if (req.statAttrs.virtualAddress != UNDEF_VIRTUAL_ADDRESS) {
+        assert((req.type == GETS) || (req.type == GETX));
+        accessMask[lineIndex] |= cluStatsGetUtilizationMask(req.statAttrs.virtualAddress, req.statAttrs.memoryAccessSize, req.statAttrs.memoryAccessType);
+    }
+}
+#endif
+
 int32_t SetAssocArray::lookup(const Address lineAddr, const MemReq* req, bool updateReplacement, bool fullyInvalidate) {
     uint32_t set = hf->hash(0, lineAddr) & setMask;
     uint32_t first = set*assoc;
-    for (uint32_t id = first; id < first + assoc; id++) {
-        if (array[id] ==  lineAddr) {
+    uint32_t retId = -1;
+#ifdef CLU_STATS_ENABLED
+    Address oldLineAddr = req ? req->statAttrs.replacedLineAddr : UNDEF_CACHE_LINE_ADDRESS;
+    bool isOldLineFound = (oldLineAddr == UNDEF_CACHE_LINE_ADDRESS);
+#else
+    bool isOldLineFound = true;
+#endif
+    bool isLineFound = false;
+    for (uint32_t id = first;
+         (id < first + assoc) && (!isLineFound || !isOldLineFound); id++) {
+        if (!isLineFound && (array[id] == lineAddr)) {
             if (updateReplacement) rp->update(id, req);
-            return id;
+            retId = id;
+            isLineFound = true;
         }
+#ifdef CLU_STATS_ENABLED
+        if (!isOldLineFound && (array[id] == oldLineAddr)) {
+            accessMask[id] |= req->statAttrs.replacedLineAccessMask;
+            isOldLineFound = true;
+        }
+#endif
     }
-    return -1;
+#ifdef CLU_STATS_ENABLED
+    if (fullyInvalidate) {
+        countUCLC.inc(__builtin_popcount(accessMask[retId]));
+        accessMask[retId] = CLU_STATS_ZERO_MASK;
+    }
+#endif
+    return retId;
 }
 
 uint32_t SetAssocArray::preinsert(const Address lineAddr, const MemReq* req, Address* wbLineAddr) { //TODO: Give out valid bit of wb cand?
@@ -55,12 +97,30 @@ uint32_t SetAssocArray::preinsert(const Address lineAddr, const MemReq* req, Add
     uint32_t candidate = rp->rankCands(req, SetAssocCands(first, first+assoc));
 
     *wbLineAddr = array[candidate];
+#ifdef CLU_STATS_ENABLED
+    {
+        MemReq *nonConstReq = const_cast<MemReq *>(req);
+        nonConstReq->statAttrs.replacedLineAddr = *wbLineAddr;
+        nonConstReq->statAttrs.replacedLineAccessMask = accessMask[candidate];
+    }
+#endif
     return candidate;
 }
 
 void SetAssocArray::postinsert(const Address lineAddr, const MemReq* req, uint32_t candidate) {
+#ifdef CLU_STATS_ENABLED
+    countUCLC.inc(__builtin_popcount(accessMask[candidate]));
+    accessMask[candidate] = CLU_STATS_ZERO_MASK;
+#endif
     rp->replaced(candidate);
     array[candidate] = lineAddr;
+#ifdef CLU_STATS_ENABLED
+    {
+        MemReq *nonConstReq = const_cast<MemReq *>(req);
+        nonConstReq->statAttrs.replacedLineAddr = UNDEF_CACHE_LINE_ADDRESS;
+        nonConstReq->statAttrs.replacedLineAccessMask = CLU_STATS_ZERO_MASK;
+    }
+#endif
     rp->update(candidate, req);
 }
 
@@ -93,6 +153,9 @@ void ZArray::initStats(AggregateStat* parentStat) {
     statSwaps.init("swaps", "Block swaps in replacement process");
     objStats->append(&statSwaps);
     parentStat->append(objStats);
+#ifdef CLU_STATS_ENABLED
+    panic("CLU statistics collection is not implemented for ZArray!");
+#endif
 }
 
 int32_t ZArray::lookup(const Address lineAddr, const MemReq* req, bool updateReplacement, bool fullyInvalidate) {

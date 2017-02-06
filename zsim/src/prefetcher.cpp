@@ -23,8 +23,10 @@
  * this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "constants.h"
 #include "prefetcher.h"
 #include "bithacks.h"
+#include "clu_stats.h"
 
 //#define DBG(args...) info(args)
 #define DBG(args...)
@@ -138,7 +140,11 @@ uint64_t StreamPrefetcher::access(MemReq& req) {
 
                 if (prefetchPos < 64 && !e.valid[prefetchPos]) {
                     MESIState state = I;
-                    MemReq pfReq = {req.lineAddr + prefetchPos - pos, GETS, req.childId, &state, reqCycle, req.childLock, state, req.srcId, MemReq::PREFETCH};
+                    MemReq pfReq = {req.lineAddr + prefetchPos - pos, GETS, req.childId, &state, reqCycle, req.childLock, state, req.srcId, MemReq::PREFETCH
+#ifdef CLU_STATS_ENABLED
+                            , {UNDEF_VIRTUAL_ADDRESS, UNDEF_MA_SIZE, MAUndefined, UNDEF_CACHE_LINE_ADDRESS, CLU_STATS_ZERO_MASK}
+#endif
+                    };
                     uint64_t pfRespCycle = parent->access(pfReq);  // FIXME, might segfault
                     e.valid[prefetchPos] = true;
                     e.times[prefetchPos].fill(reqCycle, pfRespCycle);

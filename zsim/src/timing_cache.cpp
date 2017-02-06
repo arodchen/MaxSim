@@ -146,6 +146,9 @@ uint64_t TimingCache::access(MemReq& req) {
 
         uint64_t getDoneCycle = respCycle;
         respCycle = cc->processAccess(req, lineId, respCycle, &getDoneCycle);
+#ifdef CLU_STATS_ENABLED
+        array->processAccessCLUStats(req, lineId);
+#endif
 
         if (evRec->hasRecord()) accessRecord = evRec->popRecord();
 

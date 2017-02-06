@@ -99,6 +99,7 @@ GlobSimInfo* zinfo;
 
 uint32_t procIdx;
 uint32_t lineBits; //process-local for performance, but logically global
+uint32_t lineMask;
 Address procMask;
 
 static ProcessTreeNode* procTreeNode;
@@ -1635,6 +1636,7 @@ int main(int argc, char *argv[]) {
     perProcessEndFlag = 0;
 
     lineBits = ilog2(zinfo->lineSize);
+    lineMask = zinfo->lineSize - 1;
     procMask = ((uint64_t)procIdx) << (64-lineBits);
 
     //Initialize process-local per-thread state, even if ThreadStart does so later

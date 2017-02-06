@@ -76,6 +76,9 @@ class IdealLRUArray : public CacheArray {
                 lruList.push_front(e);
             }
             rp = new ProxyReplPolicy(this);
+#ifdef CLU_STATS_ENABLED
+            panic("CLU statistics collection is not implemented for IdealLRUArray!");
+#endif
         }
 
         int32_t lookup(const Address lineAddr, const MemReq* req, bool updateReplacement, bool fullyInvalidate) {
@@ -249,6 +252,9 @@ class IdealLRUPartArray : public CacheArray {
     public:
         IdealLRUPartArray(uint32_t _numLines, IdealLRUPartReplPolicy* _rp) : rp(_rp), numLines(_numLines) {
             lineAddrs = gm_calloc<Address>(numLines);
+#ifdef CLU_STATS_ENABLED
+            panic("CLU statistics collection is not implemented for IdealLRUPartArray!");
+#endif
         }
 
         int32_t lookup(const Address lineAddr, const MemReq* req, bool updateReplacement, bool fullyInvalidate) {

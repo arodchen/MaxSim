@@ -50,7 +50,12 @@ class CacheArray : public GlobAlloc {
          */
         virtual void postinsert(const Address lineAddr, const MemReq* req, uint32_t lineId) = 0;
 
-        virtual void initStats(AggregateStat* parent) {}
+        virtual void initStats(AggregateStat* parent) {};
+
+#ifdef CLU_STATS_ENABLED
+        /* Process access cache line utilization statistics. */
+        virtual void processAccessCLUStats(const MemReq& req, const uint32_t lineIndex) {};
+#endif
 };
 
 class ReplPolicy;
@@ -60,6 +65,10 @@ class HashFamily;
 class SetAssocArray : public CacheArray {
     protected:
         Address* array;
+#ifdef CLU_STATS_ENABLED
+        volatile uint16_t* accessMask; // cache lines' access masks
+        Counter countUCLC; // utilized cache line chunks counter
+#endif
         ReplPolicy* rp;
         HashFamily* hf;
         uint32_t numLines;
@@ -73,6 +82,10 @@ class SetAssocArray : public CacheArray {
         int32_t lookup(const Address lineAddr, const MemReq* req, bool updateReplacement, bool fullyInvalidate);
         uint32_t preinsert(const Address lineAddr, const MemReq* req, Address* wbLineAddr);
         void postinsert(const Address lineAddr, const MemReq* req, uint32_t candidate);
+        void initStats(AggregateStat* parentStat);
+#ifdef CLU_STATS_ENABLED
+        void processAccessCLUStats(const MemReq& req, const uint32_t lineIndex);
+#endif
 };
 
 /* The cache array that started this simulator :) */

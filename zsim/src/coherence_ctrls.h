@@ -94,6 +94,10 @@ class MESIBottomCC : public GlobAlloc {
         // TODO: Measuring writebacks is messy, do if needed
         Counter profGETNextLevelLat, profGETNetLat;
 
+#ifdef CLU_STATS_ENABLED
+        Counter profCLE;
+#endif
+
         bool nonInclusiveHack;
 
         PAD();
@@ -142,11 +146,21 @@ class MESIBottomCC : public GlobAlloc {
             parentStat->append(&profFWD);
             parentStat->append(&profGETNextLevelLat);
             parentStat->append(&profGETNetLat);
+
+#ifdef CLU_STATS_ENABLED
+            profCLE.init("CLE", "Cache line evictions");
+
+            parentStat->append(&profCLE);
+#endif
         }
 
-        uint64_t processEviction(Address wbLineAddr, uint32_t lineId, bool lowerLevelWriteback, uint64_t cycle, uint32_t srcId);
+        uint64_t processEviction(Address wbLineAddr, uint32_t lineId, bool lowerLevelWriteback, uint64_t cycle, const MemReq& triggerReq);
 
-        uint64_t processAccess(Address lineAddr, uint32_t lineId, AccessType type, uint64_t cycle, uint32_t srcId, uint32_t flags);
+        uint64_t processAccess(Address lineAddr, uint32_t lineId, AccessType type, uint64_t cycle, uint32_t srcId, uint32_t flags
+#ifdef CLU_STATS_ENABLED
+                               , Address virtualAddr, uint8_t memoryAccessSize, MemReqStatType_t memReqStatType
+#endif
+                               );
 
         void processWritebackOnAccess(Address lineAddr, uint32_t lineId, AccessType type);
 
@@ -340,7 +354,7 @@ class MESICC : public CC {
         uint64_t processEviction(const MemReq& triggerReq, Address wbLineAddr, int32_t lineId, uint64_t startCycle) {
             bool lowerLevelWriteback = false;
             uint64_t evCycle = tcc->processEviction(wbLineAddr, lineId, &lowerLevelWriteback, startCycle, triggerReq.srcId); //1. if needed, send invalidates/downgrades to lower level
-            evCycle = bcc->processEviction(wbLineAddr, lineId, lowerLevelWriteback, evCycle, triggerReq.srcId); //2. if needed, write back line to upper level
+            evCycle = bcc->processEviction(wbLineAddr, lineId, lowerLevelWriteback, evCycle, triggerReq); //2. if needed, write back line to upper level
             return evCycle;
         }
 
@@ -362,7 +376,11 @@ class MESICC : public CC {
                 uint32_t flags = req.flags & ~MemReq::PREFETCH; //always clear PREFETCH, this flag cannot propagate up
 
                 //if needed, fetch line or upgrade miss from upper level
-                respCycle = bcc->processAccess(req.lineAddr, lineId, req.type, startCycle, req.srcId, flags);
+                respCycle = bcc->processAccess(req.lineAddr, lineId, req.type, startCycle, req.srcId, flags
+#ifdef CLU_STATS_ENABLED
+                                               , req.statAttrs.virtualAddress, req.statAttrs.memoryAccessSize, req.statAttrs.memoryAccessType
+#endif
+                );
                 if (getDoneCycle) *getDoneCycle = respCycle;
                 if (!isPrefetch) { //prefetches only touch bcc; the demand request from the core will pull the line to lower level
                     //At this point, the line is in a good state w.r.t. upper levels
@@ -458,7 +476,7 @@ class MESITerminalCC : public CC {
 
         uint64_t processEviction(const MemReq& triggerReq, Address wbLineAddr, int32_t lineId, uint64_t startCycle) {
             bool lowerLevelWriteback = false;
-            uint64_t endCycle = bcc->processEviction(wbLineAddr, lineId, lowerLevelWriteback, startCycle, triggerReq.srcId); //2. if needed, write back line to upper level
+            uint64_t endCycle = bcc->processEviction(wbLineAddr, lineId, lowerLevelWriteback, startCycle, triggerReq); //2. if needed, write back line to upper level
             return endCycle;  // critical path unaffected, but TimingCache needs it
         }
 
@@ -466,7 +484,11 @@ class MESITerminalCC : public CC {
             assert(lineId != -1);
             assert(!getDoneCycle);
             //if needed, fetch line or upgrade miss from upper level
-            uint64_t respCycle = bcc->processAccess(req.lineAddr, lineId, req.type, startCycle, req.srcId, req.flags);
+            uint64_t respCycle = bcc->processAccess(req.lineAddr, lineId, req.type, startCycle, req.srcId, req.flags
+#ifdef CLU_STATS_ENABLED
+                                                    , req.statAttrs.virtualAddress, req.statAttrs.memoryAccessSize, req.statAttrs.memoryAccessType
+#endif
+            );
             //at this point, the line is in a good state w.r.t. upper levels
             return respCycle;
         }

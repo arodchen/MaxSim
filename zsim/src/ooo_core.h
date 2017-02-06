@@ -375,6 +375,10 @@ class OOOCore : public Core {
         Address storeAddrs[256];
         uint32_t loads;
         uint32_t stores;
+#ifdef CLU_STATS_ENABLED
+        uint8_t loadSizes[256];
+        uint8_t storeSizes[256];
+#endif
 
         uint64_t lastStoreCommitCycle;
         uint64_t lastStoreAddrCommitCycle; //tracks last store addr uop, all loads queue behind it

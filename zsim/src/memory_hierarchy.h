@@ -29,14 +29,13 @@
 /* Type and interface definitions of memory hierarchy objects */
 
 #include <stdint.h>
+#include "common.h"
 #include "g_std/g_vector.h"
 #include "galloc.h"
 #include "locks.h"
+#include "stats.h"
 
 /** TYPES **/
-
-/* Addresses are plain 64-bit uints. This should be kept compatible with PIN addrints */
-typedef uint64_t Address;
 
 /* Types of Access. An Access is a request that proceeds from lower to upper
  * levels of the hierarchy (core->l1->l2, etc.)
@@ -99,6 +98,10 @@ struct MemReq {
         PREFETCH      = (1<<5), //Prefetch GETS access. Only set at level where prefetch is issued; handled early in MESICC
     };
     uint32_t flags;
+
+#ifdef CLU_STATS_ENABLED
+    MemReqStatAttrs_t statAttrs;
+#endif
 
     inline void set(Flag f) {flags |= f;}
     inline bool is (Flag f) const {return flags & f;}

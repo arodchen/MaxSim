@@ -26,6 +26,7 @@
 #include <sstream>
 #include "trace_driver.h"
 #include "zsim.h"
+#include "clu_stats.h"
 
 TraceDriver::TraceDriver(std::string filename, std::string retraceFilename, std::vector<TraceDriverProxyCache*>& proxies, bool _useSkews, bool _playPuts, bool _playAllGets)
     : tr(filename), numChildren(proxies.size()), useSkews(_useSkews), playPuts(_playPuts), playAllGets(_playAllGets)
@@ -133,7 +134,11 @@ void TraceDriver::executeAccess(AccessRecord acc) {
                 if (!playPuts) return;
                 std::unordered_map<Address, MESIState>::iterator it = cStore.find(acc.lineAddr);
                 if (it == cStore.end()) return; //we don't currently have this line, skip
-                MemReq req = {acc.lineAddr, acc.type, acc.childId, &it->second, acc.reqCycle, nullptr, it->second, acc.childId};
+                MemReq req = {acc.lineAddr, acc.type, acc.childId, &it->second, acc.reqCycle, nullptr, it->second, acc.childId, 0 /*no flags*/
+#ifdef CLU_STATS_ENABLED
+                        , {UNDEF_VIRTUAL_ADDRESS, UNDEF_MA_SIZE, MAUndefined, UNDEF_CACHE_LINE_ADDRESS, CLU_STATS_ZERO_MASK}
+#endif
+                };
                 lat = parent->access(req) - acc.reqCycle; //note that PUT latency does not affect driver latency
                 assert(it->second == I);
                 cStore.erase(it);
@@ -147,7 +152,11 @@ void TraceDriver::executeAccess(AccessRecord acc) {
                 if (it != cStore.end()) {
                     if (!((it->second == S) && (acc.type == GETX))) { //we have the line, and it's not an upgrade miss, we can't replay this access directly
                         if (playAllGets) { //issue a PUT
-                            MemReq req = {acc.lineAddr, (it->second == M)? PUTX : PUTS, acc.childId, &it->second, acc.reqCycle, nullptr, it->second, acc.childId};
+                            MemReq req = {acc.lineAddr, (it->second == M)? PUTX : PUTS, acc.childId, &it->second, acc.reqCycle, nullptr, it->second, acc.childId, 0 /*no flags*/
+#ifdef CLU_STATS_ENABLED
+                                    , {UNDEF_VIRTUAL_ADDRESS, UNDEF_MA_SIZE, MAUndefined, UNDEF_CACHE_LINE_ADDRESS, CLU_STATS_ZERO_MASK}
+#endif
+                            };
                             parent->access(req);
                             assert(it->second == I);
                         } else {
@@ -157,7 +166,11 @@ void TraceDriver::executeAccess(AccessRecord acc) {
                         state = it->second;
                     }
                 }
-                MemReq req = {acc.lineAddr, acc.type, acc.childId, &state, acc.reqCycle, nullptr, state, acc.childId};
+                MemReq req = {acc.lineAddr, acc.type, acc.childId, &state, acc.reqCycle, nullptr, state, acc.childId, 0 /*no flags*/
+#ifdef CLU_STATS_ENABLED
+                        , {UNDEF_VIRTUAL_ADDRESS, UNDEF_MA_SIZE, MAUndefined, UNDEF_CACHE_LINE_ADDRESS, CLU_STATS_ZERO_MASK}
+#endif
+                };
                 uint64_t respCycle = parent->access(req);
                 lat = respCycle - acc.reqCycle;
                 children[acc.childId].profLat.inc(lat);

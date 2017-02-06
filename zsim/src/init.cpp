@@ -966,6 +966,21 @@ void SimInit(const char* configFile, const char* outputDir, uint32_t shmid) {
     zinfo->lineSize = config.get<uint32_t>("sys.lineSize", 64);
     assert(zinfo->lineSize > 0);
 
+#ifdef CLU_STATS_ENABLED
+    zinfo->cacheLineUtilStatsChunksNum = config.get<uint32_t>("sys.cacheLineUtilStatsChunksNum", CLU_STATS_CHUNKS_DEF);
+    log2CacheLineUtilStatsChunksNum = ilog2(zinfo->cacheLineUtilStatsChunksNum);
+    if ((zinfo->cacheLineUtilStatsChunksNum <= 0) || (zinfo->cacheLineUtilStatsChunksNum > zinfo->lineSize) ||
+        ((1u << log2CacheLineUtilStatsChunksNum) != zinfo->cacheLineUtilStatsChunksNum) ||
+        (zinfo->cacheLineUtilStatsChunksNum > CLU_STATS_CHUNKS_MAX)) {
+        panic("Unsupported cacheLineUtilStatsChunksNum %d", zinfo->cacheLineUtilStatsChunksNum);
+    }
+    zinfo->cacheLineUtilStatsChunkSize = zinfo->lineSize / zinfo->cacheLineUtilStatsChunksNum;
+    log2CacheLineUtilStatsChunkSize = ilog2(zinfo->cacheLineUtilStatsChunkSize);
+    if ((1u << log2CacheLineUtilStatsChunkSize) != zinfo->cacheLineUtilStatsChunkSize) {
+        panic("Unsupported cacheLineUtilStatsChunkSize %d", zinfo->cacheLineUtilStatsChunksNum);
+    }
+#endif // CLU_STATS_ENABLED
+
     //Port virtualization
     for (uint32_t i = 0; i < MAX_PORT_DOMAINS; i++) zinfo->portVirt[i] = new PortVirtualizer();
 

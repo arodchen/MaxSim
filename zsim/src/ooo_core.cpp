@@ -146,10 +146,16 @@ void OOOCore::contextSwitch(int32_t gid) {
 InstrFuncPtrs OOOCore::GetFuncPtrs() {return {LoadFunc, StoreFunc, BblFunc, BranchFunc, PredLoadFunc, PredStoreFunc, FPTR_ANALYSIS, {0}};}
 
 inline void OOOCore::load(Address addr, uint32_t size, Address base) {
+#ifdef CLU_STATS_ENABLED
+    loadSizes[loads] = (uint8_t) size;
+#endif
     loadAddrs[loads++] = addr;
 }
 
 void OOOCore::store(Address addr, uint32_t size, Address base) {
+#ifdef CLU_STATS_ENABLED
+    storeSizes[stores] = (uint8_t) size;
+#endif
     storeAddrs[stores++] = addr;
 }
 
@@ -277,10 +283,17 @@ inline void OOOCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
                     // Wait for all previous store addresses to be resolved
                     dispatchCycle = MAX(lastStoreAddrCommitCycle+1, dispatchCycle);
 
+#ifdef CLU_STATS_ENABLED
+                    int8_t size = loadSizes[loadIdx];
+#endif
                     Address addr = loadAddrs[loadIdx++];
                     uint64_t reqSatisfiedCycle = dispatchCycle;
                     if (addr != ((Address)-1L)) {
-                        reqSatisfiedCycle = l1d->load(addr, dispatchCycle) + L1D_LAT;
+                        reqSatisfiedCycle = l1d->load(addr, dispatchCycle
+#ifdef CLU_STATS_ENABLED
+                                                      , size, LoadData
+#endif
+                                                      ) + L1D_LAT;
                         cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
                     }
 
@@ -316,8 +329,15 @@ inline void OOOCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
                     // Wait for all previous store addresses to be resolved (not just ours :))
                     dispatchCycle = MAX(lastStoreAddrCommitCycle+1, dispatchCycle);
 
+#ifdef CLU_STATS_ENABLED
+                    int8_t size = storeSizes[storeIdx];
+#endif
                     Address addr = storeAddrs[storeIdx++];
-                    uint64_t reqSatisfiedCycle = l1d->store(addr, dispatchCycle) + L1D_LAT;
+                    uint64_t reqSatisfiedCycle = l1d->store(addr, dispatchCycle
+#ifdef CLU_STATS_ENABLED
+	                                                        , size
+#endif
+                                                            ) + L1D_LAT;
                     cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
 
                     // Fill the forwarding table
@@ -419,7 +439,11 @@ inline void OOOCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
         Address wrongPathAddr = branchTaken? branchNotTakenNpc : branchTakenNpc;
         uint64_t reqCycle = fetchCycle;
         for (uint32_t i = 0; i < 5*64/lineSize; i++) {
-            uint64_t fetchLat = l1i->load(wrongPathAddr + lineSize*i, curCycle) - curCycle;
+            uint64_t fetchLat = l1i->load(wrongPathAddr + lineSize*i, curCycle
+#ifdef CLU_STATS_ENABLED
+                                          , lineSize, FetchWrongPath
+#endif
+                                          ) - curCycle;
             cRec.record(curCycle, curCycle, curCycle + fetchLat);
             uint64_t respCycle = reqCycle + fetchLat;
             if (respCycle > lastCommitCycle) {
@@ -442,7 +466,11 @@ inline void OOOCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
         // Do not model fetch throughput limit here, decoder-generated stalls already include it
         // We always call fetches with curCycle to avoid upsetting the weave
         // models (but we could move to a fetch-centric recorder to avoid this)
-        uint64_t fetchLat = l1i->load(fetchAddr, curCycle) - curCycle;
+        uint64_t fetchLat = l1i->load(fetchAddr, curCycle
+#ifdef CLU_STATS_ENABLED
+                                      , lineSize, FetchRightPath
+#endif
+                                      ) - curCycle;
         cRec.record(curCycle, curCycle, curCycle + fetchLat);
         fetchCycle += fetchLat;
     }

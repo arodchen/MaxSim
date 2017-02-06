@@ -88,6 +88,9 @@ uint64_t Cache::access(MemReq& req) {
         }
 
         respCycle = cc->processAccess(req, lineId, respCycle);
+#ifdef CLU_STATS_ENABLED
+        array->processAccessCLUStats(req, lineId);
+#endif
 
         // Access may have generated another timing record. If *both* access
         // and wb have records, stitch them together

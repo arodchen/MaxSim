@@ -30,6 +30,7 @@
 #include "cache.h"
 #include "galloc.h"
 #include "zsim.h"
+#include "clu_stats.h"
 
 /* Extends Cache with an L0 direct-mapped cache, optimized to hell for hits
  *
@@ -48,7 +49,15 @@ class FilterCache : public Cache {
             volatile Address wrAddr;
             volatile uint64_t availCycle;
 
-            void clear() {wrAddr = 0; rdAddr = 0; availCycle = 0;}
+#ifdef CLU_STATS_ENABLED
+            volatile uint16_t accessMask;
+#endif
+            void clear() {
+                wrAddr = UNDEF_CACHE_LINE_ADDRESS; rdAddr = UNDEF_CACHE_LINE_ADDRESS; availCycle = 0;
+#ifdef CLU_STATS_ENABLED
+                accessMask = CLU_STATS_ZERO_MASK;
+#endif
+            }
         };
 
         //Replicates the most accessed line of each set in the cache
@@ -60,6 +69,10 @@ class FilterCache : public Cache {
 
         lock_t filterLock;
         uint64_t fGETSHit, fGETXHit;
+#ifdef CLU_STATS_ENABLED
+        uint64_t fCLEI;
+        uint64_t fUCLC;
+#endif
 
     public:
         FilterCache(uint32_t _numSets, uint32_t _numLines, CC* _cc, CacheArray* _array,
@@ -72,6 +85,10 @@ class FilterCache : public Cache {
             for (uint32_t i = 0; i < numSets; i++) filterArray[i].clear();
             futex_init(&filterLock);
             fGETSHit = fGETXHit = 0;
+#ifdef CLU_STATS_ENABLED
+            fCLEI = 0;
+            fUCLC = 0;
+#endif
             srcId = -1;
             reqFlags = 0;
         }
@@ -92,44 +109,90 @@ class FilterCache : public Cache {
             fgetsStat->init("fhGETS", "Filtered GETS hits", &fGETSHit);
             ProxyStat* fgetxStat = new ProxyStat();
             fgetxStat->init("fhGETX", "Filtered GETX hits", &fGETXHit);
+#ifdef CLU_STATS_ENABLED
+            ProxyStat* fCLEIStat = new ProxyStat();
+            fCLEIStat->init("fCLEI", "Filtered cache line evictions and invalidations", &fCLEI);
+            ProxyStat*fUCLCStat = new ProxyStat();
+            fUCLCStat->init("fUCLC", "Filtered utilized cache line chunks", &fUCLC);
+#endif
             cacheStat->append(fgetsStat);
             cacheStat->append(fgetxStat);
+#ifdef CLU_STATS_ENABLED
+            cacheStat->append(fCLEIStat);
+            cacheStat->append(fUCLCStat);
+#endif
 
             initCacheStats(cacheStat);
             parentStat->append(cacheStat);
         }
 
-        inline uint64_t load(Address vAddr, uint64_t curCycle) {
+#ifdef CLU_STATS_ENABLED
+        inline void processAccessCLUStats(Address vAddr, uint8_t size, MemReqStatType_t memReqStatType, uint32_t lineIndex) {
+            filterArray[lineIndex].accessMask |= cluStatsGetUtilizationMask(vAddr, size, memReqStatType);
+        }
+#endif
+
+        inline uint64_t load(Address vAddr, uint64_t curCycle
+#ifdef CLU_STATS_ENABLED
+                             , uint8_t size, MemReqStatType_t memReqStatType
+#endif
+                             ) {
             Address vLineAddr = vAddr >> lineBits;
             uint32_t idx = vLineAddr & setMask;
             uint64_t availCycle = filterArray[idx].availCycle; //read before, careful with ordering to avoid timing races
             if (vLineAddr == filterArray[idx].rdAddr) {
+#ifdef CLU_STATS_ENABLED
+                processAccessCLUStats(vAddr, size, memReqStatType, idx);
+#endif
                 fGETSHit++;
                 return MAX(curCycle, availCycle);
             } else {
-                return replace(vLineAddr, idx, true, curCycle);
+                return replace(vLineAddr, idx, true, curCycle, vAddr
+#ifdef CLU_STATS_ENABLED
+                               , size, memReqStatType
+#endif
+                               );
             }
         }
 
-        inline uint64_t store(Address vAddr, uint64_t curCycle) {
+        inline uint64_t store(Address vAddr, uint64_t curCycle
+#ifdef CLU_STATS_ENABLED
+                              , uint8_t size
+#endif
+                              ) {
             Address vLineAddr = vAddr >> lineBits;
             uint32_t idx = vLineAddr & setMask;
             uint64_t availCycle = filterArray[idx].availCycle; //read before, careful with ordering to avoid timing races
             if (vLineAddr == filterArray[idx].wrAddr) {
+#ifdef CLU_STATS_ENABLED
+                processAccessCLUStats(vAddr, size, StoreData, idx);
+#endif
                 fGETXHit++;
                 //NOTE: Stores don't modify availCycle; we'll catch matches in the core
                 //filterArray[idx].availCycle = curCycle; //do optimistic store-load forwarding
                 return MAX(curCycle, availCycle);
             } else {
-                return replace(vLineAddr, idx, false, curCycle);
+                return replace(vLineAddr, idx, false, curCycle, vAddr
+#ifdef CLU_STATS_ENABLED
+                               , size, StoreData
+#endif
+                               );
             }
         }
 
-        uint64_t replace(Address vLineAddr, uint32_t idx, bool isLoad, uint64_t curCycle) {
+        uint64_t replace(Address vLineAddr, uint32_t idx, bool isLoad, uint64_t curCycle, Address vAddr
+#ifdef CLU_STATS_ENABLED
+                         , uint8_t size, MemReqStatType_t memReqStatType
+#endif
+                         ) {
             Address pLineAddr = procMask | vLineAddr;
             MESIState dummyState = MESIState::I;
             futex_lock(&filterLock);
-            MemReq req = {pLineAddr, isLoad? GETS : GETX, 0, &dummyState, curCycle, &filterLock, dummyState, srcId, reqFlags};
+            MemReq req = {pLineAddr, isLoad? GETS : GETX, 0, &dummyState, curCycle, &filterLock, dummyState, srcId, reqFlags
+#ifdef CLU_STATS_ENABLED
+                    , {vAddr, size, memReqStatType, filterArray[idx].rdAddr, filterArray[idx].accessMask}
+#endif
+                };
             uint64_t respCycle  = access(req);
 
             //Due to the way we do the locking, at this point the old address might be invalidated, but we have the new address guaranteed until we release the lock
@@ -138,6 +201,14 @@ class FilterCache : public Cache {
             Address oldAddr = filterArray[idx].rdAddr;
             filterArray[idx].wrAddr = isLoad? -1L : vLineAddr;
             filterArray[idx].rdAddr = vLineAddr;
+#ifdef CLU_STATS_ENABLED
+            if (oldAddr != UNDEF_CACHE_LINE_ADDRESS) {
+                fCLEI++;
+                fUCLC += __builtin_popcount(filterArray[idx].accessMask);
+                filterArray[idx].accessMask = CLU_STATS_ZERO_MASK;
+            }
+            processAccessCLUStats(vAddr, size, memReqStatType, idx);
+#endif
 
             //For LSU simulation purposes, loads bypass stores even to the same line if there is no conflict,
             //(e.g., st to x, ld from x+8) and we implement store-load forwarding at the core.
@@ -153,8 +224,16 @@ class FilterCache : public Cache {
             futex_lock(&filterLock);
             uint32_t idx = req.lineAddr & setMask; //works because of how virtual<->physical is done...
             if ((filterArray[idx].rdAddr | procMask) == req.lineAddr) { //FIXME: If another process calls invalidate(), procMask will not match even though we may be doing a capacity-induced invalidation!
+#ifdef CLU_STATS_ENABLED
+                assert(filterArray[idx].rdAddr != UNDEF_CACHE_LINE_ADDRESS);
+#endif
                 filterArray[idx].wrAddr = -1L;
                 filterArray[idx].rdAddr = -1L;
+#ifdef CLU_STATS_ENABLED
+                fCLEI++;
+                fUCLC += __builtin_popcount(filterArray[idx].accessMask);
+                filterArray[idx].accessMask = CLU_STATS_ZERO_MASK;
+#endif
             }
             uint64_t respCycle = Cache::finishInvalidate(req); // releases cache's downLock
             futex_unlock(&filterLock);

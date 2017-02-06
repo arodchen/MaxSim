@@ -32,6 +32,7 @@
 #include "debug.h"
 #include "locks.h"
 #include "pad.h"
+#include "stats.h"
 
 class Core;
 class Scheduler;
@@ -76,6 +77,12 @@ struct GlobSimInfo {
     //System configuration values, all read-only, set at initialization
     uint32_t numCores;
     uint32_t lineSize;
+
+#ifdef CLU_STATS_ENABLED
+    //Cache line utilization statistics collection parameters (cacheLineUtilStatsChunksNum * cacheLineUtilStatsChunkSize == cacheLineSize)
+    uint32_t cacheLineUtilStatsChunksNum; // number of chunks the cache line is split to (CLU stats granularity) (== 2^^N && <= CLU_STATS_CHUNKS_MAX)
+    uint32_t cacheLineUtilStatsChunkSize; // the size of the chunk (dependent parameter) (= cacheLineSize / cacheLineUtilStatsChunksNum)
+#endif
 
     //Cores
     Core** cores;
@@ -188,6 +195,7 @@ struct GlobSimInfo {
 extern Core* cores[MAX_THREADS]; //tid->core array
 extern uint32_t procIdx;
 extern uint32_t lineBits; //process-local for performance, but logically global
+extern uint32_t lineMask;
 extern uint64_t procMask;
 
 extern GlobSimInfo* zinfo;

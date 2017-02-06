@@ -43,4 +43,13 @@
 //If you use it, make sure it does not fail silently if violated.
 #define MAX_IPC (4)
 
+// Undefined virtual address.
+#define UNDEF_VIRTUAL_ADDRESS ((Address) -1L)
+
+// Undefined line address.
+#define UNDEF_CACHE_LINE_ADDRESS ((Address) -1L)
+
+// Undefined memory access size.
+#define UNDEF_MA_SIZE ((uint8_t) 8)
+
 #endif  // CONSTANTS_H_
