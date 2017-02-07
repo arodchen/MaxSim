@@ -34,6 +34,7 @@
 #include "memory_hierarchy.h"
 #include "ooo_core_recorder.h"
 #include "pad.h"
+#include "stats.h"
 
 // Uncomment to enable stall stats
 // #define OOO_STALL_STATS

@@ -31,6 +31,7 @@
 #include "intrusive_list.h"
 #include "part_repl_policies.h"
 #include "repl_policies.h"
+#include "stats.h"
 
 /* Fully associative cache arrays with LRU replacement (non-part; part coming up) */
 

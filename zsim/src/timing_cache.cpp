@@ -27,6 +27,7 @@
 #include "event_recorder.h"
 #include "timing_event.h"
 #include "zsim.h"
+#include "stats.h"
 
 // Events
 class HitEvent : public TimingEvent {

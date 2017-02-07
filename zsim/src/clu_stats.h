@@ -26,7 +26,8 @@
 #ifndef SRC_CLU_STATS_H
 #define SRC_CLU_STATS_H
 
-#include <zsim.h>
+#include "zsim.h"
+#include "stats.h"
 
 #ifdef CLU_STATS_ENABLED
 

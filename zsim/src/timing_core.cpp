@@ -26,6 +26,7 @@
 #include "timing_core.h"
 #include "filter_cache.h"
 #include "zsim.h"
+#include "stats.h"
 
 #define DEBUG_MSG(args...)
 //#define DEBUG_MSG(args...) info(args)
