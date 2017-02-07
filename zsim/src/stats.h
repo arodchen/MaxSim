@@ -83,28 +83,6 @@
 #define CLU_STATS_ENABLED // Enables collection of cache line utilization statistics.
                           // NOTE: Collection is implemented only for SetAssocArray type!
 
-#ifdef CLU_STATS_ENABLED
-
-/* Memory access type. */
-typedef enum {
-    LoadData,
-    FetchRightPath,
-    FetchWrongPath,
-    StoreData,
-    MAUndefined
-} MemReqStatType_t;
-
-/* Memory request attributes necessary for statistics collection. */
-typedef struct MemReqStatAttrs_t {
-    Address virtualAddress; // virtual address
-    uint8_t memoryAccessSize; // memory access size
-    MemReqStatType_t memoryAccessType; // memory access type
-    Address replacedLineAddr; // replaced line address
-    uint16_t replacedLineAccessMask; // replaced cache line access mask
-} MemReqStatAttrs_t;
-
-#endif // CLU_STATS_ENABLED
-
 class Stat : public GlobAlloc {
     protected:
         const char* _name;

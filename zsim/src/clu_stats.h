@@ -44,6 +44,24 @@ extern uint32_t log2CacheLineUtilStatsChunkSize;
 // define to consider wrong path cache line fetch as utilization
 #   define CLU_WRONG_PATH_FETCH_IS_UTILIZATION
 
+/* Memory request type for statistics collection. */
+typedef enum {
+    LoadData,
+    FetchRightPath,
+    FetchWrongPath,
+    StoreData,
+    MAUndefined
+} MemReqStatType_t;
+
+/* Memory request attributes necessary for statistics collection. */
+typedef struct MemReqStatAttrs_t {
+    Address virtualAddress; // virtual address
+    uint8_t memoryAccessSize; // memory access size
+    MemReqStatType_t memoryAccessType; // memory access type
+    Address replacedLineAddr; // replaced line address
+    uint16_t replacedLineAccessMask; // replaced cache line access mask
+} MemReqStatAttrs_t;
+
 inline uint16_t cluStatsGetUtilizationMask(Address vAddr, uint8_t size, MemReqStatType_t memReqStatType) {
     switch (memReqStatType) {
         case LoadData:

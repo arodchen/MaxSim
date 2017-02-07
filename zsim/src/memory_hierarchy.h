@@ -33,7 +33,7 @@
 #include "g_std/g_vector.h"
 #include "galloc.h"
 #include "locks.h"
-#include "stats.h"
+#include "clu_stats.h"
 
 /** TYPES **/
 
