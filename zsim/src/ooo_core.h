@@ -380,6 +380,10 @@ class OOOCore : public Core {
         uint8_t loadSizes[256];
         uint8_t storeSizes[256];
 #endif
+#ifdef POINTER_TAGGING_ENABLED
+        uint16_t loadTag[256];
+        uint16_t storeTag[256];
+#endif
 
         uint64_t lastStoreCommitCycle;
         uint64_t lastStoreAddrCommitCycle; //tracks last store addr uop, all loads queue behind it

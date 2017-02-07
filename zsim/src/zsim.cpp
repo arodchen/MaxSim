@@ -59,6 +59,7 @@
 #include "stats.h"
 #include "trace_driver.h"
 #include "virt/virt.h"
+#include "pointer_tagging.h"
 
 //#include <signal.h> //can't include this, conflicts with PIN's
 
@@ -154,6 +155,10 @@ VOID SyscallEnterUnlocked(THREADID tid, CONTEXT *ctxt);
 
 VOID VdsoInstrument(INS ins);
 VOID FFThread(VOID* arg);
+
+#ifdef POINTER_TAGGING_ENABLED
+static VOID PointerTaggingInstrument(INS ins);
+#endif
 
 /* Indirect analysis calls to work around PIN's synchronization
  *
@@ -646,6 +651,12 @@ VOID Instruction(INS ins) {
             INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR) IndirectRecordBranch, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID,
                     IARG_INST_PTR, IARG_BRANCH_TAKEN, IARG_BRANCH_TARGET_ADDR, IARG_FALLTHROUGH_ADDR, IARG_END);
         }
+
+#ifdef POINTER_TAGGING_ENABLED
+        if (zinfo->pointerTagging) {
+            PointerTaggingInstrument(ins);
+        }
+#endif
     }
 
     //Intercept and process magic ops
@@ -882,6 +893,52 @@ VOID VdsoInstrument(INS ins) {
 }
 
 /* ===================================================================== */
+
+#ifdef POINTER_TAGGING_ENABLED
+// Untag base plus offset pointer.
+ADDRINT UntagBasePlusOffsetPointer(ADDRINT effectiveAddress, ADDRINT base, INT64 disp, UINT32 scale,  INT64 index, BOOL isWrite, ADDRINT ip, THREADID tid) {
+    ADDRINT untaggedAddress = getUntaggedPointerSE(effectiveAddress);
+    return untaggedAddress;
+}
+
+// Instrumentation function, called for EVERY instruction which can contain tagged pointers.
+static VOID PointerTaggingInstrument(INS ins) {
+    if (INS_IsNop(ins)) {
+        return;
+    }
+    UINT32 memOpIdx = 0;
+    for (UINT32 opIdx = 0; opIdx < INS_OperandCount(ins); opIdx++) {
+        if (!INS_OperandIsMemory (ins, opIdx)) {
+            continue;
+        }
+        REG baseReg = INS_OperandMemoryBaseReg(ins, opIdx);
+        REG indexReg = INS_OperandMemoryIndexReg(ins, opIdx);
+        UINT32 scale = INS_OperandMemoryScale(ins, opIdx);
+        INT64 disp = INS_OperandMemoryDisplacement(ins, opIdx);
+        BOOL isWrite = INS_OperandWritten(ins, opIdx);
+        REG untaggedAddrReg = REG((int) (REG_INST_G0) + memOpIdx);
+        if (baseReg != REG_INVALID() && indexReg != REG_INVALID()) {
+            INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR) UntagBasePlusOffsetPointer, IARG_CALL_ORDER, CALL_ORDER_DEFAULT + 2, IARG_MEMORYOP_EA, memOpIdx,
+                           IARG_REG_VALUE, baseReg, IARG_ADDRINT, disp, IARG_UINT32, scale, IARG_REG_VALUE, indexReg,
+                           IARG_RETURN_REGS, untaggedAddrReg, IARG_BOOL, isWrite, IARG_INST_PTR, IARG_THREAD_ID, IARG_END);
+        } else if (baseReg == REG_INVALID() && indexReg == REG_INVALID()) {
+            INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR) UntagBasePlusOffsetPointer, IARG_CALL_ORDER, CALL_ORDER_DEFAULT + 2, IARG_MEMORYOP_EA, memOpIdx,
+                           IARG_ADDRINT, 0L, IARG_ADDRINT, disp, IARG_UINT32, scale, IARG_ADDRINT, 0L,
+                           IARG_RETURN_REGS, untaggedAddrReg, IARG_BOOL, isWrite, IARG_INST_PTR, IARG_THREAD_ID, IARG_END);
+        } else if (baseReg != REG_INVALID()) {
+            INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR) UntagBasePlusOffsetPointer, IARG_CALL_ORDER, CALL_ORDER_DEFAULT + 2, IARG_MEMORYOP_EA, memOpIdx,
+                           IARG_REG_VALUE, baseReg, IARG_ADDRINT, disp, IARG_UINT32, scale, IARG_ADDRINT, 0L,
+                           IARG_RETURN_REGS, untaggedAddrReg, IARG_BOOL, isWrite, IARG_INST_PTR, IARG_THREAD_ID, IARG_END);
+        } else {
+            INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR) UntagBasePlusOffsetPointer, IARG_CALL_ORDER, CALL_ORDER_DEFAULT + 2, IARG_MEMORYOP_EA, memOpIdx,
+                           IARG_ADDRINT, 0L, IARG_ADDRINT, disp, IARG_UINT32, scale, IARG_REG_VALUE, indexReg,
+                           IARG_RETURN_REGS, untaggedAddrReg, IARG_BOOL, isWrite, IARG_INST_PTR, IARG_THREAD_ID, IARG_END);
+        }
+        INS_RewriteMemoryOperand(ins, memOpIdx, untaggedAddrReg);
+        memOpIdx ++;
+    }
+}
+#endif // POINTER_TAGGING_ENABLED
 
 
 bool activeThreads[MAX_THREADS];  // set in ThreadStart, reset in ThreadFini, we need this for exec() (see FollowChild)

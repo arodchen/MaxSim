@@ -32,6 +32,7 @@
 #include "filter_cache.h"
 #include "zsim.h"
 #include "stats.h"
+#include "pointer_tagging.h"
 
 /* Uncomment to induce backpressure to the IW when the load/store buffers fill up. In theory, more detailed,
  * but sometimes much slower (as it relies on range poisoning in the IW, potentially O(n^2)), and in practice
@@ -147,6 +148,12 @@ void OOOCore::contextSwitch(int32_t gid) {
 InstrFuncPtrs OOOCore::GetFuncPtrs() {return {LoadFunc, StoreFunc, BblFunc, BranchFunc, PredLoadFunc, PredStoreFunc, FPTR_ANALYSIS, {0}};}
 
 inline void OOOCore::load(Address addr, uint32_t size, Address base) {
+#ifdef POINTER_TAGGING_ENABLED
+    uint16_t tag = getPointerTag(base);
+#endif
+#ifdef POINTER_TAGGING_ENABLED
+    loadTag[loads] = tag;
+#endif
 #ifdef CLU_STATS_ENABLED
     loadSizes[loads] = (uint8_t) size;
 #endif
@@ -154,6 +161,12 @@ inline void OOOCore::load(Address addr, uint32_t size, Address base) {
 }
 
 void OOOCore::store(Address addr, uint32_t size, Address base) {
+#ifdef POINTER_TAGGING_ENABLED
+    uint16_t tag = getPointerTag(base);
+#endif
+#ifdef POINTER_TAGGING_ENABLED
+    storeTag[stores] = tag;
+#endif
 #ifdef CLU_STATS_ENABLED
     storeSizes[stores] = (uint8_t) size;
 #endif

@@ -34,6 +34,8 @@
 #include "pad.h"
 #include "stats.h"
 
+#define POINTER_TAGGING_ENABLED // Enables simulation of tagged pointers
+
 class Core;
 class Scheduler;
 class AggregateStat;
@@ -187,6 +189,12 @@ struct GlobSimInfo {
 
     // Trace-driven simulation (no cores)
     bool traceDriven;
+
+#ifdef POINTER_TAGGING_ENABLED
+    // If true, tagged pointers are processed by the simulator
+    bool pointerTagging;
+#endif
+
     TraceDriver* traceDriver;
 };
 

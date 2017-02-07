@@ -74,6 +74,7 @@
 #include "virt/port_virtualizer.h"
 #include "weave_md1_mem.h" //validation, could be taken out...
 #include "zsim.h"
+#include "pointer_tagging.h"
 
 extern void EndOfPhaseActions(); //in zsim.cpp
 
@@ -879,6 +880,14 @@ void SimInit(const char* configFile, const char* outputDir, uint32_t shmid) {
     PreInitStats();
 
     zinfo->traceDriven = config.get<bool>("sim.traceDriven", false);
+#ifdef POINTER_TAGGING_ENABLED
+    zinfo->pointerTagging = config.get<bool>("sim.pointerTagging", false);
+    if (zinfo->pointerTagging) {
+        if (POINTER_TAG_MASK_SIZE > POINTER_TAG_MASK_MAX) {
+            panic("Unsupported POINTER_TAG_MASK_SIZE %d", POINTER_TAG_MASK_SIZE);
+        }
+    }
+#endif
 
     if (zinfo->traceDriven) {
         zinfo->numCores = 0;
