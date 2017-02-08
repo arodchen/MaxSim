@@ -39,7 +39,7 @@
 #define DBG_GDB 1
 #define DBG_DDD 0
 
-#ifdef DBG_GDB
+#if DBG_GDB
 #   define DBG_CMD "gdb"
 #   define DBG_EXEC_CMD_ARG "-ex"
 #elif DBG_DDD
