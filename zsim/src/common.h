@@ -26,7 +26,7 @@
 #ifndef SRC_COMMON_H
 #define SRC_COMMON_H
 
-/* Addresses are plain 64-bit uints. This should be kept compatible with PIN addrints */
+// Addresses are plain 64-bit uints. This should be kept compatible with PIN addrints
 typedef uint64_t Address;
 
 #endif //SRC_COMMON_H
