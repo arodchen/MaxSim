@@ -34,6 +34,7 @@
 #include "memory_hierarchy.h"
 #include "pad.h"
 #include "stats.h"
+#include "ma_stats.h"
 
 //TODO: Now that we have a pure CC interface, the MESI controllers should go on different files.
 
@@ -86,6 +87,10 @@ class MESIBottomCC : public GlobAlloc {
         uint32_t numLines;
         uint32_t selfId;
 
+#ifdef MA_STATS_ENABLED
+        MAStatsCacheGroupId_t MAStatsCacheGroupId;
+#endif
+
         //Profiling counters
         Counter profGETSHit, profGETSMiss, profGETXHit, profGETXMissIM /*from invalid*/, profGETXMissSM /*from S, i.e. upgrade misses*/;
         Counter profPUTS, profPUTX /*received from downstream*/;
@@ -113,7 +118,11 @@ class MESIBottomCC : public GlobAlloc {
             futex_init(&ccLock);
         }
 
-        void init(const g_vector<MemObject*>& _parents, Network* network, const char* name);
+        void init(const g_vector<MemObject*>& _parents, Network* network, const char* name
+#ifdef MA_STATS_ENABLED
+                  , MAStatsCacheGroupId_t _MAStatsCacheGroupId
+#endif
+                  );
 
         inline bool isExclusive(uint32_t lineId) {
             MESIState state = array[lineId];
@@ -185,6 +194,10 @@ class MESIBottomCC : public GlobAlloc {
 
     private:
         uint32_t getParentId(Address lineAddr);
+
+#ifdef MA_STATS_ENABLED
+        void initMAStats(MAStatsCacheGroupId_t _MAStatsCacheGroupId);
+#endif
 };
 
 
@@ -295,15 +308,29 @@ class MESICC : public CC {
         uint32_t numLines;
         bool nonInclusiveHack;
         g_string name;
+#ifdef MA_STATS_ENABLED
+        MAStatsCacheGroupId_t MAStatsCacheGroupId;
+#endif
 
     public:
         //Initialization
-        MESICC(uint32_t _numLines, bool _nonInclusiveHack, g_string& _name) : tcc(nullptr), bcc(nullptr),
-            numLines(_numLines), nonInclusiveHack(_nonInclusiveHack), name(_name) {}
+        MESICC(uint32_t _numLines, bool _nonInclusiveHack, g_string& _name
+#ifdef MA_STATS_ENABLED
+               , MAStatsCacheGroupId_t _MAStatsCacheGroupId
+#endif
+               ) : tcc(nullptr), bcc(nullptr), numLines(_numLines), nonInclusiveHack(_nonInclusiveHack), name(_name)
+#ifdef MA_STATS_ENABLED
+                   , MAStatsCacheGroupId(_MAStatsCacheGroupId)
+#endif
+        {}
 
         void setParents(uint32_t childId, const g_vector<MemObject*>& parents, Network* network) {
             bcc = new MESIBottomCC(numLines, childId, nonInclusiveHack);
-            bcc->init(parents, network, name.c_str());
+            bcc->init(parents, network, name.c_str()
+#ifdef MA_STATS_ENABLED
+                      , MAStatsCacheGroupId
+#endif
+                      );
         }
 
         void setChildren(const g_vector<BaseCache*>& children, Network* network) {
@@ -431,14 +458,29 @@ class MESITerminalCC : public CC {
         MESIBottomCC* bcc;
         uint32_t numLines;
         g_string name;
+#ifdef MA_STATS_ENABLED
+        MAStatsCacheGroupId_t MAStatsCacheGroupId;
+#endif
 
     public:
         //Initialization
-        MESITerminalCC(uint32_t _numLines, const g_string& _name) : bcc(nullptr), numLines(_numLines), name(_name) {}
+        MESITerminalCC(uint32_t _numLines, const g_string& _name
+#ifdef MA_STATS_ENABLED
+                       , MAStatsCacheGroupId_t _MAStatsCacheGroupId
+#endif
+                       ) : bcc(nullptr), numLines(_numLines), name(_name)
+#ifdef MA_STATS_ENABLED
+                           , MAStatsCacheGroupId(_MAStatsCacheGroupId)
+#endif
+        {}
 
         void setParents(uint32_t childId, const g_vector<MemObject*>& parents, Network* network) {
             bcc = new MESIBottomCC(numLines, childId, false /*inclusive*/);
-            bcc->init(parents, network, name.c_str());
+            bcc->init(parents, network, name.c_str()
+#ifdef MA_STATS_ENABLED
+                      , MAStatsCacheGroupId
+#endif
+                      );
         }
 
         void setChildren(const g_vector<BaseCache*>& children, Network* network) {

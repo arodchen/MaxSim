@@ -27,6 +27,7 @@
 #include "cache.h"
 #include "network.h"
 #include "clu_stats.h"
+#include "ma_stats.h"
 
 /* Do a simple XOR block hash on address to determine its bank. Hacky for now,
  * should probably have a class that deals with this with a real hash function
@@ -43,14 +44,26 @@ uint32_t MESIBottomCC::getParentId(Address lineAddr) {
     return (res % parents.size());
 }
 
+#ifdef MA_STATS_ENABLED
+void MESIBottomCC::initMAStats(MAStatsCacheGroupId_t _MAStatsCacheGroupId) {
+    MAStatsCacheGroupId = _MAStatsCacheGroupId;
+}
+#endif
 
-void MESIBottomCC::init(const g_vector<MemObject*>& _parents, Network* network, const char* name) {
+void MESIBottomCC::init(const g_vector<MemObject*>& _parents, Network* network, const char* name
+#ifdef MA_STATS_ENABLED
+                        , MAStatsCacheGroupId_t _MAStatsCacheGroupId
+#endif
+                        ) {
     parents.resize(_parents.size());
     parentRTTs.resize(_parents.size());
     for (uint32_t p = 0; p < parents.size(); p++) {
         parents[p] = _parents[p];
         parentRTTs[p] = (network)? network->getRTT(name, parents[p]->getName()) : 0;
     }
+#ifdef MA_STATS_ENABLED
+    initMAStats(_MAStatsCacheGroupId);
+#endif
 }
 
 

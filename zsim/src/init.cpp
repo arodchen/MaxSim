@@ -75,6 +75,7 @@
 #include "weave_md1_mem.h" //validation, could be taken out...
 #include "zsim.h"
 #include "pointer_tagging.h"
+#include "ma_stats.h"
 
 extern void EndOfPhaseActions(); //in zsim.cpp
 
@@ -83,7 +84,11 @@ extern void EndOfPhaseActions(); //in zsim.cpp
  * follow the layout of zinfo, top-down.
  */
 
-BaseCache* BuildCacheBank(Config& config, const string& prefix, g_string& name, uint32_t bankSize, bool isTerminal, uint32_t domain) {
+BaseCache* BuildCacheBank(Config& config, const string& prefix, g_string& name, uint32_t bankSize, bool isTerminal, uint32_t domain
+#ifdef MA_STATS_ENABLED
+                          , MAStatsCacheGroupId_t MAStatsCacheGroupId
+#endif
+                          ) {
     string type = config.get<const char*>(prefix + "type", "Simple");
     // Shortcut for TraceDriven type
     if (type == "TraceDriven") {
@@ -264,9 +269,17 @@ BaseCache* BuildCacheBank(Config& config, const string& prefix, g_string& name, 
     Cache* cache;
     CC* cc;
     if (isTerminal) {
-        cc = new MESITerminalCC(numLines, name);
+        cc = new MESITerminalCC(numLines, name
+#ifdef MA_STATS_ENABLED
+                                , MAStatsCacheGroupId
+#endif
+                                );
     } else {
-        cc = new MESICC(numLines, nonInclusiveHack, name);
+        cc = new MESICC(numLines, nonInclusiveHack, name
+#ifdef MA_STATS_ENABLED
+                        , MAStatsCacheGroupId
+#endif
+                        );
     }
     rp->setCC(cc);
     if (!isTerminal) {
@@ -396,6 +409,14 @@ CacheGroup* BuildCacheGroup(Config& config, const string& name, bool isTerminal)
     uint32_t banks = config.get<uint32_t>(prefix + "banks", 1);
     uint32_t caches = config.get<uint32_t>(prefix + "caches", 1);
 
+#ifdef MA_STATS_ENABLED
+    // indicates cache group id for Memory Access (MA) statistics collection
+    MAStatsCacheGroupId_t MAStatsCacheGroupId = config.get<uint32_t>(prefix + "MAStatsCacheGroupId", UNDEF_CACHE_ID);
+    if ((MAStatsCacheGroupId != UNDEF_CACHE_ID) && (MAStatsCacheGroupId >= getMAStatsCacheGroupNum())) {
+        panic("MAStatsCacheGroupId (%d) >= number of MAStatsCacheGroupNames (%d)", MAStatsCacheGroupId, getMAStatsCacheGroupNum());
+    }
+#endif
+
     uint32_t bankSize = size/banks;
     if (size % banks != 0) {
         panic("%s: banks (%d) does not divide the size (%d bytes)", name.c_str(), banks, size);
@@ -413,7 +434,11 @@ CacheGroup* BuildCacheGroup(Config& config, const string& name, bool isTerminal)
             }
             g_string bankName(ss.str().c_str());
             uint32_t domain = (i*banks + j)*zinfo->numDomains/(caches*banks); //(banks > 1)? nextDomain() : (i*banks + j)*zinfo->numDomains/(caches*banks);
-            cg[i][j] = BuildCacheBank(config, prefix, bankName, bankSize, isTerminal, domain);
+            cg[i][j] = BuildCacheBank(config, prefix, bankName, bankSize, isTerminal, domain
+#ifdef MA_STATS_ENABLED
+                                      , MAStatsCacheGroupId
+#endif
+                                      );
         }
     }
 
@@ -887,6 +912,9 @@ void SimInit(const char* configFile, const char* outputDir, uint32_t shmid) {
             panic("Unsupported POINTER_TAG_MASK_SIZE %d", POINTER_TAG_MASK_SIZE);
         }
     }
+#endif
+#ifdef MA_STATS_ENABLED
+    MAStatsCacheGroupNames = ParseList<string>(config.get<const char *>("sys.caches.MAStatsCacheGroupNames", ""), "|");
 #endif
 
     if (zinfo->traceDriven) {

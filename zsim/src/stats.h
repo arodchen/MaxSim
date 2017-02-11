@@ -83,6 +83,8 @@
 #define CLU_STATS_ENABLED // Enables collection of cache line utilization statistics.
                           // NOTE: Collection is implemented only for SetAssocArray type!
 
+#define MA_STATS_ENABLED // Enables collection of memory access statistics.
+
 class Stat : public GlobAlloc {
     protected:
         const char* _name;
