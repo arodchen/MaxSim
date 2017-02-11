@@ -149,5 +149,6 @@ class ProcessTreeNode : public GlobAlloc {
 
 void CreateProcessTree(Config& config);
 
+void DumpEventualStats(uint32_t procIdx, const char* reason);
 
 #endif  // PROCESS_TREE_H_

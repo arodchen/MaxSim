@@ -45,12 +45,12 @@ static string DefaultMaskStr() {
 }
 
 //Helper
-static void DumpEventualStats(uint32_t procIdx, const char* reason) {
+void DumpEventualStats(uint32_t procIdx, const char* reason) {
     uint32_t p = zinfo->procArray[procIdx]->getGroupIdx();
-    info("Dumping eventual stats for process GROUP %d (%s)", p, reason);
     zinfo->trigger = p;
     zinfo->eventualStatsBackend->dump(true /*buffered*/);
     zinfo->procEventualDumps++;
+    info("Dumping eventual stats ID %ld for process GROUP %d (%s)", zinfo->procEventualDumps, p, reason);
     if (zinfo->procEventualDumps == zinfo->maxProcEventualDumps) {
         info("Terminating, maxProcEventualDumps (%ld) reached", zinfo->maxProcEventualDumps);
         zinfo->terminationConditionMet = true; //note this works because it always runs at the end of the phase
