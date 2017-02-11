@@ -35,6 +35,7 @@
 #include "stats.h"
 
 #define POINTER_TAGGING_ENABLED // Enables simulation of tagged pointers
+#define STACK_TRACE_ESTIMATION_ENABLED // Enables estimation of stack trace
 
 class Core;
 class Scheduler;

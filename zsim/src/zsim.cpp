@@ -60,6 +60,7 @@
 #include "trace_driver.h"
 #include "virt/virt.h"
 #include "pointer_tagging.h"
+#include "stack_trace_estimation.h"
 
 //#include <signal.h> //can't include this, conflicts with PIN's
 
@@ -143,6 +144,11 @@ void ExitFastForward();
 VOID SimThreadStart(THREADID tid);
 VOID SimThreadFini(THREADID tid);
 VOID SimEnd();
+
+#ifdef STACK_TRACE_ESTIMATION_ENABLED
+VOID HandleCall(THREADID tid, ADDRINT ip);
+VOID HandleReturn(THREADID tid);
+#endif // STACK_TRACE_ESTIMATION_ENABLED
 
 VOID HandleMagicOp(THREADID tid, ADDRINT op);
 
@@ -657,6 +663,16 @@ VOID Instruction(INS ins) {
             PointerTaggingInstrument(ins);
         }
 #endif
+
+#ifdef STACK_TRACE_ESTIMATION_ENABLED
+        if (INS_IsCall(ins)) {
+            INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR) HandleCall, IARG_CALL_ORDER, CALL_ORDER_DEFAULT + 1,
+                           IARG_THREAD_ID, IARG_INST_PTR, IARG_END);
+        } else if (INS_IsRet(ins)) {
+            INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR) HandleReturn, IARG_CALL_ORDER, CALL_ORDER_DEFAULT + 1,
+                           IARG_THREAD_ID, IARG_END);
+        }
+#endif // STACK_TRACE_ESTIMATION_ENABLED
     }
 
     //Intercept and process magic ops
@@ -893,6 +909,16 @@ VOID VdsoInstrument(INS ins) {
 }
 
 /* ===================================================================== */
+
+#ifdef STACK_TRACE_ESTIMATION_ENABLED
+VOID HandleCall(THREADID tid, ADDRINT ip) {
+    stackTraceEstimation.pushReturnAddress(tid, ip);
+}
+
+VOID HandleReturn(THREADID tid) {
+    stackTraceEstimation.popReturnAddress(tid);
+}
+#endif // STACK_TRACE_ESTIMATION_ENABLED
 
 #ifdef POINTER_TAGGING_ENABLED
 // Untag base plus offset pointer.
