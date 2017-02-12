@@ -330,10 +330,10 @@ inline void OOOCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
 
 #ifdef MA_STATS_ENABLED
                     int32_t offset = loadOffset[loadIdx];
-#endif
-#ifdef POINTER_TAGGING_ENABLED
+#   ifdef POINTER_TAGGING_ENABLED
                     uint16_t tag = loadTag[loadIdx];
-#endif
+#   endif
+#endif // MA_STATS_ENABLED
 #ifdef CLU_STATS_ENABLED
                     int8_t size = loadSizes[loadIdx];
 #endif
@@ -388,10 +388,10 @@ inline void OOOCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
 
 #ifdef MA_STATS_ENABLED
                     int32_t offset = storeOffset[storeIdx];
-#endif
-#ifdef POINTER_TAGGING_ENABLED
+#   ifdef POINTER_TAGGING_ENABLED
                     uint16_t tag = storeTag[storeIdx];
-#endif
+#   endif
+#endif // MA_STATS_ENABLED
 #ifdef CLU_STATS_ENABLED
                     int8_t size = storeSizes[storeIdx];
 #endif

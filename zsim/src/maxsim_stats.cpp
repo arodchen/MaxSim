@@ -25,4 +25,8 @@
 
 #include "maxsim_stats.h"
 
+#ifdef MA_STATS_ENABLED
+
 MaxSimStatsDB maxsimStatsDB;
+
+#endif
