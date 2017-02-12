@@ -150,7 +150,7 @@ VOID HandleCall(THREADID tid, ADDRINT ip);
 VOID HandleReturn(THREADID tid);
 #endif // STACK_TRACE_ESTIMATION_ENABLED
 
-VOID HandleMagicOp(THREADID tid, ADDRINT op);
+VOID HandleMagicOp(THREADID tid, ADDRINT op, ADDRINT arg);
 
 VOID FakeCPUIDPre(THREADID tid, REG eax, REG ecx);
 VOID FakeCPUIDPost(THREADID tid, ADDRINT* eax, ADDRINT* ebx, ADDRINT* ecx, ADDRINT* edx); //REG* eax, REG* ebx, REG* ecx, REG* edx);
@@ -678,11 +678,13 @@ VOID Instruction(INS ins) {
     //Intercept and process magic ops
     /* xchg %rcx, %rcx is our chosen magic op. It is effectively a NOP, but it
      * is never emitted by any x86 compiler, as they use other (recommended) nop
-     * instructions or sequences.
+     * instructions or sequences. A value in the %rbx register is interepreted 
+     * as an extra argument for those magic ops which require an extra argument.
      */
     if (INS_IsXchg(ins) && INS_OperandReg(ins, 0) == REG_RCX && INS_OperandReg(ins, 1) == REG_RCX) {
         //info("Instrumenting magic op");
-        INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR) HandleMagicOp, IARG_THREAD_ID, IARG_REG_VALUE, REG_ECX, IARG_END);
+        INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR) HandleMagicOp, IARG_THREAD_ID, IARG_REG_VALUE, REG_RCX,
+            IARG_REG_VALUE, REG_RBX, IARG_END);
     }
 
     if (INS_Opcode(ins) == XED_ICLASS_CPUID) {
@@ -1352,7 +1354,7 @@ VOID SimEnd() {
 #define ZSIM_MAGIC_OP_REGISTER_THREAD   (1027)
 #define ZSIM_MAGIC_OP_HEARTBEAT         (1028)
 
-VOID HandleMagicOp(THREADID tid, ADDRINT op) {
+VOID HandleMagicOp(THREADID tid, ADDRINT op, ADDRINT arg) {
     switch (op) {
         case ZSIM_MAGIC_OP_ROI_BEGIN:
             if (!zinfo->ignoreHooks) {
