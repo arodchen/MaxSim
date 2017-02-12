@@ -169,6 +169,9 @@ class MESIBottomCC : public GlobAlloc {
 #ifdef CLU_STATS_ENABLED
                                , Address virtualAddr, uint8_t memoryAccessSize, MemReqStatType_t memReqStatType
 #endif
+#ifdef MA_STATS_ENABLED
+                               , uint16_t tag, int32_t offset, Address bblIP
+#endif
                                );
 
         void processWritebackOnAccess(Address lineAddr, uint32_t lineId, AccessType type);
@@ -407,6 +410,9 @@ class MESICC : public CC {
 #ifdef CLU_STATS_ENABLED
                                                , req.statAttrs.virtualAddress, req.statAttrs.memoryAccessSize, req.statAttrs.memoryAccessType
 #endif
+#ifdef MA_STATS_ENABLED
+                                               , req.MAStatsAttrs.tag, req.MAStatsAttrs.offset, req.MAStatsAttrs.bblIP
+#endif
                 );
                 if (getDoneCycle) *getDoneCycle = respCycle;
                 if (!isPrefetch) { //prefetches only touch bcc; the demand request from the core will pull the line to lower level
@@ -529,6 +535,9 @@ class MESITerminalCC : public CC {
             uint64_t respCycle = bcc->processAccess(req.lineAddr, lineId, req.type, startCycle, req.srcId, req.flags
 #ifdef CLU_STATS_ENABLED
                                                     , req.statAttrs.virtualAddress, req.statAttrs.memoryAccessSize, req.statAttrs.memoryAccessType
+#endif
+#ifdef MA_STATS_ENABLED
+                                                    , req.MAStatsAttrs.tag, req.MAStatsAttrs.offset, req.MAStatsAttrs.bblIP
 #endif
             );
             //at this point, the line is in a good state w.r.t. upper levels

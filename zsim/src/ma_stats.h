@@ -37,6 +37,13 @@ using std::vector;
 
 #ifdef MA_STATS_ENABLED
 
+// Memory request attributes necessary for memory access statistics collection.
+typedef struct MemReqMAStatsAttrs_t {
+    uint16_t tag; // memory access pointer tag
+    int32_t offset; // memory access offset in [base + offset] addressing mode
+    uint64_t bblIP; // basic block ip address of memory access operation
+} MemReqMAStatsAttrs_t;
+
 // Undefined cache id.
 #define UNDEF_CACHE_ID ((uint32_t) -1)
 

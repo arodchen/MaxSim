@@ -53,6 +53,9 @@ void SimpleCore::load(Address addr, uint8_t size, Address base) {
 #ifdef CLU_STATS_ENABLED
                          , size, LoadData
 #endif
+#ifdef MA_STATS_ENABLED
+                         , UNDEF_TAG, UNDEF_OFFSET, UNDEF_VIRTUAL_ADDRESS
+#endif
                          );
 }
 
@@ -60,6 +63,9 @@ void SimpleCore::store(Address addr, uint8_t size, Address base) {
     curCycle = l1d->store(addr, curCycle
 #ifdef CLU_STATS_ENABLED
                           , size
+#endif
+#ifdef MA_STATS_ENABLED
+                          , UNDEF_TAG, UNDEF_OFFSET, UNDEF_VIRTUAL_ADDRESS
 #endif
                           );
 }
@@ -75,6 +81,9 @@ void SimpleCore::bbl(Address bblAddr, BblInfo* bblInfo) {
         curCycle = l1i->load(fetchAddr, curCycle
 #ifdef CLU_STATS_ENABLED
                              , (1 << lineBits), FetchRightPath
+#endif
+#ifdef MA_STATS_ENABLED
+                             , FETCH_TAG, UNDEF_OFFSET, UNDEF_VIRTUAL_ADDRESS
 #endif
                              );
     }

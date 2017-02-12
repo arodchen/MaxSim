@@ -33,6 +33,8 @@
 #include "zsim.h"
 #include "stats.h"
 #include "pointer_tagging.h"
+#include "constants.h"
+#include "maxsim_stats.h"
 
 /* Uncomment to induce backpressure to the IW when the load/store buffers fill up. In theory, more detailed,
  * but sometimes much slower (as it relies on range poisoning in the IW, potentially O(n^2)), and in practice
@@ -66,6 +68,9 @@ OOOCore::OOOCore(FilterCache* _l1i, FilterCache* _l1d, g_string& _name) : Core(_
         regScoreboard[i] = 0;
     }
     prevBbl = nullptr;
+#ifdef MA_STATS_ENABLED
+    prevBblAddr = UNDEF_VIRTUAL_ADDRESS;
+#endif
 
     lastStoreCommitCycle = 0;
     lastStoreAddrCommitCycle = 0;
@@ -137,6 +142,9 @@ void OOOCore::contextSwitch(int32_t gid) {
     if (gid == -1) {
         // Do not execute previous BBL, as we were context-switched
         prevBbl = nullptr;
+#ifdef MA_STATS_ENABLED
+        prevBblAddr = UNDEF_VIRTUAL_ADDRESS;
+#endif
 
         // Invalidate virtually-addressed filter caches
         l1i->contextSwitch();
@@ -148,8 +156,15 @@ void OOOCore::contextSwitch(int32_t gid) {
 InstrFuncPtrs OOOCore::GetFuncPtrs() {return {LoadFunc, StoreFunc, BblFunc, BranchFunc, PredLoadFunc, PredStoreFunc, FPTR_ANALYSIS, {0}};}
 
 inline void OOOCore::load(Address addr, uint32_t size, Address base) {
+    assert(size < 256);
+    if (loads == 256) panic("Access to loadAddrs is out of bounds!");
 #ifdef POINTER_TAGGING_ENABLED
     uint16_t tag = getPointerTag(base);
+#endif
+#ifdef MA_STATS_ENABLED
+    int32_t offset = addr - base;
+
+    loadOffset[loads] = offset;
 #endif
 #ifdef POINTER_TAGGING_ENABLED
     loadTag[loads] = tag;
@@ -161,8 +176,15 @@ inline void OOOCore::load(Address addr, uint32_t size, Address base) {
 }
 
 void OOOCore::store(Address addr, uint32_t size, Address base) {
+    assert(size < 256);
+    if (stores == 256) panic("Access to storeAddrs is out of bounds!");
 #ifdef POINTER_TAGGING_ENABLED
     uint16_t tag = getPointerTag(base);
+#endif
+#ifdef MA_STATS_ENABLED
+    int32_t offset = addr - base;
+
+    storeOffset[stores] = offset;
 #endif
 #ifdef POINTER_TAGGING_ENABLED
     storeTag[stores] = tag;
@@ -191,6 +213,9 @@ inline void OOOCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
     if (!prevBbl) {
         // This is the 1st BBL since scheduled, nothing to simulate
         prevBbl = bblInfo;
+#ifdef MA_STATS_ENABLED
+        prevBblAddr = bblAddr;
+#endif
         // Kill lingering ops from previous BBL
         loads = stores = 0;
         return;
@@ -200,7 +225,13 @@ inline void OOOCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
 
     uint32_t bblInstrs = prevBbl->instrs;
     DynBbl* bbl = &(prevBbl->oooBbl[0]);
+#ifdef MA_STATS_ENABLED
+    Address bblIP = prevBblAddr;
+#endif
     prevBbl = bblInfo;
+#ifdef MA_STATS_ENABLED
+    prevBblAddr = bblAddr;
+#endif
 
     uint32_t loadIdx = 0;
     uint32_t storeIdx = 0;
@@ -297,15 +328,27 @@ inline void OOOCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
                     // Wait for all previous store addresses to be resolved
                     dispatchCycle = MAX(lastStoreAddrCommitCycle+1, dispatchCycle);
 
+#ifdef MA_STATS_ENABLED
+                    int32_t offset = loadOffset[loadIdx];
+#endif
+#ifdef POINTER_TAGGING_ENABLED
+                    uint16_t tag = loadTag[loadIdx];
+#endif
 #ifdef CLU_STATS_ENABLED
                     int8_t size = loadSizes[loadIdx];
 #endif
                     Address addr = loadAddrs[loadIdx++];
                     uint64_t reqSatisfiedCycle = dispatchCycle;
-                    if (addr != ((Address)-1L)) {
+                    if (addr != UNDEF_VIRTUAL_ADDRESS) {
+#ifdef MA_STATS_ENABLED
+                        maxsimStatsDB.addMemoryAccess(tag, offset, bblIP, false);
+#endif
                         reqSatisfiedCycle = l1d->load(addr, dispatchCycle
 #ifdef CLU_STATS_ENABLED
                                                       , size, LoadData
+#endif
+#ifdef MA_STATS_ENABLED
+                                                      , tag, offset, bblIP
 #endif
                                                       ) + L1D_LAT;
                         cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
@@ -343,13 +386,25 @@ inline void OOOCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
                     // Wait for all previous store addresses to be resolved (not just ours :))
                     dispatchCycle = MAX(lastStoreAddrCommitCycle+1, dispatchCycle);
 
+#ifdef MA_STATS_ENABLED
+                    int32_t offset = storeOffset[storeIdx];
+#endif
+#ifdef POINTER_TAGGING_ENABLED
+                    uint16_t tag = storeTag[storeIdx];
+#endif
 #ifdef CLU_STATS_ENABLED
                     int8_t size = storeSizes[storeIdx];
 #endif
                     Address addr = storeAddrs[storeIdx++];
+#ifdef MA_STATS_ENABLED
+                    maxsimStatsDB.addMemoryAccess(tag, offset, bblIP, true);
+#endif
                     uint64_t reqSatisfiedCycle = l1d->store(addr, dispatchCycle
 #ifdef CLU_STATS_ENABLED
-	                                                        , size
+                                                            , size
+#endif
+#ifdef MA_STATS_ENABLED
+                                                            , tag, offset, bblIP
 #endif
                                                             ) + L1D_LAT;
                     cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
@@ -453,9 +508,15 @@ inline void OOOCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
         Address wrongPathAddr = branchTaken? branchNotTakenNpc : branchTakenNpc;
         uint64_t reqCycle = fetchCycle;
         for (uint32_t i = 0; i < 5*64/lineSize; i++) {
+#ifdef MA_STATS_ENABLED
+            maxsimStatsDB.addMemoryAccess(FETCH_TAG, UNDEF_OFFSET, bblIP, false);
+#endif
             uint64_t fetchLat = l1i->load(wrongPathAddr + lineSize*i, curCycle
 #ifdef CLU_STATS_ENABLED
                                           , lineSize, FetchWrongPath
+#endif
+#ifdef MA_STATS_ENABLED
+                                          , FETCH_TAG, UNDEF_OFFSET, wrongPathAddr
 #endif
                                           ) - curCycle;
             cRec.record(curCycle, curCycle, curCycle + fetchLat);
@@ -480,9 +541,15 @@ inline void OOOCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
         // Do not model fetch throughput limit here, decoder-generated stalls already include it
         // We always call fetches with curCycle to avoid upsetting the weave
         // models (but we could move to a fetch-centric recorder to avoid this)
+#ifdef MA_STATS_ENABLED
+        maxsimStatsDB.addMemoryAccess(FETCH_TAG, UNDEF_OFFSET, bblIP, false);
+#endif
         uint64_t fetchLat = l1i->load(fetchAddr, curCycle
 #ifdef CLU_STATS_ENABLED
                                       , lineSize, FetchRightPath
+#endif
+#ifdef MA_STATS_ENABLED
+                                      , FETCH_TAG, UNDEF_OFFSET, bblAddr
 #endif
                                       ) - curCycle;
         cRec.record(curCycle, curCycle, curCycle + fetchLat);

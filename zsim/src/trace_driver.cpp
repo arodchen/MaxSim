@@ -138,6 +138,9 @@ void TraceDriver::executeAccess(AccessRecord acc) {
 #ifdef CLU_STATS_ENABLED
                         , {UNDEF_VIRTUAL_ADDRESS, UNDEF_MA_SIZE, MAUndefined, UNDEF_CACHE_LINE_ADDRESS, CLU_STATS_ZERO_MASK}
 #endif
+#ifdef MA_STATS_ENABLED
+                        , {UNDEF_TAG, UNDEF_OFFSET, UNDEF_VIRTUAL_ADDRESS}
+#endif
                 };
                 lat = parent->access(req) - acc.reqCycle; //note that PUT latency does not affect driver latency
                 assert(it->second == I);
@@ -156,6 +159,9 @@ void TraceDriver::executeAccess(AccessRecord acc) {
 #ifdef CLU_STATS_ENABLED
                                     , {UNDEF_VIRTUAL_ADDRESS, UNDEF_MA_SIZE, MAUndefined, UNDEF_CACHE_LINE_ADDRESS, CLU_STATS_ZERO_MASK}
 #endif
+#ifdef MA_STATS_ENABLED
+                                    , {UNDEF_TAG, UNDEF_OFFSET, UNDEF_VIRTUAL_ADDRESS}
+#endif
                             };
                             parent->access(req);
                             assert(it->second == I);
@@ -169,6 +175,9 @@ void TraceDriver::executeAccess(AccessRecord acc) {
                 MemReq req = {acc.lineAddr, acc.type, acc.childId, &state, acc.reqCycle, nullptr, state, acc.childId, 0 /*no flags*/
 #ifdef CLU_STATS_ENABLED
                         , {UNDEF_VIRTUAL_ADDRESS, UNDEF_MA_SIZE, MAUndefined, UNDEF_CACHE_LINE_ADDRESS, CLU_STATS_ZERO_MASK}
+#endif
+#ifdef MA_STATS_ENABLED
+                        , {UNDEF_TAG, UNDEF_OFFSET, UNDEF_VIRTUAL_ADDRESS}
 #endif
                 };
                 uint64_t respCycle = parent->access(req);

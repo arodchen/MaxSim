@@ -52,4 +52,19 @@
 // Undefined memory access size.
 #define UNDEF_MA_SIZE ((uint8_t) 8)
 
+// Reserved tag value which is a natural x86 pointer tag (sign extension of address bit #47 when it is zero).
+#define ZERO_TAG ((uint16_t) 0x0000)
+
+// Reserved tag value which is a natural x86 pointer tag (sign extension of address bit #47 when it is one).
+#define ONES_TAG ((uint16_t) 0xFFFF)
+
+// Undefined tag.
+#define UNDEF_TAG  (ONES_TAG - 1)
+
+// Tag identifying fetches of instructions to execute.
+#define FETCH_TAG  (UNDEF_TAG - 1)
+
+// Zero offset.
+#define UNDEF_OFFSET  ((Address) 0L)
+
 #endif  // CONSTANTS_H_

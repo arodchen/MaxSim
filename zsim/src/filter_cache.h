@@ -31,6 +31,7 @@
 #include "galloc.h"
 #include "zsim.h"
 #include "clu_stats.h"
+#include "ma_stats.h"
 
 /* Extends Cache with an L0 direct-mapped cache, optimized to hell for hits
  *
@@ -136,6 +137,9 @@ class FilterCache : public Cache {
 #ifdef CLU_STATS_ENABLED
                              , uint8_t size, MemReqStatType_t memReqStatType
 #endif
+#ifdef MA_STATS_ENABLED
+                             , uint16_t tag, int32_t offset, Address bblIP
+#endif
                              ) {
             Address vLineAddr = vAddr >> lineBits;
             uint32_t idx = vLineAddr & setMask;
@@ -151,6 +155,9 @@ class FilterCache : public Cache {
 #ifdef CLU_STATS_ENABLED
                                , size, memReqStatType
 #endif
+#ifdef MA_STATS_ENABLED
+                               , tag, offset, bblIP
+#endif
                                );
             }
         }
@@ -158,6 +165,9 @@ class FilterCache : public Cache {
         inline uint64_t store(Address vAddr, uint64_t curCycle
 #ifdef CLU_STATS_ENABLED
                               , uint8_t size
+#endif
+#ifdef MA_STATS_ENABLED
+                              , uint16_t tag, int32_t offset, Address bblIP
 #endif
                               ) {
             Address vLineAddr = vAddr >> lineBits;
@@ -176,6 +186,9 @@ class FilterCache : public Cache {
 #ifdef CLU_STATS_ENABLED
                                , size, StoreData
 #endif
+#ifdef MA_STATS_ENABLED
+                               , tag, offset, bblIP
+#endif
                                );
             }
         }
@@ -184,6 +197,9 @@ class FilterCache : public Cache {
 #ifdef CLU_STATS_ENABLED
                          , uint8_t size, MemReqStatType_t memReqStatType
 #endif
+#ifdef MA_STATS_ENABLED
+                         , uint16_t tag, int32_t offset, Address bblIP
+#endif
                          ) {
             Address pLineAddr = procMask | vLineAddr;
             MESIState dummyState = MESIState::I;
@@ -191,6 +207,9 @@ class FilterCache : public Cache {
             MemReq req = {pLineAddr, isLoad? GETS : GETX, 0, &dummyState, curCycle, &filterLock, dummyState, srcId, reqFlags
 #ifdef CLU_STATS_ENABLED
                     , {vAddr, size, memReqStatType, filterArray[idx].rdAddr, filterArray[idx].accessMask}
+#endif
+#ifdef MA_STATS_ENABLED
+                    , {tag, offset, bblIP}
 #endif
                 };
             uint64_t respCycle  = access(req);

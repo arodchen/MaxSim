@@ -28,6 +28,7 @@
 #include "network.h"
 #include "clu_stats.h"
 #include "ma_stats.h"
+#include "maxsim_stats.h"
 
 /* Do a simple XOR block hash on address to determine its bank. Hacky for now,
  * should probably have a class that deals with this with a real hash function
@@ -86,6 +87,9 @@ uint64_t MESIBottomCC::processEviction(Address wbLineAddr, uint32_t lineId, bool
 #ifdef CLU_STATS_ENABLED
                         , {UNDEF_VIRTUAL_ADDRESS, UNDEF_MA_SIZE, MAUndefined, triggerReq.statAttrs.replacedLineAddr, triggerReq.statAttrs.replacedLineAccessMask}
 #endif
+#ifdef MA_STATS_ENABLED
+                        , {UNDEF_TAG, UNDEF_OFFSET, UNDEF_VIRTUAL_ADDRESS}
+#endif
                     };
 #ifdef CLU_STATS_ENABLED
                 profCLE.inc();
@@ -98,6 +102,9 @@ uint64_t MESIBottomCC::processEviction(Address wbLineAddr, uint32_t lineId, bool
                 MemReq req = {wbLineAddr, PUTX, selfId, state, cycle, &ccLock, *state, srcId, 0 /*no flags*/
 #ifdef CLU_STATS_ENABLED
                         , {UNDEF_VIRTUAL_ADDRESS, UNDEF_MA_SIZE, MAUndefined, triggerReq.statAttrs.replacedLineAddr, triggerReq.statAttrs.replacedLineAccessMask}
+#endif
+#ifdef MA_STATS_ENABLED
+                        , {UNDEF_TAG, UNDEF_OFFSET, UNDEF_VIRTUAL_ADDRESS}
 #endif
                     };
 #ifdef CLU_STATS_ENABLED
@@ -116,6 +123,9 @@ uint64_t MESIBottomCC::processEviction(Address wbLineAddr, uint32_t lineId, bool
 uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessType type, uint64_t cycle, uint32_t srcId, uint32_t flags
 #ifdef CLU_STATS_ENABLED
                                      , Address virtualAddr, uint8_t memoryAccessSize, MemReqStatType_t memReqStatType
+#endif
+#ifdef MA_STATS_ENABLED
+                                     , uint16_t tag, int32_t offset, Address bblIP
 #endif
                                      ) {
     uint64_t respCycle = cycle;
@@ -141,12 +151,18 @@ uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessTy
 #ifdef CLU_STATS_ENABLED
                         , {virtualAddr, memoryAccessSize, memReqStatType, UNDEF_CACHE_LINE_ADDRESS, CLU_STATS_ZERO_MASK}
 #endif
+#ifdef MA_STATS_ENABLED
+                        , {tag, offset, bblIP}
+#endif
                     };
                 uint32_t nextLevelLat = parents[parentId]->access(req) - cycle;
                 uint32_t netLat = parentRTTs[parentId];
                 profGETNextLevelLat.inc(nextLevelLat);
                 profGETNetLat.inc(netLat);
                 respCycle += nextLevelLat + netLat;
+#ifdef MA_STATS_ENABLED
+                maxsimStatsDB.addCacheMiss(tag, offset, bblIP, false, MAStatsCacheGroupId, 1);
+#endif
                 profGETSMiss.inc();
                 assert(*state == S || *state == E);
             } else {
@@ -155,6 +171,9 @@ uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessTy
             break;
         case GETX:
             if (*state == I || *state == S) {
+#ifdef MA_STATS_ENABLED
+                maxsimStatsDB.addCacheMiss(tag, offset, bblIP, true, MAStatsCacheGroupId, 1);
+#endif
                 //Profile before access, state changes
                 if (*state == I) profGETXMissIM.inc();
                 else profGETXMissSM.inc();
@@ -162,6 +181,9 @@ uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessTy
                 MemReq req = {lineAddr, GETX, selfId, state, cycle, &ccLock, *state, srcId, flags
 #ifdef CLU_STATS_ENABLED
                         , {virtualAddr, memoryAccessSize, memReqStatType, UNDEF_CACHE_LINE_ADDRESS, CLU_STATS_ZERO_MASK}
+#endif
+#ifdef MA_STATS_ENABLED
+                        , {tag, offset, bblIP}
 #endif
                     };
                 uint32_t nextLevelLat = parents[parentId]->access(req) - cycle;
@@ -234,6 +256,9 @@ uint64_t MESIBottomCC::processNonInclusiveWriteback(Address lineAddr, AccessType
     MemReq req = {lineAddr, type, selfId, state, cycle, &ccLock, *state, srcId, flags | MemReq::NONINCLWB
 #ifdef CLU_STATS_ENABLED
             , {UNDEF_VIRTUAL_ADDRESS, UNDEF_MA_SIZE, MAUndefined, UNDEF_CACHE_LINE_ADDRESS, CLU_STATS_ZERO_MASK}
+#endif
+#ifdef MA_STATS_ENABLED
+            , {UNDEF_TAG, UNDEF_OFFSET, UNDEF_VIRTUAL_ADDRESS}
 #endif
         };
     uint64_t respCycle = parents[getParentId(lineAddr)]->access(req);

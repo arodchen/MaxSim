@@ -34,6 +34,7 @@
 #include "galloc.h"
 #include "locks.h"
 #include "clu_stats.h"
+#include "ma_stats.h"
 
 /** TYPES **/
 
@@ -101,6 +102,9 @@ struct MemReq {
 
 #ifdef CLU_STATS_ENABLED
     MemReqStatAttrs_t statAttrs;
+#endif
+#ifdef MA_STATS_ENABLED
+    MemReqMAStatsAttrs_t MAStatsAttrs;
 #endif
 
     inline void set(Flag f) {flags |= f;}
