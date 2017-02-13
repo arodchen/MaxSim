@@ -26,9 +26,10 @@
 #ifndef MAXINE_STATISTICS_H_
 #define MAXINE_STATISTICS_H_
 
+#include "zsim.h"
 #include "ma_stats.h"
 
-#ifdef MA_STATS_ENABLED
+#if defined(MA_STATS_ENABLED) && defined(MAXSIM_ENABLED)
 
 class MaxSimStatsDB {
     public:
@@ -43,6 +44,6 @@ class MaxSimStatsDB {
 
 extern MaxSimStatsDB maxsimStatsDB;
 
-#endif // MA_STATS_ENABLED
+#endif // MA_STATS_ENABLED && MAXSIM_ENABLED
 
 #endif // MAXINE_STATISTICS_H_

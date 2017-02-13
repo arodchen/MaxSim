@@ -25,8 +25,9 @@
 
 #include "maxsim_stats.h"
 
-#ifdef MA_STATS_ENABLED
+#if defined(MA_STATS_ENABLED) && defined(MAXSIM_ENABLED)
 
 MaxSimStatsDB maxsimStatsDB;
 
-#endif
+#endif // MA_STATS_ENABLED && MAXSIM_ENABLED
+

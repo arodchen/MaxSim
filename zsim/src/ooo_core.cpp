@@ -341,7 +341,11 @@ inline void OOOCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
                     uint64_t reqSatisfiedCycle = dispatchCycle;
                     if (addr != UNDEF_VIRTUAL_ADDRESS) {
 #ifdef MA_STATS_ENABLED
+#   ifdef MAXSIM_ENABLED
                         maxsimStatsDB.addMemoryAccess(tag, offset, bblIP, false);
+#   else
+                        UNUSED_VAR(tag); UNUSED_VAR(offset); UNUSED_VAR(bblIP);
+#   endif
 #endif
                         reqSatisfiedCycle = l1d->load(addr, dispatchCycle
 #ifdef CLU_STATS_ENABLED
@@ -400,7 +404,11 @@ inline void OOOCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
                     uint64_t reqSatisfiedCycle = dispatchCycle;
                     if (addr != UNDEF_VIRTUAL_ADDRESS) {
 #ifdef MA_STATS_ENABLED
+#   ifdef MAXSIM_ENABLED
                         maxsimStatsDB.addMemoryAccess(tag, offset, bblIP, true);
+#   else
+                        UNUSED_VAR(tag); UNUSED_VAR(offset); UNUSED_VAR(bblIP);
+#   endif
 #endif
                         reqSatisfiedCycle = l1d->store(addr, dispatchCycle
 #ifdef CLU_STATS_ENABLED
@@ -512,7 +520,9 @@ inline void OOOCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
         uint64_t reqCycle = fetchCycle;
         for (uint32_t i = 0; i < 5*64/lineSize; i++) {
 #ifdef MA_STATS_ENABLED
+#   ifdef MAXSIM_ENABLED
             maxsimStatsDB.addMemoryAccess(FETCH_TAG, UNDEF_OFFSET, bblIP, false);
+#   endif
 #endif
             uint64_t fetchLat = l1i->load(wrongPathAddr + lineSize*i, curCycle
 #ifdef CLU_STATS_ENABLED
@@ -545,7 +555,9 @@ inline void OOOCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
         // We always call fetches with curCycle to avoid upsetting the weave
         // models (but we could move to a fetch-centric recorder to avoid this)
 #ifdef MA_STATS_ENABLED
+#   ifdef MAXSIM_ENABLED
         maxsimStatsDB.addMemoryAccess(FETCH_TAG, UNDEF_OFFSET, bblIP, false);
+#   endif
 #endif
         uint64_t fetchLat = l1i->load(fetchAddr, curCycle
 #ifdef CLU_STATS_ENABLED

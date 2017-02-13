@@ -36,6 +36,7 @@
 
 #define POINTER_TAGGING_ENABLED // Enables simulation of tagged pointers
 #define STACK_TRACE_ESTIMATION_ENABLED // Enables estimation of stack trace
+#define MAXSIM_ENABLED // Enables ZSim to work in tandem with Maxine
 
 class Core;
 class Scheduler;

@@ -29,6 +29,7 @@
 #include "clu_stats.h"
 #include "ma_stats.h"
 #include "maxsim_stats.h"
+#include "zsim.h"
 
 /* Do a simple XOR block hash on address to determine its bank. Hacky for now,
  * should probably have a class that deals with this with a real hash function
@@ -161,7 +162,11 @@ uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessTy
                 profGETNetLat.inc(netLat);
                 respCycle += nextLevelLat + netLat;
 #ifdef MA_STATS_ENABLED
+#   ifdef MAXSIM_ENABLED
                 maxsimStatsDB.addCacheMiss(tag, offset, bblIP, false, MAStatsCacheGroupId, 1);
+#   else
+                UNUSED_VAR(tag); UNUSED_VAR(offset); UNUSED_VAR(bblIP);
+#   endif
 #endif
                 profGETSMiss.inc();
                 assert(*state == S || *state == E);
@@ -172,7 +177,11 @@ uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessTy
         case GETX:
             if (*state == I || *state == S) {
 #ifdef MA_STATS_ENABLED
+#   ifdef MAXSIM_ENABLED
                 maxsimStatsDB.addCacheMiss(tag, offset, bblIP, true, MAStatsCacheGroupId, 1);
+#   else
+                UNUSED_VAR(tag); UNUSED_VAR(offset); UNUSED_VAR(bblIP);
+#   endif
 #endif
                 //Profile before access, state changes
                 if (*state == I) profGETXMissIM.inc();

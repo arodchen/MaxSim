@@ -29,4 +29,7 @@
 // Addresses are plain 64-bit uints. This should be kept compatible with PIN addrints
 typedef uint64_t Address;
 
+// Unused variable.
+#define UNUSED_VAR(unused_var) do { (void)(unused_var); } while (0)
+
 #endif //SRC_COMMON_H
