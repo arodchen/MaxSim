@@ -26,9 +26,12 @@
 #include "simple_core.h"
 #include "filter_cache.h"
 #include "zsim.h"
-#include "stats.h"
+#include "pointer_tagging.h"
 
 SimpleCore::SimpleCore(FilterCache* _l1i, FilterCache* _l1d, g_string& _name) : Core(_name), l1i(_l1i), l1d(_l1d), instrs(0), curCycle(0), haltedCycles(0) {
+#ifdef MA_STATS_ENABLED
+    curBblAddr = UNDEF_VIRTUAL_ADDRESS;
+#endif
 }
 
 void SimpleCore::initStats(AggregateStat* parentStat) {
@@ -49,23 +52,37 @@ uint64_t SimpleCore::getPhaseCycles() const {
 }
 
 void SimpleCore::load(Address addr, uint8_t size, Address base) {
+#ifdef MA_STATS_ENABLED
+#   ifdef POINTER_TAGGING_ENABLED
+    uint16_t tag = getPointerTag(base);
+#   endif
+    int32_t offset = addr - base;
+#endif // MA_STATS_ENABLED
+
     curCycle = l1d->load(addr, curCycle
 #ifdef CLU_STATS_ENABLED
                          , size, LoadData
 #endif
 #ifdef MA_STATS_ENABLED
-                         , UNDEF_TAG, UNDEF_OFFSET, UNDEF_VIRTUAL_ADDRESS
+                         , tag, offset, curBblAddr
 #endif
                          );
 }
 
 void SimpleCore::store(Address addr, uint8_t size, Address base) {
+#ifdef MA_STATS_ENABLED
+#   ifdef POINTER_TAGGING_ENABLED
+    uint16_t tag = getPointerTag(base);
+#   endif
+    int32_t offset = addr - base;
+#endif // MA_STATS_ENABLED
+
     curCycle = l1d->store(addr, curCycle
 #ifdef CLU_STATS_ENABLED
                           , size
 #endif
 #ifdef MA_STATS_ENABLED
-                          , UNDEF_TAG, UNDEF_OFFSET, UNDEF_VIRTUAL_ADDRESS
+                          , tag, offset, curBblAddr
 #endif
                           );
 }
@@ -75,6 +92,9 @@ void SimpleCore::bbl(Address bblAddr, BblInfo* bblInfo) {
     //info("%d %d", bblInfo->instrs, bblInfo->bytes);
     instrs += bblInfo->instrs;
     curCycle += bblInfo->instrs;
+#ifdef MA_STATS_ENABLED
+    curBblAddr = bblAddr;
+#endif
 
     Address endBblAddr = bblAddr + bblInfo->bytes;
     for (Address fetchAddr = bblAddr; fetchAddr < endBblAddr; fetchAddr+=(1 << lineBits)) {
@@ -83,7 +103,7 @@ void SimpleCore::bbl(Address bblAddr, BblInfo* bblInfo) {
                              , (1 << lineBits), FetchRightPath
 #endif
 #ifdef MA_STATS_ENABLED
-                             , FETCH_TAG, UNDEF_OFFSET, UNDEF_VIRTUAL_ADDRESS
+                             , FETCH_TAG, UNDEF_OFFSET, bblAddr
 #endif
                              );
     }
@@ -91,6 +111,9 @@ void SimpleCore::bbl(Address bblAddr, BblInfo* bblInfo) {
 
 void SimpleCore::contextSwitch(int32_t gid) {
     if (gid == -1) {
+#ifdef MA_STATS_ENABLED
+        curBblAddr = UNDEF_VIRTUAL_ADDRESS;
+#endif
         l1i->contextSwitch();
         l1d->contextSwitch();
     }
