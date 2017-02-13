@@ -103,7 +103,7 @@ void SimpleCore::bbl(Address bblAddr, BblInfo* bblInfo) {
                              , (1 << lineBits), FetchRightPath
 #endif
 #ifdef MA_STATS_ENABLED
-                             , FETCH_TAG, UNDEF_OFFSET, bblAddr
+                             , FETCH_TAG, UNDEF_OFFSET, curBblAddr
 #endif
                              );
     }

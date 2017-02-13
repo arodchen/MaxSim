@@ -31,6 +31,7 @@
 #include "event_recorder.h"
 #include "memory_hierarchy.h"
 #include "pad.h"
+#include "ma_stats.h"
 
 class FilterCache;
 
@@ -45,6 +46,10 @@ class TimingCore : public Core {
         uint64_t phaseEndCycle; //phase 1 end clock
 
         CoreRecorder cRec;
+
+#ifdef MA_STATS_ENABLED
+        Address curBblAddr;
+#endif
 
     public:
         TimingCore(FilterCache* _l1i, FilterCache* _l1d, uint32_t domain, g_string& _name);

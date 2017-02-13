@@ -26,13 +26,17 @@
 #include "timing_core.h"
 #include "filter_cache.h"
 #include "zsim.h"
-#include "stats.h"
+#include "pointer_tagging.h"
 
 #define DEBUG_MSG(args...)
 //#define DEBUG_MSG(args...) info(args)
 
 TimingCore::TimingCore(FilterCache* _l1i, FilterCache* _l1d, uint32_t _domain, g_string& _name)
-    : Core(_name), l1i(_l1i), l1d(_l1d), instrs(0), curCycle(0), cRec(_domain, _name) {}
+    : Core(_name), l1i(_l1i), l1d(_l1d), instrs(0), curCycle(0), cRec(_domain, _name) {
+#ifdef MA_STATS_ENABLED
+    curBblAddr = UNDEF_VIRTUAL_ADDRESS;
+#endif
+}
 
 uint64_t TimingCore::getPhaseCycles() const {
     return curCycle % zinfo->phaseLength;
@@ -62,6 +66,9 @@ void TimingCore::initStats(AggregateStat* parentStat) {
 
 void TimingCore::contextSwitch(int32_t gid) {
     if (gid == -1) {
+#ifdef MA_STATS_ENABLED
+        curBblAddr = UNDEF_VIRTUAL_ADDRESS;
+#endif
         l1i->contextSwitch();
         l1d->contextSwitch();
     }
@@ -80,12 +87,18 @@ void TimingCore::leave() {
 
 void TimingCore::loadAndRecord(Address addr, uint8_t size, Address base) {
     uint64_t startCycle = curCycle;
+#ifdef MA_STATS_ENABLED
+#   ifdef POINTER_TAGGING_ENABLED
+    uint16_t tag = getPointerTag(base);
+#   endif
+    int32_t offset = addr - base;
+#endif // MA_STATS_ENABLED
     curCycle = l1d->load(addr, curCycle
 #ifdef CLU_STATS_ENABLED
                          , size, LoadData
 #endif
 #ifdef MA_STATS_ENABLED
-                         , UNDEF_TAG, UNDEF_OFFSET, UNDEF_VIRTUAL_ADDRESS
+                         , tag, offset, curBblAddr
 #endif
                          );
     cRec.record(startCycle);
@@ -93,12 +106,18 @@ void TimingCore::loadAndRecord(Address addr, uint8_t size, Address base) {
 
 void TimingCore::storeAndRecord(Address addr, uint8_t size, Address base) {
     uint64_t startCycle = curCycle;
+#ifdef MA_STATS_ENABLED
+#   ifdef POINTER_TAGGING_ENABLED
+    uint16_t tag = getPointerTag(base);
+#   endif
+    int32_t offset = addr - base;
+#endif // MA_STATS_ENABLED
     curCycle = l1d->store(addr, curCycle
 #ifdef CLU_STATS_ENABLED
                           , size
 #endif
 #ifdef MA_STATS_ENABLED
-                          , UNDEF_TAG, UNDEF_OFFSET, UNDEF_VIRTUAL_ADDRESS
+                          , tag, offset, curBblAddr
 #endif
                           );
     cRec.record(startCycle);
@@ -108,6 +127,10 @@ void TimingCore::bblAndRecord(Address bblAddr, BblInfo* bblInfo) {
     instrs += bblInfo->instrs;
     curCycle += bblInfo->instrs;
 
+#ifdef MA_STATS_ENABLED
+    curBblAddr = bblAddr;
+#endif
+
     Address endBblAddr = bblAddr + bblInfo->bytes;
     for (Address fetchAddr = bblAddr; fetchAddr < endBblAddr; fetchAddr+=(1 << lineBits)) {
         uint64_t startCycle = curCycle;
@@ -116,7 +139,7 @@ void TimingCore::bblAndRecord(Address bblAddr, BblInfo* bblInfo) {
                              , (1 << lineBits), FetchRightPath
 #endif
 #ifdef MA_STATS_ENABLED
-                             , FETCH_TAG, UNDEF_OFFSET, UNDEF_VIRTUAL_ADDRESS
+                             , FETCH_TAG, UNDEF_OFFSET, curBblAddr
 #endif
                              );
         cRec.record(startCycle);
