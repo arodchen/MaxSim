@@ -28,8 +28,11 @@
 #include "network.h"
 #include "clu_stats.h"
 #include "ma_stats.h"
-#include "maxsim_stats.h"
 #include "zsim.h"
+
+#ifdef MAXSIM_ENABLED
+#include "maxsim_stats.h"
+#endif // MAXSIM_ENABLED
 
 /* Do a simple XOR block hash on address to determine its bank. Hacky for now,
  * should probably have a class that deals with this with a real hash function

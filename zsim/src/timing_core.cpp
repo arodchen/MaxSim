@@ -27,7 +27,10 @@
 #include "filter_cache.h"
 #include "zsim.h"
 #include "pointer_tagging.h"
+
+#ifdef MAXSIM_ENABLED
 #include "maxsim_stats.h"
+#endif // MAXSIM_ENABLED
 
 #define DEBUG_MSG(args...)
 //#define DEBUG_MSG(args...) info(args)

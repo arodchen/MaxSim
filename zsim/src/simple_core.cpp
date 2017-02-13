@@ -27,7 +27,10 @@
 #include "filter_cache.h"
 #include "zsim.h"
 #include "pointer_tagging.h"
+
+#ifdef MAXSIM_ENABLED
 #include "maxsim_stats.h"
+#endif // MAXSIM_ENABLED
 
 SimpleCore::SimpleCore(FilterCache* _l1i, FilterCache* _l1d, g_string& _name) : Core(_name), l1i(_l1i), l1d(_l1d), instrs(0), curCycle(0), haltedCycles(0) {
 #ifdef MA_STATS_ENABLED
