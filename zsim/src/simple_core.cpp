@@ -27,6 +27,7 @@
 #include "filter_cache.h"
 #include "zsim.h"
 #include "pointer_tagging.h"
+#include "maxsim_stats.h"
 
 SimpleCore::SimpleCore(FilterCache* _l1i, FilterCache* _l1d, g_string& _name) : Core(_name), l1i(_l1i), l1d(_l1d), instrs(0), curCycle(0), haltedCycles(0) {
 #ifdef MA_STATS_ENABLED
@@ -57,8 +58,13 @@ void SimpleCore::load(Address addr, uint8_t size, Address base) {
     uint16_t tag = getPointerTag(base);
 #   endif
     int32_t offset = addr - base;
-#endif // MA_STATS_ENABLED
 
+#   ifdef MAXSIM_ENABLED
+    maxsimStatsDB.addMemoryAccess(tag, offset, curBblAddr, false);
+#   else
+    UNUSED_VAR(tag); UNUSED_VAR(offset); UNUSED_VAR(curBblAddr);
+#   endif
+#endif // MA_STATS_ENABLED
     curCycle = l1d->load(addr, curCycle
 #ifdef CLU_STATS_ENABLED
                          , size, LoadData
@@ -75,8 +81,13 @@ void SimpleCore::store(Address addr, uint8_t size, Address base) {
     uint16_t tag = getPointerTag(base);
 #   endif
     int32_t offset = addr - base;
-#endif // MA_STATS_ENABLED
 
+#   ifdef MAXSIM_ENABLED
+    maxsimStatsDB.addMemoryAccess(tag, offset, curBblAddr, true);
+#   else
+    UNUSED_VAR(tag); UNUSED_VAR(offset); UNUSED_VAR(curBblAddr);
+#   endif
+#endif // MA_STATS_ENABLED
     curCycle = l1d->store(addr, curCycle
 #ifdef CLU_STATS_ENABLED
                           , size
@@ -98,6 +109,9 @@ void SimpleCore::bbl(Address bblAddr, BblInfo* bblInfo) {
 
     Address endBblAddr = bblAddr + bblInfo->bytes;
     for (Address fetchAddr = bblAddr; fetchAddr < endBblAddr; fetchAddr+=(1 << lineBits)) {
+#ifdef MAXSIM_ENABLED
+        maxsimStatsDB.addMemoryAccess(FETCH_TAG, UNDEF_OFFSET, bblAddr, false);
+#endif
         curCycle = l1i->load(fetchAddr, curCycle
 #ifdef CLU_STATS_ENABLED
                              , (1 << lineBits), FetchRightPath

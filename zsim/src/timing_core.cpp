@@ -27,6 +27,7 @@
 #include "filter_cache.h"
 #include "zsim.h"
 #include "pointer_tagging.h"
+#include "maxsim_stats.h"
 
 #define DEBUG_MSG(args...)
 //#define DEBUG_MSG(args...) info(args)
@@ -92,6 +93,12 @@ void TimingCore::loadAndRecord(Address addr, uint8_t size, Address base) {
     uint16_t tag = getPointerTag(base);
 #   endif
     int32_t offset = addr - base;
+
+#   ifdef MAXSIM_ENABLED
+    maxsimStatsDB.addMemoryAccess(tag, offset, curBblAddr, false);
+#   else
+    UNUSED_VAR(tag); UNUSED_VAR(offset); UNUSED_VAR(curBblAddr);
+#   endif
 #endif // MA_STATS_ENABLED
     curCycle = l1d->load(addr, curCycle
 #ifdef CLU_STATS_ENABLED
@@ -111,6 +118,12 @@ void TimingCore::storeAndRecord(Address addr, uint8_t size, Address base) {
     uint16_t tag = getPointerTag(base);
 #   endif
     int32_t offset = addr - base;
+
+#   ifdef MAXSIM_ENABLED
+    maxsimStatsDB.addMemoryAccess(tag, offset, curBblAddr, true);
+#   else
+    UNUSED_VAR(tag); UNUSED_VAR(offset); UNUSED_VAR(curBblAddr);
+#   endif
 #endif // MA_STATS_ENABLED
     curCycle = l1d->store(addr, curCycle
 #ifdef CLU_STATS_ENABLED
@@ -134,6 +147,9 @@ void TimingCore::bblAndRecord(Address bblAddr, BblInfo* bblInfo) {
     Address endBblAddr = bblAddr + bblInfo->bytes;
     for (Address fetchAddr = bblAddr; fetchAddr < endBblAddr; fetchAddr+=(1 << lineBits)) {
         uint64_t startCycle = curCycle;
+#ifdef MAXSIM_ENABLED
+        maxsimStatsDB.addMemoryAccess(FETCH_TAG, UNDEF_OFFSET, bblAddr, false);
+#endif
         curCycle = l1i->load(fetchAddr, curCycle
 #ifdef CLU_STATS_ENABLED
                              , (1 << lineBits), FetchRightPath
