@@ -396,22 +396,25 @@ inline void OOOCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
                     int8_t size = storeSizes[storeIdx];
 #endif
                     Address addr = storeAddrs[storeIdx++];
+
+                    uint64_t reqSatisfiedCycle = dispatchCycle;
+                    if (addr != UNDEF_VIRTUAL_ADDRESS) {
 #ifdef MA_STATS_ENABLED
-                    maxsimStatsDB.addMemoryAccess(tag, offset, bblIP, true);
+                        maxsimStatsDB.addMemoryAccess(tag, offset, bblIP, true);
 #endif
-                    uint64_t reqSatisfiedCycle = l1d->store(addr, dispatchCycle
+                        reqSatisfiedCycle = l1d->store(addr, dispatchCycle
 #ifdef CLU_STATS_ENABLED
-                                                            , size
+                                                       , size
 #endif
 #ifdef MA_STATS_ENABLED
-                                                            , tag, offset, bblIP
+                                                       , tag, offset, bblIP
 #endif
-                                                            ) + L1D_LAT;
-                    cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
+                                                       ) + L1D_LAT;
+                        cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
 
-                    // Fill the forwarding table
-                    fwdArray[(addr>>2) & (FWD_ENTRIES-1)].set(addr, reqSatisfiedCycle);
-
+                        // Fill the forwarding table
+                        fwdArray[(addr>>2) & (FWD_ENTRIES-1)].set(addr, reqSatisfiedCycle);
+                    }
                     commitCycle = reqSatisfiedCycle;
                     lastStoreCommitCycle = MAX(lastStoreCommitCycle, reqSatisfiedCycle);
                     storeQueue.markRetire(commitCycle);
