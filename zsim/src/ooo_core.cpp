@@ -80,7 +80,7 @@ OOOCore::OOOCore(FilterCache* _l1i, FilterCache* _l1d, g_string& _name) : Core(_
 
     instrs = uops = branchUops = fpAddSubUops = fpMulDivUops = bbls = approxInstrs = mispredBranches = predBranches = 0;
 
-    for (uint32_t i = 0; i < FWD_ENTRIES; i++) fwdArray[i].set((Address)(-1L), 0);
+    for (uint32_t i = 0; i < FWD_ENTRIES; i++) fwdArray[i].set((Address)(UNDEF_VIRTUAL_ADDRESS), 0);
 }
 
 void OOOCore::initStats(AggregateStat* parentStat) {
@@ -199,7 +199,7 @@ void OOOCore::store(Address addr, uint32_t size, Address base) {
 // Predication is rare enough that we don't need to model it perfectly to be accurate (i.e. the uops still execute, retire, etc), but this is needed for correctness.
 void OOOCore::predFalseMemOp() {
     // I'm going to go out on a limb and assume just loads are predicated (this will not fail silently if it's a store)
-    loadAddrs[loads++] = -1L;
+    loadAddrs[loads++] = UNDEF_VIRTUAL_ADDRESS;
 }
 
 void OOOCore::branch(Address pc, bool taken, Address takenNpc, Address notTakenNpc) {
