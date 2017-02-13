@@ -49,9 +49,9 @@ void SetAssocArray::initStats(AggregateStat* parentStat) {
 
 #ifdef CLU_STATS_ENABLED
 void SetAssocArray::processAccessCLUStats(const MemReq& req, const uint32_t lineIndex) {
-    if (req.statAttrs.virtualAddress != UNDEF_VIRTUAL_ADDRESS) {
+    if (req.CLUStatsAttrs.virtualAddress != UNDEF_VIRTUAL_ADDRESS) {
         assert((req.type == GETS) || (req.type == GETX));
-        accessMask[lineIndex] |= cluStatsGetUtilizationMask(req.statAttrs.virtualAddress, req.statAttrs.memoryAccessSize, req.statAttrs.memoryAccessType);
+        accessMask[lineIndex] |= cluStatsGetUtilizationMask(req.CLUStatsAttrs.virtualAddress, req.CLUStatsAttrs.memoryAccessSize, req.CLUStatsAttrs.memoryAccessType);
     }
 }
 #endif
@@ -61,7 +61,7 @@ int32_t SetAssocArray::lookup(const Address lineAddr, const MemReq* req, bool up
     uint32_t first = set*assoc;
     uint32_t retId = -1;
 #ifdef CLU_STATS_ENABLED
-    Address oldLineAddr = req ? req->statAttrs.replacedLineAddr : UNDEF_CACHE_LINE_ADDRESS;
+    Address oldLineAddr = req ? req->CLUStatsAttrs.replacedLineAddr : UNDEF_CACHE_LINE_ADDRESS;
     bool isOldLineFound = (oldLineAddr == UNDEF_CACHE_LINE_ADDRESS);
 #else
     bool isOldLineFound = true;
@@ -76,7 +76,7 @@ int32_t SetAssocArray::lookup(const Address lineAddr, const MemReq* req, bool up
         }
 #ifdef CLU_STATS_ENABLED
         if (!isOldLineFound && (array[id] == oldLineAddr)) {
-            accessMask[id] |= req->statAttrs.replacedLineAccessMask;
+            accessMask[id] |= req->CLUStatsAttrs.replacedLineAccessMask;
             isOldLineFound = true;
         }
 #endif
@@ -100,8 +100,8 @@ uint32_t SetAssocArray::preinsert(const Address lineAddr, const MemReq* req, Add
 #ifdef CLU_STATS_ENABLED
     {
         MemReq *nonConstReq = const_cast<MemReq *>(req);
-        nonConstReq->statAttrs.replacedLineAddr = *wbLineAddr;
-        nonConstReq->statAttrs.replacedLineAccessMask = accessMask[candidate];
+        nonConstReq->CLUStatsAttrs.replacedLineAddr = *wbLineAddr;
+        nonConstReq->CLUStatsAttrs.replacedLineAccessMask = accessMask[candidate];
     }
 #endif
     return candidate;
@@ -117,8 +117,8 @@ void SetAssocArray::postinsert(const Address lineAddr, const MemReq* req, uint32
 #ifdef CLU_STATS_ENABLED
     {
         MemReq *nonConstReq = const_cast<MemReq *>(req);
-        nonConstReq->statAttrs.replacedLineAddr = UNDEF_CACHE_LINE_ADDRESS;
-        nonConstReq->statAttrs.replacedLineAccessMask = CLU_STATS_ZERO_MASK;
+        nonConstReq->CLUStatsAttrs.replacedLineAddr = UNDEF_CACHE_LINE_ADDRESS;
+        nonConstReq->CLUStatsAttrs.replacedLineAccessMask = CLU_STATS_ZERO_MASK;
     }
 #endif
     rp->update(candidate, req);

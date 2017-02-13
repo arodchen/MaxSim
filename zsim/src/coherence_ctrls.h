@@ -408,7 +408,7 @@ class MESICC : public CC {
                 //if needed, fetch line or upgrade miss from upper level
                 respCycle = bcc->processAccess(req.lineAddr, lineId, req.type, startCycle, req.srcId, flags
 #ifdef CLU_STATS_ENABLED
-                                               , req.statAttrs.virtualAddress, req.statAttrs.memoryAccessSize, req.statAttrs.memoryAccessType
+                                               , req.CLUStatsAttrs.virtualAddress, req.CLUStatsAttrs.memoryAccessSize, req.CLUStatsAttrs.memoryAccessType
 #endif
 #ifdef MA_STATS_ENABLED
                                                , req.MAStatsAttrs.tag, req.MAStatsAttrs.offset, req.MAStatsAttrs.bblIP
@@ -534,7 +534,7 @@ class MESITerminalCC : public CC {
             //if needed, fetch line or upgrade miss from upper level
             uint64_t respCycle = bcc->processAccess(req.lineAddr, lineId, req.type, startCycle, req.srcId, req.flags
 #ifdef CLU_STATS_ENABLED
-                                                    , req.statAttrs.virtualAddress, req.statAttrs.memoryAccessSize, req.statAttrs.memoryAccessType
+                                                    , req.CLUStatsAttrs.virtualAddress, req.CLUStatsAttrs.memoryAccessSize, req.CLUStatsAttrs.memoryAccessType
 #endif
 #ifdef MA_STATS_ENABLED
                                                     , req.MAStatsAttrs.tag, req.MAStatsAttrs.offset, req.MAStatsAttrs.bblIP

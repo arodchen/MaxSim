@@ -101,7 +101,7 @@ struct MemReq {
     uint32_t flags;
 
 #ifdef CLU_STATS_ENABLED
-    MemReqStatAttrs_t statAttrs;
+    MemReqCLUStatsAttrs_t CLUStatsAttrs;
 #endif
 #ifdef MA_STATS_ENABLED
     MemReqMAStatsAttrs_t MAStatsAttrs;

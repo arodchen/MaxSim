@@ -54,14 +54,14 @@ typedef enum {
     MAUndefined
 } MemReqStatType_t;
 
-/* Memory request attributes necessary for statistics collection. */
-typedef struct MemReqStatAttrs_t {
+/* Memory request attributes necessary for cache line utilization statistics collection. */
+typedef struct MemReqCLUStatsAttrs_t {
     Address virtualAddress; // virtual address
     uint8_t memoryAccessSize; // memory access size
     MemReqStatType_t memoryAccessType; // memory access type
     Address replacedLineAddr; // replaced line address
     uint16_t replacedLineAccessMask; // replaced cache line access mask
-} MemReqStatAttrs_t;
+} MemReqCLUStatsAttrs_t;
 
 inline uint16_t cluStatsGetUtilizationMask(Address vAddr, uint8_t size, MemReqStatType_t memReqStatType) {
     switch (memReqStatType) {

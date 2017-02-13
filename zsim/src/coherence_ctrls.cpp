@@ -85,7 +85,7 @@ uint64_t MESIBottomCC::processEviction(Address wbLineAddr, uint32_t lineId, bool
             {
                 MemReq req = {wbLineAddr, PUTS, selfId, state, cycle, &ccLock, *state, srcId, 0 /*no flags*/
 #ifdef CLU_STATS_ENABLED
-                        , {UNDEF_VIRTUAL_ADDRESS, UNDEF_MA_SIZE, MAUndefined, triggerReq.statAttrs.replacedLineAddr, triggerReq.statAttrs.replacedLineAccessMask}
+                        , {UNDEF_VIRTUAL_ADDRESS, UNDEF_MA_SIZE, MAUndefined, triggerReq.CLUStatsAttrs.replacedLineAddr, triggerReq.CLUStatsAttrs.replacedLineAccessMask}
 #endif
 #ifdef MA_STATS_ENABLED
                         , {UNDEF_TAG, UNDEF_OFFSET, UNDEF_VIRTUAL_ADDRESS}
@@ -101,7 +101,7 @@ uint64_t MESIBottomCC::processEviction(Address wbLineAddr, uint32_t lineId, bool
             {
                 MemReq req = {wbLineAddr, PUTX, selfId, state, cycle, &ccLock, *state, srcId, 0 /*no flags*/
 #ifdef CLU_STATS_ENABLED
-                        , {UNDEF_VIRTUAL_ADDRESS, UNDEF_MA_SIZE, MAUndefined, triggerReq.statAttrs.replacedLineAddr, triggerReq.statAttrs.replacedLineAccessMask}
+                        , {UNDEF_VIRTUAL_ADDRESS, UNDEF_MA_SIZE, MAUndefined, triggerReq.CLUStatsAttrs.replacedLineAddr, triggerReq.CLUStatsAttrs.replacedLineAccessMask}
 #endif
 #ifdef MA_STATS_ENABLED
                         , {UNDEF_TAG, UNDEF_OFFSET, UNDEF_VIRTUAL_ADDRESS}
