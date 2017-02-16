@@ -26,7 +26,7 @@
 #
 # ----------------------------------------------------------------------------------------------------
 
-import os, shutil, fnmatch, subprocess
+import os, shutil, fnmatch, subprocess, re, filecmp, errno
 from os.path import join, exists, dirname, isdir, pathsep, isfile
 import mx
 from argparse import ArgumentParser
@@ -380,6 +380,73 @@ def optionsgen(args):
 
     return mx.run_java(['-cp', mx.classpath('com.oracle.max.vm.ext.graal'), 'com.oracle.max.vm.ext.graal.hosted.MaxGraalOptionsGenerator'])
 
+def maxsiminterfacegen(args):
+    """(re)generate sources for MaxSim interface"""
+
+    if "PROTOBUFPATH" in os.environ:
+        PROTOBUFPATH = os.environ["PROTOBUFPATH"]
+    else:
+       print "ERROR: You need to define the $PROTOBUFPATH environment variable with Protocol Buffers 2.6.1 path"
+       mx.abort(1)
+
+    # Generate MaxSimInterface.pb.cpp and Generate MaxSimInterface.pb.h
+    mx.run([join(PROTOBUFPATH,'bin/protoc'), '--cpp_out=../zsim/src', '--proto_path=com.oracle.max.vm/src/com/sun/max/vm/maxsim',
+            'com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto'])
+    os.rename('../zsim/src/MaxSimInterface.pb.cc', '../zsim/src/MaxSimInterface.pb.cpp')
+
+    # Place non enum parts of the MaxSimInterface.pb.h file under __cplusplus define.
+    # This way enums in the header file are accessible from C files.
+    # NOTE: The parser below is dependent on the the protocol buffer compiler 2.6.1 output pattern:
+    # ...
+    # #ifndef PROTOBUF_.*__INCLUDED
+    # #define PROTOBUF_.*__INCLUDED
+    # ...
+    # enum .*{
+    # };
+    # ...
+    # #endif  // PROTOBUF_.*__INCLUDED
+    # ..
+    with open('../zsim/src/MaxSimInterface.pb.h', 'r') as h_file:
+        h_buffer = h_file.readlines()
+
+    with open('../zsim/src/MaxSimInterface.pb.h', 'w') as h_file:
+        h_enum_parsing = False
+
+        for h_line in h_buffer:
+            if re.match('^#define PROTOBUF_.*_INCLUDED$', h_line) is not None:
+                h_line = h_line + '#ifdef __cplusplus\n'
+
+            if re.match('^#endif  \/\/ PROTOBUF_.*_INCLUDED$', h_line) is not None:
+                h_line = '#endif  // __cplusplus\n' + h_line
+
+            if re.match('^enum .*{$', h_line) is not None:
+                h_line = '#endif  // __cplusplus\n' + h_line
+                h_enum_parsing = True
+
+            if re.match('^};$', h_line) is not None and h_enum_parsing is True:
+                h_line = h_line + '#ifdef __cplusplus\n'
+                h_enum_parsing = False
+
+            h_file.write(h_line)
+
+    # Generate MaxSimInterface.java
+    try:
+        os.makedirs('com.oracle.max.vm/generated')
+    except OSError as exc:
+        if exc.errno == errno.EEXIST and os.path.isdir('com.oracle.max.vm/generated'):
+            pass
+        else:
+            raise
+
+    mx.run([join(PROTOBUFPATH,'bin/protoc'), '--java_out=com.oracle.max.vm/generated', '--proto_path=com.oracle.max.vm/src/com/sun/max/vm/maxsim',
+            'com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto'])
+
+    if isfile('com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.java') is False or \
+       filecmp.cmp('com.oracle.max.vm/generated/com/sun/max/vm/maxsim/MaxSimInterface.java',
+                   'com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.java') is False:
+        os.rename('com.oracle.max.vm/generated/com/sun/max/vm/maxsim/MaxSimInterface.java', 
+                  'com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.java')
+
 def jvmtigen(args):
     """(re)generate Java source for JVMTI native function interfaces
 
@@ -713,6 +780,7 @@ def mx_init(suite):
         'jttgen': [jttgen, ''],
         'loggen': [loggen, ''],
         'makejdk': [makejdk, '[<destination directory>]'],
+        'maxsiminterfacegen': [maxsiminterfacegen, ''],
         'methodtree': [methodtree, '[options]'],
         'nm': [nm, '[options] [boot image file]', _vm_image],
         'objecttree': [objecttree, '[options]'],

@@ -1,0 +1,322 @@
+/*
+ * Copyright (c) 2017, Andrey Rodchenko, School of Computer Science,
+ * The University of Manchester. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
+package MaxSimInterface;
+
+option java_package = "com.sun.max.vm.maxsim";
+option java_outer_classname = "MaxSimInterface";
+
+
+// ZSim magic opcodes.
+//
+// NOTE: These opcodes need to be in sync with magic ops in src/zsim.cpp and zsim/misc/hooks/zsim_hooks.h
+//
+enum ZSimMagicOpcodes {
+  option allow_alias = true;
+  ZSIM_M_OPC_LO                                          = 1025;
+
+  // Begin simulation of a Region Of Interest (ROI) exiting fast-forwarding mode.
+  ZSIM_M_OPC_ROI_BEGIN                                   = 1025;
+
+  // End simulation of a Region Of Interest (ROI) entering fast-forwarding mode.
+  ZSIM_M_OPC_ROI_END                                     = 1026;
+
+  ZSIM_M_OPC_ZSIM_HI                                     = 1033;
+}
+
+// MaxSim magic opcodes.
+//
+enum MaxSimMagicOpcodes {
+  option allow_alias = true;
+
+  // NOTE: Leave a gap between ZSIM_M_OPC_ZSIM_HI and MAXSIM_M_OPC_LO to reduce the risk of intersection in future.
+  MAXSIM_M_OPC_LO                                        = 1101;
+
+  // Gets a number of available processors (cores) in a model.
+  //
+  // Returns a number in a variable which address is passed in the rbx register.
+  //
+  MAXSIM_M_OPC_GET_AVAILABLE_PROCESSORS_NUM              = 1101;
+
+  // Registers an offset inside a hub where a HubType value is stored.
+  //
+  // Receives an offset in the rbx register.
+  //
+  MAXSIM_M_OPC_REPORT_HUB_TYPE_OFFSET                    = 1102;
+
+  // Registers an offset of the first element inside an array.
+  //
+  // Receives an offset in the rbx register.
+  //
+  MAXSIM_M_OPC_REPORT_ARRAY_FIRST_ELEM_OFFSET            = 1103;
+
+  // Registers an address range.
+  //
+  // Receives an AddressRange_t variable address in the rbx register.
+  //
+  MAXSIM_M_OPC_REGISTER_ADDRESS_RANGE                    = 1104;
+
+  // Deregisters an address range.
+  //
+  // Receives an AddressRange_t variable address in the rbx register.
+  //
+  MAXSIM_M_OPC_DEREGISTER_ADDRESS_RANGE                  = 1105;
+
+  // Registers an object allocation.
+  //
+  // Receives a size, a tag and a tagType in the rbx register packed as described by MaxSimMagicOpPackedArgsOffsets.
+  //
+  MAXSIM_M_OPC_REGISTER_OBJECT_ALLOCATION                = 1106;
+
+  // Gets an allocations site estimation id.
+  //
+  // Returns an id in a variable which address is passed in the rbx register.
+  //
+  MAXSIM_M_OPC_GET_ALLOCATION_SITE_ESTIMATION_ID         = 1107;
+
+  // Enables MaxSim statistics collection.
+  //
+  MAXSIM_M_OPC_ENABLE_STATS_COLLECTION                   = 1108;
+
+  // Disables MaxSim statistics collection.
+  //
+  MAXSIM_M_OPC_DISABLE_STATS_COLLECTION                  = 1109;
+
+  // Resets MaxSim statistics collection.
+  //
+  MAXSIM_M_OPC_RESET_STATS_COLLECTION                    = 1110;
+
+  // Serializes MaxSim statistics to a file.
+  //
+  MAXSIM_M_OPC_SERIALIZE_STATS_TO_FILE                   = 1111;
+
+  // Sets MaxSim statistics file prefix.
+  //
+  // Receives an address of a null terminated string in the rbx register.
+  //
+  MAXSIM_M_OPC_SET_STATS_FILE_PREFIX                     = 1112;
+
+  // Dumps eventual statistics.
+  //
+  MAXSIM_M_OPC_DUMP_EVENTUAL_STATS                       = 1113;
+
+  // Begins filtering of loop iterations during simulation.
+  //
+  // Receives an address of an object handled in a loop.
+  //
+  MAXSIM_M_OPC_FILTER_LOOP_BEGIN                         = 1114;
+
+  // Ends filtering of loop iterations during simulation.
+  //
+  MAXSIM_M_OPC_FILTER_LOOP_END                           = 1115;
+
+  // Activates simulation of array length handling via tagging.
+  //
+  MAXSIM_M_OPC_ACTIVATE_ARRAY_LENGTH_VIA_TAGGING         = 1116;
+
+  // Deactivates simulation of array length handling via tagging.
+  //
+  MAXSIM_M_OPC_DEACTIVATE_ARRAY_LENGTH_VIA_TAGGING       = 1117;
+
+  MAXSIM_M_OPC_HI                                        = 1200;
+}
+
+// MaxSim magic operation packed arguments offsets.
+//
+enum MaxSimMagicOpPackedArgsOffsets {
+  option allow_alias = true;
+
+  MAXSIM_M_OP_REGISTER_OBJECT_ALLOCATION_P_ARG_SIZE_OFF      = 0;
+  MAXSIM_M_OP_REGISTER_OBJECT_ALLOCATION_P_ARG_TAG_OFF      = 32;
+  MAXSIM_M_OP_REGISTER_OBJECT_ALLOCATION_P_ARG_TAG_TYPE_OFF = 48;
+}
+
+// Tagging type.
+//
+enum TaggingType {
+  CLASS_ID_TAGGING = 0;
+  ALLOC_SITE_ID_TAGGING = 1;
+  ARRAY_LENGTH_TAGGING = 2;
+  UNDEFINED_TAGGING = 3;
+}
+
+// Hub type.
+//
+enum HubType {
+   HUB_TYPE_TUPLE = 0;
+   HUB_TYPE_ARRAY_OF_REFERENCES = 1;
+   HUB_TYPE_ARRAY_OF_PRIMITIVES = 2;
+   HUB_TYPE_UNDEF = 3;
+}
+
+
+// MaxSim configuration.
+//
+message MaxSimConfig {
+  optional TaggingType taggingType = 1 [default = CLASS_ID_TAGGING];
+  optional int32 layoutScaleFactor = 2 [default = 1];
+  optional int32 layoutScaleRefFactor = 3 [default = 1];
+}
+
+// Offset-BCI pair.
+//
+message OffsetBCIPair {
+  required int32 offset = 1;
+  required int32 BCI = 2;
+}
+
+// Method information.
+//
+message MethodInfo {
+  required string name = 1;
+  required int64 beginIP = 2;
+  required int64 size = 3;
+  optional string desc = 4;
+  optional int32 classId = 5;
+  optional Kind kind = 6;
+  repeated OffsetBCIPair offsetBCIPair = 7;
+
+  enum Kind {
+    OPTIMIZED = 0;
+    BOOT = 1;
+    BASELINE = 2;
+    NATIVE = 3;
+  }
+}
+
+// Field information.
+//
+message FieldInfo {
+  required string name = 1;
+  required int32  classId = 2;
+  required int32  offset = 3;
+  repeated Property property = 4;
+
+  enum Property {
+    FINAL = 0;
+  }
+}
+
+// Class information.
+//
+message ClassInfo {
+  required string desc = 1;
+  required int32 id = 2;
+  required Kind kind = 3;
+  optional int32 componentId = 4;
+  optional int32 baseVersionId = 6;
+  repeated FieldInfo fieldInfo = 7;
+
+  enum Kind {
+    TUPLE = 0;
+    ARRAY = 1;
+    PRIMITIVE = 2;
+    HYBRID = 3;
+    OTHER = 4;
+  }
+}
+
+// Maxine information data base.
+//
+message MaxineInfoDB {
+  optional int64 key = 1;
+  required int32 maxClassInfoId = 2;
+  repeated ClassInfo classInfo = 3;
+  repeated MethodInfo methodInfo = 4;
+  required MethodInfo bootCodeRegInfo = 5;
+  required MaxSimConfig MaxSimConfig = 6;
+}
+
+// Allocation profe.
+//
+message AllocProf {
+  required int32 size = 1;
+  required int64 count = 2;
+}
+
+// Cache miss profile.
+//
+message CacheMissProf {
+  required int64 count = 1;
+  required int64 IP = 2;
+  required int32 classId = 3;
+  required int32 offsetLo = 4;
+  required int32 offsetHi = 5;
+}
+
+// Cache Read/Write group information.
+//
+message CacheRWGroupInfo {
+  required int32 cacheRWGroupId = 1;
+  required int32 cacheGroupId = 2;
+  required string cacheGroupName = 3;
+  required bool isWrite = 4;
+}
+
+// Cache Read/Write group miss profile.
+//
+message CacheRWGroupMissProf {
+  repeated CacheMissProf cacheMissProf = 1;
+}
+
+// Allocation site profile.
+//
+message AllocSiteProf {
+  required int32 id = 1;
+  required int64 IP = 2;
+  required int32 classId = 3;
+  required int64 count = 4;
+}
+
+
+// Field profile.
+//
+message FieldProf {
+  required int32 offset = 1;
+  required int64 readCount = 2;
+  required int64 writeCount = 3;
+  repeated int64 cacheRWGroupMissCount = 4;
+}
+
+
+// Class profile.
+//
+message ClassProf {
+  required int32 id = 1;
+  repeated AllocProf allocProf = 2;
+  repeated FieldProf fieldProf = 3;
+  required int64 memAllSize = 4;
+  required int64 memAllCount = 5;
+  required int64 memAccCount = 6;
+}
+
+
+// ZSim profile data base.
+//
+message ZSimProfDB {
+  optional int64 key = 1;
+  required int64 interval = 2;
+  required int32 maxAllocSiteProfId = 3;
+  repeated CacheRWGroupInfo cacheRWGroupInfo = 4;
+  repeated ClassProf classProf = 5;
+  repeated CacheRWGroupMissProf cacheRWGroupMissProf = 6;
+  repeated AllocSiteProf allocSiteProf = 7;
+}
+

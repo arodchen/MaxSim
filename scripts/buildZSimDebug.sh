@@ -19,5 +19,6 @@ set -x
 : ${PROTOBUFPATH?"PROTOBUFPATH is not set!"}
 : ${LIBCONFIGPATH?"LIBCONFIGPATH is not set! Hint: export LIBCONFIGPATH=/usr/lib/x86_64-linux-gnu"}
 : ${POLARSSLPATH?"POLARSSLPATH is not set! Hint: export POLARSSLPATH=/usr/lib/"}
+executeExitOnFail ./scripts/generateMaxSimInterface.sh
 executeExitOnFail cd zsim
 executeExitOnFail scons --d
