@@ -39,9 +39,9 @@ using std::vector;
 
 // Memory request attributes necessary for memory access statistics collection.
 typedef struct MemReqMAStatsAttrs_t {
-    uint16_t tag; // memory access pointer tag
-    int32_t offset; // memory access offset in [base + offset] addressing mode
-    uint64_t bblIP; // basic block ip address of memory access operation
+    PointerTag_t tag; // memory access pointer tag
+    MAOffset_t offset; // memory access offset in [base + offset] addressing mode
+    Address bblIP; // basic block ip address of memory access operation
 } MemReqMAStatsAttrs_t;
 
 // Undefined cache id.

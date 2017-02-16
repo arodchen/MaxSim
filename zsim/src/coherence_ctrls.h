@@ -167,10 +167,10 @@ class MESIBottomCC : public GlobAlloc {
 
         uint64_t processAccess(Address lineAddr, uint32_t lineId, AccessType type, uint64_t cycle, uint32_t srcId, uint32_t flags
 #ifdef CLU_STATS_ENABLED
-                               , Address virtualAddr, uint8_t memoryAccessSize, MemReqStatType_t memReqStatType
+                               , Address virtualAddr, MASize_t memoryAccessSize, MemReqStatType_t memReqStatType
 #endif
 #ifdef MA_STATS_ENABLED
-                               , uint16_t tag, int32_t offset, Address bblIP
+                               , PointerTag_t tag, MAOffset_t offset, Address bblIP
 #endif
                                );
 

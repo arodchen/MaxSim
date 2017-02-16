@@ -162,10 +162,10 @@ inline void OOOCore::load(Address addr, uint32_t size, Address base) {
     assert(size < 256);
     if (loads == 256) panic("Access to loadAddrs is out of bounds!");
 #ifdef POINTER_TAGGING_ENABLED
-    uint16_t tag = getPointerTag(base);
+    PointerTag_t tag = getPointerTag(base);
 #endif
 #ifdef MA_STATS_ENABLED
-    int32_t offset = addr - base;
+    MAOffset_t offset = addr - base;
 
     loadOffset[loads] = offset;
 #endif
@@ -173,7 +173,7 @@ inline void OOOCore::load(Address addr, uint32_t size, Address base) {
     loadTag[loads] = tag;
 #endif
 #ifdef CLU_STATS_ENABLED
-    loadSizes[loads] = (uint8_t) size;
+    loadSizes[loads] = (MASize_t) size;
 #endif
     loadAddrs[loads++] = addr;
 }
@@ -182,10 +182,10 @@ void OOOCore::store(Address addr, uint32_t size, Address base) {
     assert(size < 256);
     if (stores == 256) panic("Access to storeAddrs is out of bounds!");
 #ifdef POINTER_TAGGING_ENABLED
-    uint16_t tag = getPointerTag(base);
+    PointerTag_t tag = getPointerTag(base);
 #endif
 #ifdef MA_STATS_ENABLED
-    int32_t offset = addr - base;
+    MAOffset_t offset = addr - base;
 
     storeOffset[stores] = offset;
 #endif
@@ -193,7 +193,7 @@ void OOOCore::store(Address addr, uint32_t size, Address base) {
     storeTag[stores] = tag;
 #endif
 #ifdef CLU_STATS_ENABLED
-    storeSizes[stores] = (uint8_t) size;
+    storeSizes[stores] = (MASize_t) size;
 #endif
     storeAddrs[stores++] = addr;
 }
@@ -332,9 +332,11 @@ inline void OOOCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
                     dispatchCycle = MAX(lastStoreAddrCommitCycle+1, dispatchCycle);
 
 #ifdef MA_STATS_ENABLED
-                    int32_t offset = loadOffset[loadIdx];
+                    MAOffset_t offset = loadOffset[loadIdx];
 #   ifdef POINTER_TAGGING_ENABLED
-                    uint16_t tag = loadTag[loadIdx];
+                    PointerTag_t tag = loadTag[loadIdx];
+#   else
+                    PointerTag_t tag = UNDEF_TAG;
 #   endif
 #endif // MA_STATS_ENABLED
 #ifdef CLU_STATS_ENABLED
@@ -394,9 +396,11 @@ inline void OOOCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
                     dispatchCycle = MAX(lastStoreAddrCommitCycle+1, dispatchCycle);
 
 #ifdef MA_STATS_ENABLED
-                    int32_t offset = storeOffset[storeIdx];
+                    MAOffset_t offset = storeOffset[storeIdx];
 #   ifdef POINTER_TAGGING_ENABLED
-                    uint16_t tag = storeTag[storeIdx];
+                    PointerTag_t tag = storeTag[storeIdx];
+#   else
+                    PointerTag_t tag = UNDEF_TAG;
 #   endif
 #endif // MA_STATS_ENABLED
 #ifdef CLU_STATS_ENABLED

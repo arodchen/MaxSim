@@ -51,7 +51,7 @@ class FilterCache : public Cache {
             volatile uint64_t availCycle;
 
 #ifdef CLU_STATS_ENABLED
-            volatile uint16_t accessMask;
+            volatile CacheLineAccessMask_t accessMask;
 #endif
             void clear() {
                 wrAddr = UNDEF_CACHE_LINE_ADDRESS; rdAddr = UNDEF_CACHE_LINE_ADDRESS; availCycle = 0;
@@ -128,17 +128,17 @@ class FilterCache : public Cache {
         }
 
 #ifdef CLU_STATS_ENABLED
-        inline void processAccessCLUStats(Address vAddr, uint8_t size, MemReqStatType_t memReqStatType, uint32_t lineIndex) {
+        inline void processAccessCLUStats(Address vAddr, MASize_t size, MemReqStatType_t memReqStatType, uint32_t lineIndex) {
             filterArray[lineIndex].accessMask |= cluStatsGetUtilizationMask(vAddr, size, memReqStatType);
         }
 #endif
 
         inline uint64_t load(Address vAddr, uint64_t curCycle
 #ifdef CLU_STATS_ENABLED
-                             , uint8_t size, MemReqStatType_t memReqStatType
+                             , MASize_t size, MemReqStatType_t memReqStatType
 #endif
 #ifdef MA_STATS_ENABLED
-                             , uint16_t tag, int32_t offset, Address bblIP
+                             , PointerTag_t tag, MAOffset_t offset, Address bblIP
 #endif
                              ) {
             Address vLineAddr = vAddr >> lineBits;
@@ -164,10 +164,10 @@ class FilterCache : public Cache {
 
         inline uint64_t store(Address vAddr, uint64_t curCycle
 #ifdef CLU_STATS_ENABLED
-                              , uint8_t size
+                              , MASize_t size
 #endif
 #ifdef MA_STATS_ENABLED
-                              , uint16_t tag, int32_t offset, Address bblIP
+                              , PointerTag_t tag, MAOffset_t offset, Address bblIP
 #endif
                               ) {
             Address vLineAddr = vAddr >> lineBits;
@@ -195,10 +195,10 @@ class FilterCache : public Cache {
 
         uint64_t replace(Address vLineAddr, uint32_t idx, bool isLoad, uint64_t curCycle, Address vAddr
 #ifdef CLU_STATS_ENABLED
-                         , uint8_t size, MemReqStatType_t memReqStatType
+                         , MASize_t size, MemReqStatType_t memReqStatType
 #endif
 #ifdef MA_STATS_ENABLED
-                         , uint16_t tag, int32_t offset, Address bblIP
+                         , PointerTag_t tag, MAOffset_t offset, Address bblIP
 #endif
                          ) {
             Address pLineAddr = procMask | vLineAddr;

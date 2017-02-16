@@ -50,13 +50,13 @@
 #define UNDEF_CACHE_LINE_ADDRESS ((Address) -1L)
 
 // Undefined memory access size.
-#define UNDEF_MA_SIZE ((uint8_t) 8)
+#define UNDEF_MA_SIZE ((MASize_t) 8)
 
 // Reserved tag value which is a natural x86 pointer tag (sign extension of address bit #47 when it is zero).
-#define ZERO_TAG ((uint16_t) 0x0000)
+#define ZERO_TAG ((PointerTag_t) 0x0000)
 
 // Reserved tag value which is a natural x86 pointer tag (sign extension of address bit #47 when it is one).
-#define ONES_TAG ((uint16_t) 0xFFFF)
+#define ONES_TAG ((PointerTag_t) 0xFFFF)
 
 // Undefined tag.
 #define UNDEF_TAG  (ONES_TAG - 1)

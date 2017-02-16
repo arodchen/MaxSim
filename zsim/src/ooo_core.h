@@ -380,12 +380,12 @@ class OOOCore : public Core {
         uint32_t loads;
         uint32_t stores;
 #ifdef CLU_STATS_ENABLED
-        uint8_t loadSizes[256];
-        uint8_t storeSizes[256];
+        MASize_t loadSizes[256];
+        MASize_t storeSizes[256];
 #endif
 #ifdef POINTER_TAGGING_ENABLED
-        uint16_t loadTag[256];
-        uint16_t storeTag[256];
+        PointerTag_t loadTag[256];
+        PointerTag_t storeTag[256];
 #endif
 #ifdef MA_STATS_ENABLED
         int32_t loadOffset[256];

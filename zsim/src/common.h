@@ -32,4 +32,13 @@ typedef uint64_t Address;
 // Unused variable.
 #define UNUSED_VAR(unused_var) do { (void)(unused_var); } while (0)
 
+// Pointer tag type.
+typedef uint16_t PointerTag_t;
+
+// Memory Access (MA) size type.
+typedef uint16_t MASize_t;
+
+// Memory Access (MA) offset type.
+typedef int32_t MAOffset_t;
+
 #endif //SRC_COMMON_H

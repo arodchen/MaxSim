@@ -55,12 +55,14 @@ uint64_t SimpleCore::getPhaseCycles() const {
     return curCycle % zinfo->phaseLength;
 }
 
-void SimpleCore::load(Address addr, uint8_t size, Address base) {
+void SimpleCore::load(Address addr, MASize_t size, Address base) {
 #ifdef MA_STATS_ENABLED
 #   ifdef POINTER_TAGGING_ENABLED
-    uint16_t tag = getPointerTag(base);
+    PointerTag_t tag = getPointerTag(base);
+#   else
+    PointerTag_t tag = UNDEF_TAG;
 #   endif
-    int32_t offset = addr - base;
+    MAOffset_t offset = addr - base;
 
 #   ifdef MAXSIM_ENABLED
     maxsimStatsDB.addMemoryAccess(tag, offset, curBblAddr, false);
@@ -78,12 +80,14 @@ void SimpleCore::load(Address addr, uint8_t size, Address base) {
                          );
 }
 
-void SimpleCore::store(Address addr, uint8_t size, Address base) {
+void SimpleCore::store(Address addr, MASize_t size, Address base) {
 #ifdef MA_STATS_ENABLED
 #   ifdef POINTER_TAGGING_ENABLED
-    uint16_t tag = getPointerTag(base);
+    PointerTag_t tag = getPointerTag(base);
+#   else
+    PointerTag_t tag = UNDEF_TAG;
 #   endif
-    int32_t offset = addr - base;
+    MAOffset_t offset = addr - base;
 
 #   ifdef MAXSIM_ENABLED
     maxsimStatsDB.addMemoryAccess(tag, offset, curBblAddr, true);
@@ -156,22 +160,22 @@ InstrFuncPtrs SimpleCore::GetFuncPtrs() {
 
 void SimpleCore::LoadFunc(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base) {
     assert(size < 256);
-    static_cast<SimpleCore*>(cores[tid])->load(addr, (uint8_t)size, base);
+    static_cast<SimpleCore*>(cores[tid])->load(addr, (MASize_t)size, base);
 }
 
 void SimpleCore::StoreFunc(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base) {
     assert(size < 256);
-    static_cast<SimpleCore*>(cores[tid])->store(addr, (uint8_t)size, base);
+    static_cast<SimpleCore*>(cores[tid])->store(addr, (MASize_t)size, base);
 }
 
 void SimpleCore::PredLoadFunc(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base, BOOL pred) {
     assert(size < 256);
-    if (pred) static_cast<SimpleCore*>(cores[tid])->load(addr, (uint8_t)size, base);
+    if (pred) static_cast<SimpleCore*>(cores[tid])->load(addr, (MASize_t)size, base);
 }
 
 void SimpleCore::PredStoreFunc(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base, BOOL pred) {
     assert(size < 256);
-    if (pred) static_cast<SimpleCore*>(cores[tid])->store(addr, (uint8_t)size, base);
+    if (pred) static_cast<SimpleCore*>(cores[tid])->store(addr, (MASize_t)size, base);
 }
 
 void SimpleCore::BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {

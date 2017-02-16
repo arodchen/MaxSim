@@ -49,12 +49,12 @@ inline Address getUntaggedPointerZE(Address addr) {
 }
 
 // Get pointer tag.
-inline uint16_t getPointerTag(Address addr) {
+inline PointerTag_t getPointerTag(Address addr) {
     return (addr >> POINTER_NON_TAG_MASK_SIZE);
 }
 
 // Set pointer tag.
-inline Address setPointerTag(Address addr, uint16_t tag) {
+inline Address setPointerTag(Address addr, PointerTag_t tag) {
     return (((Address) tag) << POINTER_NON_TAG_MASK_SIZE) | getUntaggedPointerZE(addr);
 }
 

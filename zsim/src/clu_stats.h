@@ -31,6 +31,8 @@
 
 #ifdef CLU_STATS_ENABLED
 
+typedef uint16_t CacheLineAccessMask_t;
+
 extern uint32_t log2CacheLineUtilStatsChunksNum;
 extern uint32_t log2CacheLineUtilStatsChunkSize;
 
@@ -57,20 +59,20 @@ typedef enum {
 /* Memory request attributes necessary for cache line utilization statistics collection. */
 typedef struct MemReqCLUStatsAttrs_t {
     Address virtualAddress; // virtual address
-    uint8_t memoryAccessSize; // memory access size
+    MASize_t memoryAccessSize; // memory access size
     MemReqStatType_t memoryAccessType; // memory access type
     Address replacedLineAddr; // replaced line address
-    uint16_t replacedLineAccessMask; // replaced cache line access mask
+    CacheLineAccessMask_t replacedLineAccessMask; // replaced cache line access mask
 } MemReqCLUStatsAttrs_t;
 
-inline uint16_t cluStatsGetUtilizationMask(Address vAddr, uint8_t size, MemReqStatType_t memReqStatType) {
+inline CacheLineAccessMask_t cluStatsGetUtilizationMask(Address vAddr, MASize_t size, MemReqStatType_t memReqStatType) {
     switch (memReqStatType) {
         case LoadData:
         case StoreData:
         {
-            uint16_t accessedChunksCeil = (size + (1 << log2CacheLineUtilStatsChunkSize) - 1) >> log2CacheLineUtilStatsChunkSize;
-            uint16_t accessedChunksMask = (1 << accessedChunksCeil) - 1;
-            uint16_t accessedChunksMaskShift = ((vAddr & lineMask) >> (lineBits - log2CacheLineUtilStatsChunksNum));
+            uint32_t accessedChunksCeil = (size + (1 << log2CacheLineUtilStatsChunkSize) - 1) >> log2CacheLineUtilStatsChunkSize;
+            uint32_t accessedChunksMaskShift = ((vAddr & lineMask) >> (lineBits - log2CacheLineUtilStatsChunksNum));
+            CacheLineAccessMask_t accessedChunksMask = (1 << accessedChunksCeil) - 1;
 
             return accessedChunksMask << accessedChunksMaskShift;
         }

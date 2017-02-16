@@ -34,11 +34,11 @@
 class MaxSimStatsDB {
     public:
         // Add memory access
-        void addMemoryAccess(uint16_t tag, int32_t offset, Address bblIP, bool isWrite) {
+        void addMemoryAccess(PointerTag_t tag, MAOffset_t offset, Address bblIP, bool isWrite) {
         }
 
         // Add cache miss
-        void addCacheMiss(uint16_t tag, int32_t offset, Address bblIP, bool isWrite, MAStatsCacheGroupId_t cacheGroupId, int missCount) {
+        void addCacheMiss(PointerTag_t tag, MAOffset_t offset, Address bblIP, bool isWrite, MAStatsCacheGroupId_t cacheGroupId, int missCount) {
         }
 };
 

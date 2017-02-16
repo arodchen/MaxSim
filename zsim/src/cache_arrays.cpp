@@ -33,7 +33,7 @@
 SetAssocArray::SetAssocArray(uint32_t _numLines, uint32_t _assoc, ReplPolicy* _rp, HashFamily* _hf) : rp(_rp), hf(_hf), numLines(_numLines), assoc(_assoc)  {
     array = gm_calloc<Address>(numLines);
 #ifdef CLU_STATS_ENABLED
-    accessMask = gm_calloc<uint16_t>(numLines);
+    accessMask = gm_calloc<CacheLineAccessMask_t>(numLines);
 #endif
     numSets = numLines/assoc;
     setMask = numSets - 1;

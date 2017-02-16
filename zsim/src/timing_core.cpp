@@ -89,13 +89,15 @@ void TimingCore::leave() {
     cRec.notifyLeave(curCycle);
 }
 
-void TimingCore::loadAndRecord(Address addr, uint8_t size, Address base) {
+void TimingCore::loadAndRecord(Address addr, MASize_t size, Address base) {
     uint64_t startCycle = curCycle;
 #ifdef MA_STATS_ENABLED
 #   ifdef POINTER_TAGGING_ENABLED
-    uint16_t tag = getPointerTag(base);
+    PointerTag_t tag = getPointerTag(base);
+#   else
+    PointerTag_t tag = UNDEF_TAG;
 #   endif
-    int32_t offset = addr - base;
+    MAOffset_t offset = addr - base;
 
 #   ifdef MAXSIM_ENABLED
     maxsimStatsDB.addMemoryAccess(tag, offset, curBblAddr, false);
@@ -114,13 +116,15 @@ void TimingCore::loadAndRecord(Address addr, uint8_t size, Address base) {
     cRec.record(startCycle);
 }
 
-void TimingCore::storeAndRecord(Address addr, uint8_t size, Address base) {
+void TimingCore::storeAndRecord(Address addr, MASize_t size, Address base) {
     uint64_t startCycle = curCycle;
 #ifdef MA_STATS_ENABLED
 #   ifdef POINTER_TAGGING_ENABLED
-    uint16_t tag = getPointerTag(base);
+    PointerTag_t tag = getPointerTag(base);
+#   else
+    PointerTag_t tag = UNDEF_TAG;
 #   endif
-    int32_t offset = addr - base;
+    MAOffset_t offset = addr - base;
 
 #   ifdef MAXSIM_ENABLED
     maxsimStatsDB.addMemoryAccess(tag, offset, curBblAddr, true);
@@ -172,12 +176,12 @@ InstrFuncPtrs TimingCore::GetFuncPtrs() {
 
 void TimingCore::LoadAndRecordFunc(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base) {
     assert(size < 256);
-    static_cast<TimingCore*>(cores[tid])->loadAndRecord(addr, (uint8_t)size, base);
+    static_cast<TimingCore*>(cores[tid])->loadAndRecord(addr, (MASize_t)size, base);
 }
 
 void TimingCore::StoreAndRecordFunc(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base) {
     assert(size < 256);
-    static_cast<TimingCore*>(cores[tid])->storeAndRecord(addr, (uint8_t)size, base);
+    static_cast<TimingCore*>(cores[tid])->storeAndRecord(addr, (MASize_t)size, base);
 }
 
 void TimingCore::BblAndRecordFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {

@@ -66,7 +66,7 @@ class SetAssocArray : public CacheArray {
     protected:
         Address* array;
 #ifdef CLU_STATS_ENABLED
-        volatile uint16_t* accessMask; // cache lines' access masks
+        volatile CacheLineAccessMask_t * accessMask; // cache lines' access masks
         Counter countUCLC; // utilized cache line chunks counter
 #endif
         ReplPolicy* rp;
