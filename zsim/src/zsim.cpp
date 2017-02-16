@@ -62,6 +62,12 @@
 #include "pointer_tagging.h"
 #include "stack_trace_estimation.h"
 
+#ifdef MAXSIM_ENABLED
+#include "maxsim_mediator.h"
+#include "MaxSimInterface.pb.h"
+#include "maxsim_interface_c.h"
+#endif // MAXSIM_ENABLED
+
 //#include <signal.h> //can't include this, conflicts with PIN's
 
 /* Command-line switches (used to pass info from harness that cannot be passed through the config file, most config is file-based) */
@@ -1419,6 +1425,12 @@ VOID HandleMagicOp(THREADID tid, ADDRINT op, ADDRINT arg) {
         case 1033:
             return;
         default:
+#ifdef MAXSIM_ENABLED
+            if (MaxSimInterface::MAXSIM_M_OPC_LO <= op && op <= MaxSimInterface::MAXSIM_M_OPC_HI) {
+                HandleMaxSimMagicOp(tid, op, arg);
+                break;
+            }
+#endif
             panic("Thread %d issued unknown magic op %ld!", tid, op);
     }
 }

@@ -26,6 +26,10 @@
 #ifndef __ZSIM_HOOKS_CONSTS_H__
 #define __ZSIM_HOOKS_CONSTS_H__
 
+// 64-bit argument
+//
+typedef uint64_t Arg64_t;
+
 // Type of address range
 //
 typedef enum AddressRangeType_t {
