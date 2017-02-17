@@ -33,6 +33,20 @@
 
 class MaxSimStatsDB {
     public:
+        // Get instance
+        static MaxSimStatsDB & getInst()
+        {
+            static MaxSimStatsDB maxsimStatsDB;
+
+            return maxsimStatsDB;
+        }
+
+        // Delete copy and move constructors and assign operators
+        MaxSimStatsDB(MaxSimStatsDB const&) = delete;
+        MaxSimStatsDB(MaxSimStatsDB&&) = delete;
+        MaxSimStatsDB& operator=(MaxSimStatsDB const&) = delete;
+        MaxSimStatsDB& operator=(MaxSimStatsDB &&) = delete;
+
         // Add memory access
         void addMemoryAccess(PointerTag_t tag, MAOffset_t offset, Address bblIP, bool isWrite) {
         }
@@ -40,9 +54,12 @@ class MaxSimStatsDB {
         // Add cache miss
         void addCacheMiss(PointerTag_t tag, MAOffset_t offset, Address bblIP, bool isWrite, MAStatsCacheGroupId_t cacheGroupId, int missCount) {
         }
-};
 
-extern MaxSimStatsDB maxsimStatsDB;
+    protected:
+        // Protect constructor and destructor
+        MaxSimStatsDB() {}
+        ~MaxSimStatsDB() {}
+};
 
 #endif // MA_STATS_ENABLED && MAXSIM_ENABLED
 

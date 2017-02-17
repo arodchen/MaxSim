@@ -27,7 +27,5 @@
 
 #if defined(MA_STATS_ENABLED) && defined(MAXSIM_ENABLED)
 
-MaxSimStatsDB maxsimStatsDB;
-
 #endif // MA_STATS_ENABLED && MAXSIM_ENABLED
 

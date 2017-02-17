@@ -100,7 +100,7 @@ void TimingCore::loadAndRecord(Address addr, MASize_t size, Address base) {
     MAOffset_t offset = addr - base;
 
 #   ifdef MAXSIM_ENABLED
-    maxsimStatsDB.addMemoryAccess(tag, offset, curBblAddr, false);
+    MaxSimStatsDB::getInst().addMemoryAccess(tag, offset, curBblAddr, false);
 #   else
     UNUSED_VAR(tag); UNUSED_VAR(offset); UNUSED_VAR(curBblAddr);
 #   endif
@@ -127,7 +127,7 @@ void TimingCore::storeAndRecord(Address addr, MASize_t size, Address base) {
     MAOffset_t offset = addr - base;
 
 #   ifdef MAXSIM_ENABLED
-    maxsimStatsDB.addMemoryAccess(tag, offset, curBblAddr, true);
+    MaxSimStatsDB::getInst().addMemoryAccess(tag, offset, curBblAddr, true);
 #   else
     UNUSED_VAR(tag); UNUSED_VAR(offset); UNUSED_VAR(curBblAddr);
 #   endif
@@ -155,7 +155,7 @@ void TimingCore::bblAndRecord(Address bblAddr, BblInfo* bblInfo) {
     for (Address fetchAddr = bblAddr; fetchAddr < endBblAddr; fetchAddr+=(1 << lineBits)) {
         uint64_t startCycle = curCycle;
 #ifdef MAXSIM_ENABLED
-        maxsimStatsDB.addMemoryAccess(FETCH_TAG, UNDEF_OFFSET, bblAddr, false);
+        MaxSimStatsDB::getInst().addMemoryAccess(FETCH_TAG, UNDEF_OFFSET, bblAddr, false);
 #endif
         curCycle = l1i->load(fetchAddr, curCycle
 #ifdef CLU_STATS_ENABLED
