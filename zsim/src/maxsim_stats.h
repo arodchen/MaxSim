@@ -33,9 +33,18 @@
 
 class MaxSimStatsDB {
     public:
+        // Add memory access
+        void addMemoryAccess(PointerTag_t tag, MAOffset_t offset, Address bblIP, bool isWrite) {
+        }
+
+        // Add cache miss
+        void addCacheMiss(PointerTag_t tag, MAOffset_t offset, Address bblIP, bool isWrite, MAStatsCacheGroupId_t cacheGroupId, int missCount) {
+        }
+
+    // Singleton part
+    public:
         // Get instance
-        static MaxSimStatsDB & getInst()
-        {
+        static MaxSimStatsDB & getInst() {
             static MaxSimStatsDB maxsimStatsDB;
 
             return maxsimStatsDB;
@@ -46,14 +55,6 @@ class MaxSimStatsDB {
         MaxSimStatsDB(MaxSimStatsDB&&) = delete;
         MaxSimStatsDB& operator=(MaxSimStatsDB const&) = delete;
         MaxSimStatsDB& operator=(MaxSimStatsDB &&) = delete;
-
-        // Add memory access
-        void addMemoryAccess(PointerTag_t tag, MAOffset_t offset, Address bblIP, bool isWrite) {
-        }
-
-        // Add cache miss
-        void addCacheMiss(PointerTag_t tag, MAOffset_t offset, Address bblIP, bool isWrite, MAStatsCacheGroupId_t cacheGroupId, int missCount) {
-        }
 
     protected:
         // Protect constructor and destructor
