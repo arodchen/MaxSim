@@ -23,43 +23,8 @@
  * this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "log.h"
-#include "zsim.h"
-
-#ifdef MAXSIM_ENABLED
-
-#include "maxsim_mediator.h"
-#include "MaxSimInterface.pb.h"
-#include "maxsim_interface_c.h"
-#include "cpuenum.h"
 #include "maxsim_runtime_info.h"
 
-using namespace MaxSimInterface;
-
-VOID MaxSimMediator::HandleMaxSimMagicOp(THREADID tid, ADDRINT op, ADDRINT arg) {
-    switch (op) {
-        case MAXSIM_M_OPC_GET_AVAILABLE_PROCESSORS_NUM: {
-            Arg64_t * availableProcessorsNumPointer = (Arg64_t *) arg;
-
-            *(availableProcessorsNumPointer) = cpuenumNumCpus(procIdx);
-            return;
-        }
-        case MAXSIM_M_OPC_REPORT_HUB_TYPE_OFFSET: {
-            MAOffset_t hubOffset = (MAOffset_t) arg;
-
-            MaxSimRuntimeInfo::getInst().setMaxineHubTypeOffset(hubOffset);
-            return;
-        }
-        case MAXSIM_M_OPC_REPORT_ARRAY_FIRST_ELEM_OFFSET: {
-            MAOffset_t arrayFirstElemOffset = (MAOffset_t) arg;
-
-            MaxSimRuntimeInfo::getInst().setMaxineArrayFirstElementOffset(arrayFirstElemOffset);
-            return;
-        }
-
-        default:
-            panic("Thread %d issued unknown MaxSim magic op %ld!", tid, op);
-    }
-}
+#ifdef MAXSIM_ENABLED
 
 #endif // MAXSIM_ENABLED

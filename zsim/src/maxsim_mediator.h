@@ -51,8 +51,8 @@ class MaxSimMediator {
         MaxSimMediator &operator=(MaxSimMediator const &) = delete;
         MaxSimMediator &operator=(MaxSimMediator &&) = delete;
 
-    protected:
-        // Protect constructor and destructor
+    private:
+        // Privatize constructor and destructor
         MaxSimMediator() {}
         ~MaxSimMediator() {}
 };

@@ -56,8 +56,8 @@ class MaxSimStatsDB {
         MaxSimStatsDB& operator=(MaxSimStatsDB const&) = delete;
         MaxSimStatsDB& operator=(MaxSimStatsDB &&) = delete;
 
-    protected:
-        // Protect constructor and destructor
+    private:
+        // Privatize constructor and destructor
         MaxSimStatsDB() {}
         ~MaxSimStatsDB() {}
 };
