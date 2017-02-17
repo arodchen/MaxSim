@@ -24,6 +24,10 @@
  */
 
 #include "log.h"
+#include "zsim.h"
+
+#ifdef MAXSIM_ENABLED
+
 #include "maxsim_mediator.h"
 #include "MaxSimInterface.pb.h"
 #include "maxsim_interface_c.h"
@@ -31,7 +35,7 @@
 
 using namespace MaxSimInterface;
 
-VOID HandleMaxSimMagicOp(THREADID tid, ADDRINT op, ADDRINT arg) {
+VOID MaxSimMediator::HandleMaxSimMagicOp(THREADID tid, ADDRINT op, ADDRINT arg) {
     switch (op) {
         case MAXSIM_M_OPC_GET_AVAILABLE_PROCESSORS_NUM: {
             Arg64_t * availableProcessorsNumPointer = (Arg64_t *) arg;
@@ -44,3 +48,5 @@ VOID HandleMaxSimMagicOp(THREADID tid, ADDRINT op, ADDRINT arg) {
             panic("Thread %d issued unknown MaxSim magic op %ld!", tid, op);
     }
 }
+
+#endif // MAXSIM_ENABLED

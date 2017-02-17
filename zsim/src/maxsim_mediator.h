@@ -26,8 +26,37 @@
 #ifndef MAXINE_MEDIATOR_H_
 #define MAXINE_MEDIATOR_H_
 
+#include "zsim.h"
+
+#ifdef MAXSIM_ENABLED
+
 #include "pin.H"
 
-VOID HandleMaxSimMagicOp(THREADID tid, ADDRINT op, ADDRINT arg);
+class MaxSimMediator {
+    public:
+        VOID HandleMaxSimMagicOp(THREADID tid, ADDRINT op, ADDRINT arg);
+
+    // Singleton part
+    public:
+        // Get instance
+        static MaxSimMediator &getInst() {
+            static MaxSimMediator maxsimMediator;
+
+            return maxsimMediator;
+        }
+
+        // Delete copy and move constructors and assign operators
+        MaxSimMediator(MaxSimMediator const &) = delete;
+        MaxSimMediator(MaxSimMediator &&) = delete;
+        MaxSimMediator &operator=(MaxSimMediator const &) = delete;
+        MaxSimMediator &operator=(MaxSimMediator &&) = delete;
+
+    protected:
+        // Protect constructor and destructor
+        MaxSimMediator() {}
+        ~MaxSimMediator() {}
+};
+
+#endif // MAXSIM_ENABLED
 
 #endif // MAXINE_MEDIATOR_H_

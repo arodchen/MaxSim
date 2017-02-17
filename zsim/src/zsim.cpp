@@ -1427,7 +1427,7 @@ VOID HandleMagicOp(THREADID tid, ADDRINT op, ADDRINT arg) {
         default:
 #ifdef MAXSIM_ENABLED
             if (MaxSimInterface::MAXSIM_M_OPC_LO <= op && op <= MaxSimInterface::MAXSIM_M_OPC_HI) {
-                HandleMaxSimMagicOp(tid, op, arg);
+                MaxSimMediator::getInst().HandleMaxSimMagicOp(tid, op, arg);
                 break;
             }
 #endif
