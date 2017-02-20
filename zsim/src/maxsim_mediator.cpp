@@ -68,6 +68,10 @@ VOID MaxSimMediator::HandleMaxSimMagicOp(THREADID tid, ADDRINT op, ADDRINT arg) 
             MaxSimRuntimeInfo::getInst().deregisterAddressRange(addressRange);
             return;
         }
+        case MAXSIM_M_OPC_DUMP_EVENTUAL_STATS: {
+            DumpEventualStats(procIdx, "Request from Maxine VM to dump eventual stats");
+            return;
+        }
 
         default:
             panic("Thread %d issued unknown MaxSim magic op %ld!", tid, op);
