@@ -27,8 +27,11 @@
 #define SRC_MAXSIM_RUNTIME_INFO_H
 
 #include "zsim.h"
+#include "maxsim_interface_c.h"
 
 #ifdef MAXSIM_ENABLED
+
+#define NPRINT_REGDEREG_GLOB_MEM_RANGES
 
 // MaxSim Maxine runtime information
 //
@@ -37,6 +40,28 @@ class MaxSimRuntimeInfo {
     friend class MaxSimMediator;
 
     public:
+        // Maxine Address spaces.
+        //
+        // Address ranges within the same address space should not intersect, but address ranges form different spaces
+        // can intersect.
+        //
+        typedef enum MaxineAddressSpace_t {
+            // Global address space containing the following address ranges: TLS, stack, heap, code cache, native
+            Global,
+            // Heap address subspace containing array critical (see JNI GetPrimitiveArrayCritical) address ranges
+            HeapArrayCritical,
+            // Number of address spaces
+            AddressSpacesNum
+        } MaxineAddressSpace_t;
+
+        // Get Maxine address space by an address range type
+        //
+        MaxineAddressSpace_t getMaxineAddressSpaceByAddressRangeType(AddressRangeType_t type);
+
+        // Get a registered address range for a given address and an address space
+        //
+        AddressRange_t getRegisteredAddressRange(Address address, MaxSimRuntimeInfo::MaxineAddressSpace_t space);
+
         // Get Maxine hub type offset
         //
         MAOffset_t getMaxineHubTypeOffset() {
@@ -56,6 +81,9 @@ class MaxSimRuntimeInfo {
         }
 
     private:
+        // Vector of address ranges
+        typedef std::vector<AddressRange_t> VectorOfAddressRanges_t;
+
         // Set Maxine hub type offset
         //
         void setMaxineHubTypeOffset(MAOffset_t offset) {
@@ -70,11 +98,26 @@ class MaxSimRuntimeInfo {
             isMaxineArrayFirstElementOffsetSet = true;
         }
 
-         MAOffset_t MaxineHubTypeOffset;
-         bool isMaxineHubTypeOffsetSet;
+        // Register address range
+        //
+        void registerAddressRange(AddressRange_t * addressRange);
 
-         MAOffset_t MaxineArrayFirstElementOffset;
-         bool isMaxineArrayFirstElementOffsetSet;
+        // Deregister address range
+        //
+        void deregisterAddressRange(AddressRange_t * addressRange);
+
+        MAOffset_t MaxineHubTypeOffset;
+        bool isMaxineHubTypeOffsetSet;
+
+        MAOffset_t MaxineArrayFirstElementOffset;
+        bool isMaxineArrayFirstElementOffsetSet;
+
+        PAD();
+        lock_t registeredAddressRangesLock;
+        PAD();
+
+        // Array of sorted vectors of address ranges for each Maxine address space
+        VectorOfAddressRanges_t disjointAddressRanges[MaxineAddressSpace_t::AddressSpacesNum];
 
     // Singleton part
     public:
@@ -94,7 +137,7 @@ class MaxSimRuntimeInfo {
 
     private:
         // Privatize constructor and destructor
-        MaxSimRuntimeInfo() : isMaxineHubTypeOffsetSet(false), isMaxineArrayFirstElementOffsetSet(false) {}
+        MaxSimRuntimeInfo() : isMaxineHubTypeOffsetSet(false), isMaxineArrayFirstElementOffsetSet(false), registeredAddressRangesLock(0) {}
         ~MaxSimRuntimeInfo() {}
 };
 

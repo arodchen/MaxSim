@@ -56,6 +56,18 @@ VOID MaxSimMediator::HandleMaxSimMagicOp(THREADID tid, ADDRINT op, ADDRINT arg) 
             MaxSimRuntimeInfo::getInst().setMaxineArrayFirstElementOffset(arrayFirstElemOffset);
             return;
         }
+        case MAXSIM_M_OPC_REGISTER_ADDRESS_RANGE: {
+            AddressRange_t * addressRange = (AddressRange_t *) arg;
+
+            MaxSimRuntimeInfo::getInst().registerAddressRange(addressRange);
+            return;
+        }
+        case MAXSIM_M_OPC_DEREGISTER_ADDRESS_RANGE: {
+            AddressRange_t * addressRange = (AddressRange_t *) arg;
+
+            MaxSimRuntimeInfo::getInst().deregisterAddressRange(addressRange);
+            return;
+        }
 
         default:
             panic("Thread %d issued unknown MaxSim magic op %ld!", tid, op);

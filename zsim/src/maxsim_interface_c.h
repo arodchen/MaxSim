@@ -41,10 +41,10 @@ typedef enum AddressRangeType_t {
     HeapRange,
     // Code cache address range
     CodeRange,
-    // Array creitical address range (see JNI GetPrimitiveArrayCritical)
-    ArrayCriticalRange,
     // Native address range
     NativeRange,
+    // Array critical address range (see JNI GetPrimitiveArrayCritical)
+    ArrayCriticalRange,
     // ProtoBuf message range (for sending protocol buffer messages)
     ProtoBufMessageRange,
     // Undefined address range

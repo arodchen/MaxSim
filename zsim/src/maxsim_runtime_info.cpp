@@ -27,4 +27,108 @@
 
 #ifdef MAXSIM_ENABLED
 
+MaxSimRuntimeInfo::MaxineAddressSpace_t MaxSimRuntimeInfo::getMaxineAddressSpaceByAddressRangeType(AddressRangeType_t type) {
+    switch (type) {
+        default:
+            panic("Cannot get Maxine address space for address range type %d", type);
+        case StackRange:
+        case TLSRange:
+        case HeapRange:
+        case CodeRange:
+        case NativeRange:
+            return MaxineAddressSpace_t::Global;
+        case ArrayCriticalRange:
+            return MaxineAddressSpace_t::HeapArrayCritical;
+
+    }
+}
+
+void MaxSimRuntimeInfo::registerAddressRange(AddressRange_t * addressRange) {
+    VectorOfAddressRanges_t::iterator it;
+    MaxineAddressSpace_t space = getMaxineAddressSpaceByAddressRangeType(addressRange->type);
+
+#ifndef NPRINT_REGDEREG_GLOB_MEM_RANGES
+    if (space == MaxineAddressSpace_t::Global) {
+        info("Registering range l:0x%lx h:0x%lx t:%d", addressRange->lo, addressRange->hi, addressRange->type);
+    }
+#endif
+
+    futex_lock(& registeredAddressRangesLock);
+
+    it = std::lower_bound(disjointAddressRanges[space].begin(), disjointAddressRanges[space].end(), *addressRange);
+
+    if ((it != disjointAddressRanges[space].end()) && addressRange->equalTo(*it)) {
+        assert(space == MaxineAddressSpace_t::HeapArrayCritical);
+        (*it).counter++;
+        futex_unlock(& registeredAddressRangesLock);
+        return;
+    }
+    addressRange->counter = 0;
+    it = disjointAddressRanges[space].insert(it, *addressRange);
+
+    ++it;
+    while (it != disjointAddressRanges[space].end() && (addressRange->hi > it->lo)) {
+        it = disjointAddressRanges[space].erase(it);
+        warn("Address range intersection detected: deregistering intersecting ranges.");
+    }
+
+    --it;
+    if (it != disjointAddressRanges[space].begin()) {
+        --it;
+        while (it != disjointAddressRanges[space].begin() && (it->hi > addressRange->lo)) {
+            it = disjointAddressRanges[space].erase(it);
+            warn("Address range intersection detected: deregistering intersecting ranges.");
+        }
+    }
+
+    futex_unlock(& registeredAddressRangesLock);
+}
+
+void  MaxSimRuntimeInfo::deregisterAddressRange(AddressRange_t * addressRange) {
+    VectorOfAddressRanges_t::iterator it;
+    MaxineAddressSpace_t space = getMaxineAddressSpaceByAddressRangeType(addressRange->type);
+
+    futex_lock(& registeredAddressRangesLock);
+
+    it = std::lower_bound(disjointAddressRanges[space].begin(), disjointAddressRanges[space].end(), *addressRange);
+
+    if ((it != disjointAddressRanges[space].end()) && addressRange->equalTo(*it)) {
+        if ((*it).counter) {
+            assert(space == MaxineAddressSpace_t::HeapArrayCritical);
+            (*it).counter--;
+        } else {
+            disjointAddressRanges[space].erase(it);
+        }
+        futex_unlock(& registeredAddressRangesLock);
+#ifndef NPRINT_REGDEREG_GLOB_MEM_RANGES
+        if (space == MaxineAddressSpace_t::Global) {
+            info("Deregistering range l:0x%lx h:0x%lx", addressRange->lo, addressRange->hi);
+        }
+#endif
+        return;
+    }
+
+    futex_unlock(& registeredAddressRangesLock);
+    warn("Deregistering non-existing address range!");
+}
+
+AddressRange_t MaxSimRuntimeInfo::getRegisteredAddressRange(uint64_t address, MaxSimRuntimeInfo::MaxineAddressSpace_t space) {
+    VectorOfAddressRanges_t::iterator it;
+    AddressRange_t addressRange = {address, address, UndefinedRange};
+
+    futex_lock(& registeredAddressRangesLock);
+
+    it = std::lower_bound(disjointAddressRanges[space].begin(), disjointAddressRanges[space].end(), addressRange);
+    if (it != disjointAddressRanges[space].begin()) {
+        --it;
+        if (address < it->hi) {
+            addressRange = *it;
+        }
+    }
+
+    futex_unlock(& registeredAddressRangesLock);
+
+    return addressRange;
+}
+
 #endif // MAXSIM_ENABLED
