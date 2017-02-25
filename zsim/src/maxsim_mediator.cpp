@@ -29,7 +29,6 @@
 #ifdef MAXSIM_ENABLED
 
 #include "maxsim_mediator.h"
-#include "MaxSimInterface.pb.h"
 #include "maxsim_interface_c.h"
 #include "cpuenum.h"
 #include "maxsim_runtime_info.h"
