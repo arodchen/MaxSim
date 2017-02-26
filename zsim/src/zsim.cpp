@@ -919,11 +919,11 @@ VOID VdsoInstrument(INS ins) {
 
 #ifdef STACK_TRACE_ESTIMATION_ENABLED
 VOID HandleCall(THREADID tid, ADDRINT ip) {
-    stackTraceEstimation.pushReturnAddress(tid, ip);
+    StackTraceEstimation::getInst().pushReturnAddress(tid, ip);
 }
 
 VOID HandleReturn(THREADID tid) {
-    stackTraceEstimation.popReturnAddress(tid);
+    StackTraceEstimation::getInst().popReturnAddress(tid);
 }
 #endif // STACK_TRACE_ESTIMATION_ENABLED
 

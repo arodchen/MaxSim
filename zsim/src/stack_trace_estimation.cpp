@@ -27,6 +27,4 @@
 
 #ifdef STACK_TRACE_ESTIMATION_ENABLED
 
-StackTraceEstimation stackTraceEstimation;
-
 #endif

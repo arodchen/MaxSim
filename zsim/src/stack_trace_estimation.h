@@ -77,9 +77,28 @@ class StackTraceEstimation {
 
     public:
         static const uint16_t UNDEF_FRAME_NO = MAX_STACK_FRAMES;
-};
 
-extern StackTraceEstimation stackTraceEstimation;
+    // Singleton part
+    public:
+        // Get instance
+        //
+        static StackTraceEstimation &getInst() {
+            static StackTraceEstimation stackTraceEstimation;
+
+            return stackTraceEstimation;
+        }
+
+        // Delete copy and move constructors and assign operators
+        StackTraceEstimation(StackTraceEstimation const &) = delete;
+        StackTraceEstimation(StackTraceEstimation &&) = delete;
+        StackTraceEstimation &operator=(StackTraceEstimation const &) = delete;
+        StackTraceEstimation &operator=(StackTraceEstimation &&) = delete;
+
+    private:
+        // Privatize constructor and destructor
+        StackTraceEstimation() {}
+        ~StackTraceEstimation() {}
+};
 
 #endif // STACK_TRACE_ESTIMATION_ENABLED
 
