@@ -39,6 +39,8 @@ MaxSimRuntimeInfo::MaxineAddressSpace_t MaxSimRuntimeInfo::getMaxineAddressSpace
             return MaxineAddressSpace_t::Global;
         case ARRAY_CRITICAL_ADDRESS_RANGE:
             return MaxineAddressSpace_t::HeapArrayCritical;
+        case ALLOCATION_FRONTIER_ADDRESS_RANGE:
+            return MaxineAddressSpace_t::CodeAllocationFrontier;
 
     }
 }

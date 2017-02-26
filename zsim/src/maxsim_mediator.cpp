@@ -33,7 +33,6 @@
 #include "cpuenum.h"
 #include "maxsim_runtime_info.h"
 
-using namespace MaxSimInterface;
 
 VOID MaxSimMediator::HandleMaxSimMagicOp(THREADID tid, ADDRINT op, ADDRINT arg) {
     switch (op) {

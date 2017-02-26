@@ -175,9 +175,13 @@ enum AddressRangeType {
     //
     ARRAY_CRITICAL_ADDRESS_RANGE      = 5;
 
+    // Allocation frontier (functions called at allocation sites) address range.
+    //
+    ALLOCATION_FRONTIER_ADDRESS_RANGE = 6;
+
     // Undefined address range.
     //
-    UNDEFINED_ADDRESS_RANGE           = 6;
+    UNDEFINED_ADDRESS_RANGE           = 7;
 }
 
 // Tagging type.
