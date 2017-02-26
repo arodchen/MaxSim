@@ -148,6 +148,38 @@ enum MaxSimMagicOpPackedArgsOffsets {
   MAXSIM_M_OP_REGISTER_OBJECT_ALLOCATION_P_ARG_TAG_TYPE_OFF = 48;
 }
 
+// Address range type.
+//
+enum AddressRangeType {
+    // Stack address range.
+    //
+    STACK_ADDRESS_RANGE               = 0;
+
+    // Thread-local storage address range.
+    //
+    TLS_ADDRESS_RANGE                 = 1;
+
+    // Heap address range.
+    //
+    HEAP_ADDRESS_RANGE                = 2;
+
+    // Code cache address range.
+    //
+    CODE_ADDRESS_RANGE                = 3;
+
+    // Native address range.
+    //
+    NATIVE_ADDRESS_RANGE              = 4;
+
+    // Array critical address range (see JNI GetPrimitiveArrayCritical).
+    //
+    ARRAY_CRITICAL_ADDRESS_RANGE      = 5;
+
+    // Undefined address range.
+    //
+    UNDEFINED_ADDRESS_RANGE           = 6;
+}
+
 // Tagging type.
 //
 enum TaggingType {

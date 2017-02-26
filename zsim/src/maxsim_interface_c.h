@@ -32,26 +32,11 @@
 //
 typedef uint64_t Arg64_t;
 
-// Type of address range
-//
-typedef enum AddressRangeType_t {
-    // Stack address range
-    StackRange,
-    // Thread-local storage address range
-    TLSRange,
-    // Heap address range
-    HeapRange,
-    // Code cache address range
-    CodeRange,
-    // Native address range
-    NativeRange,
-    // Array critical address range (see JNI GetPrimitiveArrayCritical)
-    ArrayCriticalRange,
-    // ProtoBuf message range (for sending protocol buffer messages)
-    ProtoBufMessageRange,
-    // Undefined address range
-    UndefinedRange
-} AddressRangeType_t;
+#ifdef __cplusplus
+using namespace MaxSimInterface;
+#else
+typedef enum AddressRangeType AddressRangeType;
+#endif
 
 // Address range.
 //
@@ -61,8 +46,8 @@ typedef struct AddressRange_t {
     // High boundary of an address range
     uint64_t hi;
     // Type of an address range
-    AddressRangeType_t type;
-    // Nesting counter (used for nested ArrayCriticalRange registrations)
+    AddressRangeType type;
+    // Nesting counter (used for nested ARRAY_CRITICAL_ADDRESS_RANGE registrations)
     uint32_t counter;
 
 #ifdef __cplusplus

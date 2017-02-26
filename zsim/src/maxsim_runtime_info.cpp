@@ -27,17 +27,17 @@
 
 #ifdef MAXSIM_ENABLED
 
-MaxSimRuntimeInfo::MaxineAddressSpace_t MaxSimRuntimeInfo::getMaxineAddressSpaceByAddressRangeType(AddressRangeType_t type) {
+MaxSimRuntimeInfo::MaxineAddressSpace_t MaxSimRuntimeInfo::getMaxineAddressSpaceByAddressRangeType(AddressRangeType type) {
     switch (type) {
         default:
             panic("Cannot get Maxine address space for address range type %d", type);
-        case StackRange:
-        case TLSRange:
-        case HeapRange:
-        case CodeRange:
-        case NativeRange:
+        case STACK_ADDRESS_RANGE:
+        case TLS_ADDRESS_RANGE:
+        case HEAP_ADDRESS_RANGE:
+        case CODE_ADDRESS_RANGE:
+        case NATIVE_ADDRESS_RANGE:
             return MaxineAddressSpace_t::Global;
-        case ArrayCriticalRange:
+        case ARRAY_CRITICAL_ADDRESS_RANGE:
             return MaxineAddressSpace_t::HeapArrayCritical;
 
     }
@@ -114,7 +114,7 @@ void  MaxSimRuntimeInfo::deregisterAddressRange(AddressRange_t * addressRange) {
 
 AddressRange_t MaxSimRuntimeInfo::getRegisteredAddressRange(uint64_t address, MaxSimRuntimeInfo::MaxineAddressSpace_t space) {
     VectorOfAddressRanges_t::iterator it;
-    AddressRange_t addressRange = {address, address, UndefinedRange};
+    AddressRange_t addressRange = {address, address, UNDEFINED_ADDRESS_RANGE};
 
     futex_lock(& registeredAddressRangesLock);
 

@@ -56,7 +56,7 @@ class MaxSimRuntimeInfo {
 
         // Get Maxine address space by an address range type
         //
-        MaxineAddressSpace_t getMaxineAddressSpaceByAddressRangeType(AddressRangeType_t type);
+        MaxineAddressSpace_t getMaxineAddressSpaceByAddressRangeType(AddressRangeType type);
 
         // Get a registered address range for a given address and an address space
         //
