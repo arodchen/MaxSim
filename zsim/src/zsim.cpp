@@ -155,7 +155,7 @@ VOID HandleCall(THREADID tid, ADDRINT ip);
 VOID HandleReturn(THREADID tid);
 #endif // STACK_TRACE_ESTIMATION_ENABLED
 
-VOID HandleMagicOp(THREADID tid, ADDRINT op, ADDRINT arg);
+VOID HandleMagicOp(THREADID tid, ADDRINT* op, ADDRINT arg);
 
 VOID FakeCPUIDPre(THREADID tid, REG eax, REG ecx);
 VOID FakeCPUIDPost(THREADID tid, ADDRINT* eax, ADDRINT* ebx, ADDRINT* ecx, ADDRINT* edx); //REG* eax, REG* ebx, REG* ecx, REG* edx);
@@ -688,7 +688,7 @@ VOID Instruction(INS ins) {
      */
     if (INS_IsXchg(ins) && INS_OperandReg(ins, 0) == REG_RCX && INS_OperandReg(ins, 1) == REG_RCX) {
         //info("Instrumenting magic op");
-        INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR) HandleMagicOp, IARG_THREAD_ID, IARG_REG_VALUE, REG_RCX,
+        INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR) HandleMagicOp, IARG_THREAD_ID, IARG_REG_REFERENCE, REG_RCX,
             IARG_REG_VALUE, REG_RBX, IARG_END);
     }
 
@@ -1359,8 +1359,8 @@ VOID SimEnd() {
 #define ZSIM_MAGIC_OP_REGISTER_THREAD   (1027)
 #define ZSIM_MAGIC_OP_HEARTBEAT         (1028)
 
-VOID HandleMagicOp(THREADID tid, ADDRINT op, ADDRINT arg) {
-    switch (op) {
+VOID HandleMagicOp(THREADID tid, ADDRINT* op, ADDRINT arg) {
+    switch (*op) {
         case ZSIM_MAGIC_OP_ROI_BEGIN:
             if (!zinfo->ignoreHooks) {
                 //TODO: Test whether this is thread-safe
@@ -1425,12 +1425,12 @@ VOID HandleMagicOp(THREADID tid, ADDRINT op, ADDRINT arg) {
             return;
         default:
 #ifdef MAXSIM_ENABLED
-            if (MAXSIM_M_OPC_LO <= op && op <= MAXSIM_M_OPC_HI) {
+            if ((MAXSIM_M_OPC_LO <= (*op)) && ((*op) <= MAXSIM_M_OPC_HI)) {
                 MaxSimMediator::getInst().HandleMaxSimMagicOp(tid, op, arg);
                 break;
             }
 #endif
-            panic("Thread %d issued unknown magic op %ld!", tid, op);
+            panic("Thread %d issued unknown magic op %ld!", tid, *op);
     }
 }
 

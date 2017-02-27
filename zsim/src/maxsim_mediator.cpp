@@ -34,10 +34,10 @@
 #include "maxsim_runtime_info.h"
 
 
-VOID MaxSimMediator::HandleMaxSimMagicOp(THREADID tid, ADDRINT op, ADDRINT arg) {
-    switch (op) {
+VOID MaxSimMediator::HandleMaxSimMagicOp(THREADID tid, ADDRINT * op, ADDRINT arg) {
+    switch (*op) {
         case MAXSIM_M_OPC_GET_AVAILABLE_PROCESSORS_NUM: {
-            Arg64_t * availableProcessorsNumPointer = (Arg64_t *) arg;
+            Arg64_t * availableProcessorsNumPointer = (Arg64_t *) op;
 
             *(availableProcessorsNumPointer) = cpuenumNumCpus(procIdx);
             return;
@@ -72,7 +72,7 @@ VOID MaxSimMediator::HandleMaxSimMagicOp(THREADID tid, ADDRINT op, ADDRINT arg) 
         }
 
         default:
-            panic("Thread %d issued unknown MaxSim magic op %ld!", tid, op);
+            panic("Thread %d issued unknown MaxSim magic op %ld!", tid, *op);
     }
 }
 

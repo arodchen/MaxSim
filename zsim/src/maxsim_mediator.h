@@ -34,7 +34,7 @@
 
 class MaxSimMediator {
     public:
-        VOID HandleMaxSimMagicOp(THREADID tid, ADDRINT op, ADDRINT arg);
+        VOID HandleMaxSimMagicOp(THREADID tid, ADDRINT * op, ADDRINT arg);
 
     // Singleton part
     public:

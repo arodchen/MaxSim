@@ -51,7 +51,7 @@ enum MaxSimMagicOpcodes {
 
   // Gets a number of available processors (cores) in a model.
   //
-  // Returns a number in a variable which address is passed in the rbx register.
+  // Returns a number in the rcx register.
   //
   MAXSIM_M_OPC_GET_AVAILABLE_PROCESSORS_NUM              = 1101;
 
@@ -87,7 +87,7 @@ enum MaxSimMagicOpcodes {
 
   // Gets an allocations site estimation id.
   //
-  // Returns an id in a variable which address is passed in the rbx register.
+  // Returns an id in the rcx register.
   //
   MAXSIM_M_OPC_GET_ALLOCATION_SITE_ESTIMATION_ID         = 1107;
 
