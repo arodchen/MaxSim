@@ -878,6 +878,13 @@ static void InitGlobalStats() {
     triggerStat->init("trigger", "Reason for this stats dump", &zinfo->trigger);
     zinfo->rootStat->append(triggerStat);
 
+#ifdef MAXSIM_ENABLED
+    ProxyStat* maxineVMOperationModeStat = new ProxyStat();
+    zinfo->maxineVMOperationMode = (uint64_t) MAXINE_VM_OPERATION_MODE_UNKNOWN;
+    maxineVMOperationModeStat->init("maxineVMOperationMode", "Maxine VM operation mode of the next event", &zinfo->maxineVMOperationMode);
+    zinfo->rootStat->append(maxineVMOperationModeStat);
+#endif // MAXSIM_ENABLED
+
     ProxyStat* phaseStat = new ProxyStat();
     phaseStat->init("phase", "Simulated phases", &zinfo->numPhases);
     zinfo->rootStat->append(phaseStat);

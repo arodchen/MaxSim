@@ -67,7 +67,8 @@ VOID MaxSimMediator::HandleMaxSimMagicOp(THREADID tid, ADDRINT * op, ADDRINT arg
             return;
         }
         case MAXSIM_M_OPC_DUMP_EVENTUAL_STATS: {
-            DumpEventualStats(procIdx, "Request from Maxine VM to dump eventual stats");
+            MaxineVMOperationMode maxineVMOperationMode = (MaxineVMOperationMode) arg;
+            DumpEventualStats(procIdx, "Request from Maxine VM to dump eventual stats", maxineVMOperationMode);
             return;
         }
 

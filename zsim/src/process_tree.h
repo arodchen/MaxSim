@@ -32,6 +32,10 @@
 #include "log.h"
 #include "zsim.h"
 
+#ifdef MAXSIM_ENABLED
+#include "maxsim_interface_c.h"
+#endif
+
 class Config;
 
 enum SyncedFastForwardMode {
@@ -149,6 +153,10 @@ class ProcessTreeNode : public GlobAlloc {
 
 void CreateProcessTree(Config& config);
 
-void DumpEventualStats(uint32_t procIdx, const char* reason);
+void DumpEventualStats(uint32_t procIdx, const char* reason
+#ifdef MAXSIM_ENABLED
+                       , MaxineVMOperationMode maxineVMOperationMode = MAXINE_VM_OPERATION_MODE_SAME
+#endif
+);
 
 #endif  // PROCESS_TREE_H_

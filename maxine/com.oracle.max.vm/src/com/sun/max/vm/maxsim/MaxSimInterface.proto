@@ -93,9 +93,13 @@ enum MaxSimMagicOpcodes {
 
   // Enables MaxSim statistics collection.
   //
+  // Receives MaxineVMOperationMode after enabling statistic collection.
+  //
   MAXSIM_M_OPC_ENABLE_STATS_COLLECTION                   = 1108;
 
   // Disables MaxSim statistics collection.
+  //
+  // Receives MaxineVMOperationMode after disabling statistic collection.
   //
   MAXSIM_M_OPC_DISABLE_STATS_COLLECTION                  = 1109;
 
@@ -103,9 +107,9 @@ enum MaxSimMagicOpcodes {
   //
   MAXSIM_M_OPC_RESET_STATS_COLLECTION                    = 1110;
 
-  // Serializes MaxSim statistics to a file.
+  // Prints MaxSim statistics to a file.
   //
-  MAXSIM_M_OPC_SERIALIZE_STATS_TO_FILE                   = 1111;
+  MAXSIM_M_OPC_PRINT_STATS_TO_FILE                       = 1111;
 
   // Sets MaxSim statistics file prefix.
   //
@@ -114,6 +118,8 @@ enum MaxSimMagicOpcodes {
   MAXSIM_M_OPC_SET_STATS_FILE_PREFIX                     = 1112;
 
   // Dumps eventual statistics.
+  //
+  // Receives MaxineVMOperationMode after dumping evnetual statistics.
   //
   MAXSIM_M_OPC_DUMP_EVENTUAL_STATS                       = 1113;
 
@@ -182,6 +188,26 @@ enum AddressRangeType {
     // Undefined address range.
     //
     UNDEFINED_ADDRESS_RANGE           = 7;
+}
+
+// Maxine VM operation mode.
+//
+enum MaxineVMOperationMode {
+  // Unknown VM operation mode.
+  //
+  MAXINE_VM_OPERATION_MODE_UNKNOWN        = 0;
+
+  // Running VM non-GC operation mode.
+  //
+  MAXINE_VM_OPERATION_MODE_RUNNING_NON_GC = 1;
+
+  // Running VM GC operation mode.
+  //
+  MAXINE_VM_OPERATION_MODE_RUNNING_GC     = 2;
+
+  // Same VM operation mode as previously registered.
+  //
+  MAXINE_VM_OPERATION_MODE_SAME           = 3;
 }
 
 // Tagging type.

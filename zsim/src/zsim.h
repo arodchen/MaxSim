@@ -156,6 +156,10 @@ struct GlobSimInfo {
 
     uint64_t trigger; //code with what triggered the current stats dump
 
+#ifdef MAXSIM_ENABLED
+    uint64_t maxineVMOperationMode;
+#endif
+
     ProcessTreeNode* procTree;
     ProcessTreeNode** procArray; //a flat view of the process tree, where each process is indexed by procIdx
     ProcExitStatus* procExited; //starts with all set to PROC_RUNNING, each process sets to PROC_EXITED or PROC_RESTARTME on exit. Used to detect untimely deaths (that don;t go thropugh SimEnd) in the harness and abort.

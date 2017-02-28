@@ -45,10 +45,19 @@ static string DefaultMaskStr() {
 }
 
 //Helper
-void DumpEventualStats(uint32_t procIdx, const char* reason) {
+void DumpEventualStats(uint32_t procIdx, const char* reason
+#ifdef MAXSIM_ENABLED
+                       , MaxineVMOperationMode maxineVMOperationMode
+#endif
+) {
     uint32_t p = zinfo->procArray[procIdx]->getGroupIdx();
     zinfo->trigger = p;
     zinfo->eventualStatsBackend->dump(true /*buffered*/);
+#ifdef MAXSIM_ENABLED
+    if (maxineVMOperationMode != MAXINE_VM_OPERATION_MODE_SAME) {
+        zinfo->maxineVMOperationMode = (uint64_t) maxineVMOperationMode;
+    }
+#endif
     zinfo->procEventualDumps++;
     info("Dumping eventual stats ID %ld for process GROUP %d (%s)", zinfo->procEventualDumps, p, reason);
     if (zinfo->procEventualDumps == zinfo->maxProcEventualDumps) {

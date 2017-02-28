@@ -30,8 +30,8 @@
 #include <sys/stat.h>
 #include "config.h" // for ParseList
 #include "pin.H"
-#include "process_tree.h"
 #include "profile_stats.h"
+#include "process_tree.h"
 #include "str.h"
 #include "virt/syscall_name.h"
 
