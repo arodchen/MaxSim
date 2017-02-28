@@ -86,3 +86,8 @@ Java_java_lang_Runtime_availableProcessors(JNIEnv *env, jclass c, jobject runtim
 	c_UNIMPLEMENTED();
 #endif
 }
+
+jint
+Runtime_availableProcessors() {
+    return Java_java_lang_Runtime_availableProcessors(NULL, NULL, NULL);
+}

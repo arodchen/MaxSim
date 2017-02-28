@@ -37,6 +37,7 @@
 #include "image.h"
 #include "log.h"
 #include "word.h"
+#include "maxsimMediator.h"
 
 /* TODO: make this cpu-dependent: */
 #define MIN_CACHE_ALIGNMENT 8
@@ -430,6 +431,8 @@ void image_load(char *imageFileName) {
     if (error != 0) {
         log_println("WARNING: could not close image file");
     }
+    maxsim_c_register_address_range(theHeap, theHeap + theHeader->heapSize, HEAP_ADDRESS_RANGE);
+    maxsim_c_register_address_range(theCode, theCode + theHeader->codeSize, CODE_ADDRESS_RANGE);
 }
 
 void image_printAddress(Address address) {

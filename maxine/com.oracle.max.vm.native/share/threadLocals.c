@@ -33,6 +33,7 @@
 #include "threadLocals.h"
 #include "virtualMemory.h"
 #include "mutex.h"
+#include "maxsimMediator.h"
 
 #if (os_DARWIN || os_LINUX)
 #   include <pthread.h>
@@ -143,6 +144,8 @@ Address threadLocalsBlock_create(jint id, Address tlBlock, Size stackSize) {
         }
     }
 
+    maxsim_c_register_address_range(tlBlock, tlBlock + tlBlockSize, TLS_ADDRESS_RANGE);
+
     TLA ttla = tlBlock + pageSize - sizeof(Address);
     TLA etla  = ttla + tlaSize;
     TLA dtla = etla + tlaSize;
@@ -166,6 +169,8 @@ Address threadLocalsBlock_create(jint id, Address tlBlock, Size stackSize) {
     ntl->stackSize = stackSize;
     ntl->tlBlock = tlBlock;
     ntl->tlBlockSize = tlBlockSize;
+
+    maxsim_c_register_address_range(ntl->stackBase, ntl->stackBase + ntl->stackSize, STACK_ADDRESS_RANGE);
 
     Address startGuardZone;
     int guardZonePages;
@@ -332,6 +337,9 @@ void threadLocalsBlock_destroy(Address tlBlock) {
 
     // Undo the temporary re-establishment of the thread locals block
     threadLocalsBlock_setCurrent(0);
+
+    maxsim_c_deregister_address_range(ntl->stackBase, ntl->stackBase + ntl->stackSize, STACK_ADDRESS_RANGE);
+    maxsim_c_deregister_address_range(tlBlock, tlBlock + ntl->tlBlockSize, TLS_ADDRESS_RANGE);
 
     /* Release the memory of the TL block. */
     deallocateThreadLocalBlock(tlBlock, ntl->tlBlockSize);
