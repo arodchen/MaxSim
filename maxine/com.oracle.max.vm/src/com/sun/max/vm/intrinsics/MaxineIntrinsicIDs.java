@@ -317,6 +317,16 @@ public class MaxineIntrinsicIDs {
     public static final String CMP_BYTECODE = p + "CMP_BYTECODE";
 
     /**
+     * Intrinsic that emits MaxSim magic operation.
+     *
+     * The method definition must have the following form:
+     * <pre>
+     * static Word m(Word op, Word arg);
+     * </pre>
+     */
+    public static final String MAXSIM_MAGIC_OP = p + "MAXSIM_MAGIC_OP";
+
+    /**
      * A vehicle for testing snippets.
      * TODO remove when debugged
      */

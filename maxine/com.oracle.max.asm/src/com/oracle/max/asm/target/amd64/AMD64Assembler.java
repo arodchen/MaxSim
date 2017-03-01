@@ -2412,6 +2412,12 @@ public class AMD64Assembler extends AbstractAssembler {
         emitOperandHelper(reg, adr);
     }
 
+    public final void maxsimmagicop(CiRegister reg) {
+        int encode = prefixqAndEncode(reg.encoding, reg.encoding);
+        emitByte(0x87);
+        emitByte(0xC0 | encode);
+    }
+
     public final void cvtsi2sdq(CiRegister dst, CiRegister src) {
         assert dst.isFpu();
         emitByte(0xF2);

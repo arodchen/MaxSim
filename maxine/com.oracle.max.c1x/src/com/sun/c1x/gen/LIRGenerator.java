@@ -1091,6 +1091,12 @@ public abstract class LIRGenerator extends ValueVisitor {
     }
 
     @Override
+    public void visitMaxSimMagicOp(MaxSimMagicOp x) {
+        CiValue reg = x.register.asValue(x.ciKind);
+        lir.maxsimmagicop(reg);
+    }
+
+    @Override
     public void visitStoreField(StoreField x) {
         RiField field = x.field();
         boolean needsPatching = x.needsPatching();

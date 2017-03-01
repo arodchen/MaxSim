@@ -130,6 +130,11 @@ public final class AMD64LIRAssembler extends LIRAssembler {
     }
 
     @Override
+    protected void emitMaxSimMagicOp(CiValue inOpr) {
+        masm.maxsimmagicop(inOpr.asRegister());
+    }
+
+    @Override
     protected void emitBreakpoint() {
         masm.int3();
     }

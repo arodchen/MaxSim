@@ -285,6 +285,9 @@ public abstract class LIRAssembler {
             case Msb:
                 emitSignificantBitOp(true,  op.operand(), op.result());
                 break;
+            case MaxSimMagicOp:
+                emitMaxSimMagicOp(op.operand());
+                break;
             default:
                 throw Util.shouldNotReachHere();
         }
@@ -469,6 +472,8 @@ public abstract class LIRAssembler {
     protected abstract void emitMonitorAddress(int monitor, CiValue dst);
 
     protected abstract void emitPause();
+
+    protected abstract void emitMaxSimMagicOp(CiValue inOpr);
 
     protected abstract void emitStackAllocate(StackBlock src, CiValue dst);
 

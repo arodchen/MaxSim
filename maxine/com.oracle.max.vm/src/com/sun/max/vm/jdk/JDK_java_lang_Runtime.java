@@ -25,6 +25,8 @@ package com.sun.max.vm.jdk;
 import com.sun.max.annotate.*;
 import com.sun.max.vm.heap.*;
 import com.sun.max.vm.heap.HeapScheme.GCRequest;
+import com.sun.max.vm.maxsim.MaxSimInterfaceHelpers;
+import com.sun.max.vm.maxsim.MaxSimMediator;
 
 /**
  * Implements method substitutions for {@link java.lang.Runtime java.lang.Runtime}.
@@ -81,6 +83,22 @@ public final class JDK_java_lang_Runtime {
 
     @ALIAS(declaringClassName = "java.lang.ref.Finalizer", name = "runFinalization")
     static native void runFinalization();
+
+    @C_FUNCTION
+    private static native int Runtime_availableProcessors();
+
+    /**
+     * Returns the number of processors available to the Java virtual machine.
+     * @see java.lang.Runtime#availableProcessors() ()
+     */
+    @SUBSTITUTE
+    public int availableProcessors() {
+        if (MaxSimInterfaceHelpers.isMaxSimEnabled()) {
+            return MaxSimMediator.getAvailableProcessors();
+        } else {
+            return Runtime_availableProcessors();
+        }
+    }
 
     /**
      * Invoke finalizers of garbage collected objects.

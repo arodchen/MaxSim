@@ -22,8 +22,10 @@
  */
 package com.oracle.max.vm.ext.c1x;
 
+import static com.sun.max.platform.Platform.platform;
 import static com.sun.max.vm.intrinsics.MaxineIntrinsicIDs.*;
 
+import com.oracle.max.asm.target.amd64.AMD64;
 import com.oracle.max.cri.intrinsics.*;
 import com.sun.c1x.graph.*;
 import com.sun.c1x.intrinsics.*;
@@ -35,6 +37,7 @@ import com.sun.c1x.value.*;
 import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
+import com.sun.max.lang.ISA;
 import com.sun.max.vm.runtime.*;
 
 public class MaxineIntrinsicImplementations {
@@ -250,6 +253,35 @@ public class MaxineIntrinsicImplementations {
         }
     }
 
+    public static class MaxSimMagicOpIntrinsic implements C1XIntrinsicImpl {
+        @Override
+        public Value createHIR(GraphBuilder b, RiMethod target, Value[] args, boolean isStatic, FrameState stateBefore) {
+            if (platform().isa == ISA.AMD64) {
+                CiRegister regOp = AMD64.rcx;
+                RiType type = target.signature().returnType(null);
+                RiRegisterAttributes regAttr = b.compilation.registerConfig.getAttributesMap()[regOp.number];
+                LoadRegister load;
+
+                b.append(new StoreRegister(regOp, args[0]));
+
+                assert args.length == 1 || args.length == 2;
+                if (args.length == 2) {
+                    CiRegister regArg = AMD64.rbx;
+                    b.append(new StoreRegister(regArg, args[1]));
+                }
+                b.append(new MaxSimMagicOp(regOp, args[0].kind));
+
+                load = new LoadRegister(target.signature().returnKind(false), regOp, (type instanceof RiResolvedType) ? (RiResolvedType) type : null);
+                if (regAttr.isNonZero) {
+                    load.setFlag(Flag.NonNull);
+                }
+                return b.append(load);
+            } else {
+                throw FatalError.unimplemented();
+            }
+        }
+    }
+
 
     public static void initialize(IntrinsicImpl.Registry registry) {
         registry.add(LSB, new BitIntrinsic(LIROpcode.Lsb));
@@ -277,5 +309,7 @@ public class MaxineIntrinsicImplementations {
         registry.add(ALLOCA, new AllocaIntrinsic());
 
         registry.add(CMP_BYTECODE, new CompareBytecodeIntrinsic());
+
+        registry.add(MAXSIM_MAGIC_OP, new MaxSimMagicOpIntrinsic());
     }
 }

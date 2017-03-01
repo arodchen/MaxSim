@@ -402,6 +402,10 @@ public final class LIRList {
         append(new LIROp1(LIROpcode.Move, src, dst, src.kind, info));
     }
 
+    public void maxsimmagicop(CiValue op) {
+        append(new LIROp1(LIROpcode.MaxSimMagicOp, op, CiValue.IllegalValue));
+    }
+
     public static void printBlock(BlockBegin x) {
         // print block id
         BlockEnd end = x.end();

@@ -54,6 +54,7 @@ public enum LIROpcode {
         Lsb,
         Msb,
         MonitorAddress,
+        MaxSimMagicOp,
     EndOp1,
     BeginOp2,
         Cmp,
