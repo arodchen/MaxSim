@@ -32,9 +32,14 @@
 #include "maxsim_interface_c.h"
 #include "cpuenum.h"
 #include "maxsim_runtime_info.h"
+#include "maxsim_interface_helpers.h"
 
 
 VOID MaxSimMediator::HandleMaxSimMagicOp(THREADID tid, ADDRINT * op, ADDRINT arg) {
+    if (!MaxSimInterfaceHelpers::isMaxSimEnabled()) {
+        panic("Thread %d issued MaxSim magic op %ld while MaxSimConfig.isMaxSimEnabled is false!", tid, *op);
+    }
+
     switch (*op) {
         case MAXSIM_M_OPC_GET_AVAILABLE_PROCESSORS_NUM: {
             Arg64_t * availableProcessorsNumPointer = (Arg64_t *) op;
