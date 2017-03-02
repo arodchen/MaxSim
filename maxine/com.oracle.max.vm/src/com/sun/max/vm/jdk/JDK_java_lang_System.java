@@ -33,6 +33,9 @@ import java.io.*;
 import java.nio.charset.*;
 import java.util.*;
 
+import com.sun.max.vm.maxsim.MaxSimInterfaceHelpers;
+import com.sun.max.vm.maxsim.MaxSimPlatform;
+import com.sun.max.vm.maxsim.MaxSimMediator;
 import sun.misc.*;
 import sun.reflect.*;
 
@@ -48,6 +51,7 @@ import com.sun.max.vm.actor.holder.*;
 import com.sun.max.vm.object.*;
 import com.sun.max.vm.runtime.*;
 import com.sun.max.vm.type.*;
+import sun.security.util.SecurityConstants;
 
 /**
  * Implements method substitutions for {@link java.lang.System java.lang.System}.
@@ -815,6 +819,38 @@ public final class JDK_java_lang_System {
         Launcher_clinit();
 
         return properties;
+    }
+
+    @ALIAS(declaringClass = System.class)
+    private static Properties props;
+
+    @ALIAS(declaringClass = System.class, name = "checkKey")
+    private static native void checkKey(String key);
+
+    /**
+     * Sets the system property indicated by the specified key.
+     */
+    @SUBSTITUTE
+    private static String setProperty(String key, String value) {
+        if (MaxSimInterfaceHelpers.isMaxSimEnabled()) {
+            if (key.equals("MaxSim.Command")) {
+                if (value.equals("ROI_BEGIN()")) {
+                    MaxSimPlatform.exitMaxSimFastForwardingMode();
+                } else if (value.equals("ROI_END()")) {
+                    MaxSimPlatform.enterMaxSimFastForwardingMode();
+                } else {
+                    FatalError.unexpected("Unexpected MaxSim.Command value!");
+                }
+            }
+        }
+        checkKey(key);
+        SecurityManager sm = System.getSecurityManager();
+        if (sm != null) {
+            sm.checkPermission(new PropertyPermission(key,
+                    SecurityConstants.PROPERTY_WRITE_ACTION));
+        }
+
+        return (String) props.setProperty(key, value);
     }
 
     /**

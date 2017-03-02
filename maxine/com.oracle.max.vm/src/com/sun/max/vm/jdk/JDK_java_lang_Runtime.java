@@ -89,10 +89,13 @@ public final class JDK_java_lang_Runtime {
 
     /**
      * Returns the number of processors available to the Java virtual machine.
-     * @see java.lang.Runtime#availableProcessors() ()
+     * @see java.lang.Runtime#availableProcessors()
      */
     @SUBSTITUTE
     public int availableProcessors() {
+        // FIXME: This is a workaround as a call to Runtime_availableProcessors is incorrectly virtualized by ZSim,
+        // FIXME: and a host number of available processors is returned. ZSim virtualization should be fixed so that
+        // FIXME: the simulated number of processors is returned, and after that this substitution should be removed.
         if (MaxSimInterfaceHelpers.isMaxSimEnabled()) {
             return MaxSimMediator.getAvailableProcessors();
         } else {

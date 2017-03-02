@@ -29,6 +29,9 @@ import com.sun.max.annotate.*;
 import com.sun.max.unsafe.*;
 import com.sun.max.vm.*;
 import com.sun.max.vm.heap.*;
+import com.sun.max.vm.maxsim.MaxSimInterface;
+import com.sun.max.vm.maxsim.MaxSimInterfaceHelpers;
+import com.sun.max.vm.maxsim.MaxSimMediator;
 import com.sun.max.vm.monitor.*;
 import com.sun.max.vm.stack.*;
 import com.sun.max.vm.thread.*;
@@ -191,9 +194,13 @@ public abstract class GCOperation extends VmOperation {
             Log.println(" Kb --");
             Log.unlock(lockDisabledSafepoints);
         }
-
+        if (MaxSimInterfaceHelpers.isMaxSimEnabled()) {
+            MaxSimMediator.dumpEventualStats(MaxSimInterface.MaxineVMOperationMode.MAXINE_VM_OPERATION_MODE_RUNNING_GC_VALUE);
+        }
         collect(invocationCount);
-
+        if (MaxSimInterfaceHelpers.isMaxSimEnabled()) {
+            MaxSimMediator.dumpEventualStats(MaxSimInterface.MaxineVMOperationMode.MAXINE_VM_OPERATION_MODE_RUNNING_NON_GC_VALUE);
+        }
         if (Heap.verbose()) {
             final long afterUsed = Heap.reportUsedSpace();
             final long afterFree = Heap.reportFreeSpace();

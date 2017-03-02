@@ -64,4 +64,11 @@ public class MaxSimMediator {
             Address.fromLong(MaxSimInterface.MaxSimMagicOpcodes.MAXSIM_M_OPC_GET_AVAILABLE_PROCESSORS_NUM_VALUE)).
             asAddress().toInt();
     }
+
+    @INLINE
+    public static void dumpEventualStats(int maxineVMOperationMode) {
+        maxsimMagicOp(
+            Address.fromLong(MaxSimInterface.MaxSimMagicOpcodes.MAXSIM_M_OPC_DUMP_EVENTUAL_STATS_VALUE),
+            Address.fromInt(maxineVMOperationMode));
+    }
 }
