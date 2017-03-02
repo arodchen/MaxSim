@@ -288,6 +288,10 @@ public final class JDKInterceptor {
         JDK.java_math_BigInteger,
             new FieldOffsetRecomputation("signumOffset", "signum"),
             new FieldOffsetRecomputation("magOffset", "mag"),
+        JDK.sun_util_logging_PlatformLogger,
+            new ZeroField("loggingEnabled"),
+        JDK.java_util_logging_LogManager,
+            new ValueField("initializedGlobalHandlers", BooleanValue.from(true)),
     };
 
     private static final Object[] interceptedFieldArrayJDK6 = {

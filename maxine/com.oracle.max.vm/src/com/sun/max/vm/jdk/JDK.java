@@ -96,6 +96,9 @@ public class JDK {
 
     public static final ClassRef java_math_BigInteger                = new LazyClassRef(java.math.BigInteger.class);
 
+    public static final ClassRef sun_util_logging_PlatformLogger    = new ClassRef(sun.util.logging.PlatformLogger.class);
+    public static final ClassRef java_util_logging_LogManager    = new ClassRef(java.util.logging.LogManager.class);
+
     public static final ClassRef java_util_concurrent_ConcurrentSkipListSet = new LazyClassRef(java.util.concurrent.ConcurrentSkipListSet.class);
     public static final ClassRef java_util_concurrent_ConcurrentLinkedQueue= new LazyClassRef(java.util.concurrent.ConcurrentLinkedQueue.class);
     public static final ClassRef java_util_concurrent_ConcurrentLinkedQueue$Node= new LazyClassRef(java.util.concurrent.ConcurrentLinkedQueue.class, "Node");
