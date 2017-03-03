@@ -13,21 +13,19 @@
 # limitations under the License.
 
 _LOCK_ACQUIRED=0
-_LOCK_DIR=
 function removeDeadLock {
-    if [ -d $1 ] ; then
-        if [ $(pidof -x -o $$ $2 | wc -w) -eq 1 ] ; then
-            rmdir $1
+    if [ -d $SINGLE_INSTANCE_LOCK_DIR ] ; then
+        if [ $(pidof -x -o $$ $1 | wc -w) -eq 1 ] ; then
+            rmdir $SINGLE_INSTANCE_LOCK_DIR
         fi
     fi
 }
 
 function isSingleInstanceTest {
-    _SINGLE_INSTANCE_TESTS=$2
-    _SINGLE_INSTANCE_TESTS_NUM=${#_SINGLE_INSTANCE_TESTS[@]}
+    _SINGLE_INSTANCE_TESTS_NUM=${#SINGLE_INSTANCE_TESTS[@]}
     _LAST_K=$((_SINGLE_INSTANCE_TESTS_NUM-1))
     for k in $(seq 0 $_LAST_K) ; do
-        if [ ${_SINGLE_INSTANCE_TESTS[k]} == $1 ] ; then
+        if [ ${SINGLE_INSTANCE_TESTS[k]} == $1 ] ; then
             return 0
         fi
     done
@@ -35,22 +33,21 @@ function isSingleInstanceTest {
 }
 
 function acquireLock {
-    if isSingleInstanceTest $1 $2 ; then
-        until mkdir $3
+    if isSingleInstanceTest $1 ; then
+        until mkdir $SINGLE_INSTANCE_LOCK_DIR
         do
             echo "Single instance test lock acquired. Will try again in 60 seconds ..."
             sleep 60
         done
-        _LOCK_DIR=$3
         _LOCK_ACQUIRED=1
     fi
 }
 
 function releaseLock {
-    if isSingleInstanceTest $1 $2 ; then
+    if isSingleInstanceTest $1 ; then
         if [ $_LOCK_ACQUIRED -eq 1 ] ; then
             _LOCK_ACQUIRED=0
-            rmdir $3
+            rmdir $SINGLE_INSTANCE_LOCK_DIR
         fi
     fi
 }
@@ -59,7 +56,7 @@ trap ctrl_c_handler INT
 function ctrl_c_handler {
     if [ $_LOCK_ACQUIRED -eq 1 ] ; then
         _LOCK_ACQUIRED=0
-        rmdir $_LOCK_DIR
+        rmdir $SINGLE_INSTANCE_LOCK_DIR
     fi
 }
 

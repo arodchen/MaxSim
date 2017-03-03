@@ -63,7 +63,7 @@ executeExitOnFail popd
 
 executeExitOnFail pushd ./maxine
 
-removeDeadLock $SINGLE_INSTANCE_LOCK_DIR $SCRIPT_NAME
+removeDeadLock $SCRIPT_NAME
 
 TESTS_NUM=${#TESTS[@]}
 LAST_J=$((TESTS_NUM-1))
@@ -80,13 +80,13 @@ for i in $(seq 0 $LAST_I) ; do
         TEST_STDERR_FILE=$OUTPUT_DIR/DaCapo-9.12-bach_${TESTS[j]}_product_$i.out
         executeExitOnFail touch $TEST_STDERR_FILE
 
-        acquireLock ${TESTS[j]} $SINGLE_INSTANCE_TESTS $SINGLE_INSTANCE_LOCK_DIR
+        acquireLock ${TESTS[j]}
         TAKE=0
         while !(grep -q PASSED $TEST_STDERR_FILE) && (($TAKE < $TEST_TAKES_NUM)); do
             timelimit -T $TEST_TIMELIMIT -t $WARN_TIMELIMIT ../zsim/build/release/zsim $SIMULATOR_TEST_CFG 2>$TEST_STDERR_FILE
             TAKE=$[$TAKE+1]
         done
-        releaseLock ${TESTS[j]} $SINGLE_INSTANCE_TESTS $SINGLE_INSTANCE_LOCK_DIR
+        releaseLock ${TESTS[j]}
 
         ZSIM_TEST_OUT_DIR=$OUTPUT_DIR/zsim/DaCapo-9.12-bach_${TESTS[j]}_product_$i/
         executeExitOnFail mkdir -p $ZSIM_TEST_OUT_DIR
