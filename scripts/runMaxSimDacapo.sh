@@ -52,14 +52,14 @@ SINGLE_INSTANCE_LOCK_DIR=/var/lock/dacapo-9.12-bach-single-instance-tests-lock
 
 executeExitOnFail mkdir $OUTPUT_DIR
 
+executeExitOnFail ./scripts/buildMaxSimProduct.sh
+
 executeExitOnFail pushd ./graal/lib
 if [ ! -f ./$BENCHMARK_JAR ]; then
     executeExitOnFail wget "http://downloads.sourceforge.net/project/dacapobench/9.12-bach/$BENCHMARK_JAR"
 fi
 CP_JAR_FLAGS=" -cp ../misc/DaCapoCallbacks:../graal/lib/$BENCHMARK_JAR Harness -c MaxSimCallback"
 executeExitOnFail popd
-
-executeExitOnFail ./scripts/buildMaxSimProduct.sh
 
 executeExitOnFail pushd ./maxine
 
