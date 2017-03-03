@@ -32,6 +32,7 @@ import com.sun.max.vm.heap.*;
 import com.sun.max.vm.maxsim.MaxSimInterface;
 import com.sun.max.vm.maxsim.MaxSimInterfaceHelpers;
 import com.sun.max.vm.maxsim.MaxSimMediator;
+import com.sun.max.vm.maxsim.MaxSimPlatform;
 import com.sun.max.vm.monitor.*;
 import com.sun.max.vm.stack.*;
 import com.sun.max.vm.thread.*;
@@ -194,11 +195,11 @@ public abstract class GCOperation extends VmOperation {
             Log.println(" Kb --");
             Log.unlock(lockDisabledSafepoints);
         }
-        if (MaxSimInterfaceHelpers.isMaxSimEnabled()) {
+        if (MaxSimInterfaceHelpers.isMaxSimEnabled() && !MaxSimPlatform.isMaxSimFastForwarding()) {
             MaxSimMediator.dumpEventualStats(MaxSimInterface.MaxineVMOperationMode.MAXINE_VM_OPERATION_MODE_RUNNING_GC_VALUE);
         }
         collect(invocationCount);
-        if (MaxSimInterfaceHelpers.isMaxSimEnabled()) {
+        if (MaxSimInterfaceHelpers.isMaxSimEnabled() && !MaxSimPlatform.isMaxSimFastForwarding()) {
             MaxSimMediator.dumpEventualStats(MaxSimInterface.MaxineVMOperationMode.MAXINE_VM_OPERATION_MODE_RUNNING_NON_GC_VALUE);
         }
         if (Heap.verbose()) {

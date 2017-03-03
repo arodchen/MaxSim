@@ -24,13 +24,28 @@
 
 package com.sun.max.vm.maxsim;
 
+import com.sun.max.annotate.INLINE;
+
 public class MaxSimPlatform {
+    /**
+     * Indicates whether MaxSim is in fast forwarding mode.
+     */
+    private static boolean isMaxSimFastForwarding = true;
+
+    /**
+     * Indicates whether MaxSim is in fast forwarding mode.
+     */
+    @INLINE
+    public static boolean isMaxSimFastForwarding() {
+        return isMaxSimFastForwarding;
+    }
 
     /**
      * Instructs MaxSim to exit fast forwarding mode.
      */
     public static synchronized void exitMaxSimFastForwardingMode() {
         MaxSimMediator.exitZSimFastForwardingMode();
+        isMaxSimFastForwarding = false;
         MaxSimMediator.dumpEventualStats(
             MaxSimInterface.MaxineVMOperationMode.MAXINE_VM_OPERATION_MODE_RUNNING_NON_GC_VALUE);
     }
@@ -41,6 +56,7 @@ public class MaxSimPlatform {
     public static synchronized void enterMaxSimFastForwardingMode() {
         MaxSimMediator.dumpEventualStats(
             MaxSimInterface.MaxineVMOperationMode.MAXINE_VM_OPERATION_MODE_UNKNOWN_VALUE);
+        isMaxSimFastForwarding = true;
         MaxSimMediator.enterZSimFastForwardingMode();
     }
 }
