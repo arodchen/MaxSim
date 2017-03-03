@@ -30,8 +30,10 @@ if [ -z "$3" ] ; then
     exit 1 
 fi
 . ./scripts/executeExitOnFail
+. ./scripts/approximateLocks
 set -x
 
+SCRIPT_NAME=`basename "$0"`
 OUTPUT_DIR=$(readlink -f $1)
 SIMULATOR_TMPL_CFG=$2
 EXECS_NUM=$3
@@ -43,6 +45,10 @@ WARN_TIMELIMIT=$[$TEST_TIMELIMIT+1]
 BENCHMARK_JAR="dacapo-9.12-bach.jar"
 TESTS=(avrora batik eclipse fop h2 jython luindex lusearch pmd sunflow tomcat tradebeans tradesoap xalan)
 ITERS=(13     20    16      30  8  13     10      8        13  15      15     13         15        18   )
+
+# Only single instance (mutually) of these tests can be run on the same machine 
+SINGLE_INSTANCE_TESTS=(eclipse tomcat tradebeans tradesoap)
+SINGLE_INSTANCE_LOCK_DIR=/var/lock/dacapo-9.12-bach-single-instance-tests-lock
 
 executeExitOnFail mkdir $OUTPUT_DIR
 
@@ -57,10 +63,11 @@ executeExitOnFail ./scripts/buildMaxSimProduct.sh
 
 executeExitOnFail pushd ./maxine
 
+removeDeadLock $SINGLE_INSTANCE_LOCK_DIR $SCRIPT_NAME
+
 TESTS_NUM=${#TESTS[@]}
 LAST_J=$((TESTS_NUM-1))
 LAST_I=$((EXECS_NUM-1))
-
 for i in $(seq 0 $LAST_I) ; do
     for j in $(seq 0 $LAST_J) ; do
 
@@ -73,11 +80,13 @@ for i in $(seq 0 $LAST_I) ; do
         TEST_STDERR_FILE=$OUTPUT_DIR/DaCapo-9.12-bach_${TESTS[j]}_product_$i.out
         executeExitOnFail touch $TEST_STDERR_FILE
 
+        acquireLock ${TESTS[j]} $SINGLE_INSTANCE_TESTS $SINGLE_INSTANCE_LOCK_DIR
         TAKE=0
         while !(grep -q PASSED $TEST_STDERR_FILE) && (($TAKE < $TEST_TAKES_NUM)); do
             timelimit -T $TEST_TIMELIMIT -t $WARN_TIMELIMIT ../zsim/build/release/zsim $SIMULATOR_TEST_CFG 2>$TEST_STDERR_FILE
             TAKE=$[$TAKE+1]
         done
+        releaseLock ${TESTS[j]} $SINGLE_INSTANCE_TESTS $SINGLE_INSTANCE_LOCK_DIR
 
         ZSIM_TEST_OUT_DIR=$OUTPUT_DIR/zsim/DaCapo-9.12-bach_${TESTS[j]}_product_$i/
         executeExitOnFail mkdir -p $ZSIM_TEST_OUT_DIR
