@@ -241,11 +241,11 @@ message MaxSimConfig {
   //
   optional PointerTaggingType pointerTaggingType = 2 [default = CLASS_ID_TAGGING];
 
-  // Scaling factor for primitives used in address space morphing.
+  // Scaling factor for primitives in Maxine VM and contraction factor in ZSim used in address space morphing.
   //
   optional int32 layoutScaleFactor = 3 [default = 1];
 
-  // Scaling factor for references used in address space morphing.
+  // Scaling factor for references in Maxine VM used in address space morphing.
   //
   optional int32 layoutScaleRefFactor = 4 [default = 1];
 }

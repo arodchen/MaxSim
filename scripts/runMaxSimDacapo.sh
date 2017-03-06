@@ -55,6 +55,8 @@ ITERS=(13     20    16      30  8  13     10      8        13  15      15     13
 SINGLE_INSTANCE_TESTS=(eclipse tomcat tradebeans tradesoap)
 SINGLE_INSTANCE_LOCK_DIR=/var/lock/dacapo-9.12-bach-single-instance-tests-lock
 
+removeDeadLock $SCRIPT_NAME
+
 executeExitOnFail ./scripts/buildMaxSimProduct.sh
 
 executeExitOnFail pushd ./graal/lib
@@ -65,8 +67,6 @@ CP_JAR_FLAGS=" -cp ../misc/DaCapoCallbacks:../graal/lib/$BENCHMARK_JAR Harness -
 executeExitOnFail popd
 
 executeExitOnFail pushd ./maxine
-
-removeDeadLock $SCRIPT_NAME
 
 TESTS_NUM=${#TESTS[@]}
 LAST_J=$((TESTS_NUM-1))
