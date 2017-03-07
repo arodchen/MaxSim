@@ -389,6 +389,11 @@ def maxsiminterfacegen(args):
        print "ERROR: You need to define the $PROTOBUFPATH environment variable with Protocol Buffers 2.6.1 path"
        mx.abort(1)
 
+    # Generate MaxSimInterface_pb.py
+    mx.run([join(PROTOBUFPATH,'bin/protoc'), '--python_out=../scripts', '--proto_path=com.oracle.max.vm/src/com/sun/max/vm/maxsim',
+            'com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto'])
+    os.rename('../scripts/MaxSimInterface_pb2.py', '../scripts/MaxSimInterface_pb.py')
+
     # Generate MaxSimInterface.pb.cpp and Generate MaxSimInterface.pb.h
     mx.run([join(PROTOBUFPATH,'bin/protoc'), '--cpp_out=../zsim/src', '--proto_path=com.oracle.max.vm/src/com/sun/max/vm/maxsim',
             'com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto'])
