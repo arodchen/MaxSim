@@ -590,6 +590,14 @@ public class GraphPrototype extends Prototype {
         add(javaClass, classActor, "classActor");
         // walk the static fields of the class
         walkFields(javaClass, makeClassInfo(javaClass).staticFields);
+        // walk static nested classes of forced classes
+        if (HostedBootClassLoader.isForcedStaticNestedOfClass(javaClass.getName())) {
+            for (Class nestedJavaClass : javaClass.getDeclaredClasses()) {
+                if (Modifier.isStatic(nestedJavaClass.getModifiers())) {
+                    exploreClass(nestedJavaClass);
+                }
+            }
+        }
     }
 
     private void exploreClassRef(JDK.ClassRef classRef) {
