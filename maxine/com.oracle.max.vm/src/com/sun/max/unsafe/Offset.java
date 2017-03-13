@@ -348,9 +348,14 @@ public class Offset extends Word {
     }
 
     @INLINE
-    public Offset aligned() {
-        int n = Word.size();
+    public Offset aligned(int words) {
+        int n = Word.size() * words;
         return plus(n - 1).and(Offset.fromInt(n - 1).not());
+    }
+
+    @INLINE
+    public Offset aligned() {
+        return aligned(1);
     }
 
     @INLINE

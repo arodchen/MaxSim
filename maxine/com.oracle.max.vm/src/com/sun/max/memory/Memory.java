@@ -209,6 +209,23 @@ public final class Memory {
     }
 
     @NO_SAFEPOINT_POLLS("speed")
+    public static void copyBytes(Pointer fromPointer, Offset fromOffset,
+                                 Pointer toPointer, Offset toOffset,
+                                 Size numberOfBytes) {
+        Offset i = Offset.zero();
+        Size wordBounds = numberOfBytes.alignDown(Word.size());
+        while (i.lessThan(wordBounds.asOffset())) {
+            toPointer.writeWord(toOffset.plus(i), fromPointer.readWord(fromOffset.plus(i)));
+            i = i.plus(Word.size());
+        }
+        while (i.lessThan(numberOfBytes.asOffset())) {
+            toPointer.writeByte(toOffset.plus(i), fromPointer.readByte(fromOffset.plus(i)));
+            i = i.plus(1);
+        }
+        assert i.equals(numberOfBytes);
+    }
+
+    @NO_SAFEPOINT_POLLS("speed")
     public static void readBytes(Pointer fromPointer, int numberOfBytes, byte[] toArray, int startIndex) {
         for (int i = 0; i < numberOfBytes; i++) {
             toArray[startIndex + i] = fromPointer.readByte(i);
@@ -246,6 +263,13 @@ public final class Memory {
     public static void writeBytes(byte[] fromArray, int startIndex, int numberOfBytes, Pointer toPointer) {
         for (int i = 0; i < numberOfBytes; i++) {
             toPointer.writeByte(i, fromArray[startIndex + i]);
+        }
+    }
+
+    @NO_SAFEPOINT_POLLS("speed")
+    public static void writeChars(char[] fromArray, int startIndex, int numberOfChars, Pointer toPointer) {
+        for (int i = 0; i < numberOfChars; i++) {
+            toPointer.setChar(i, fromArray[startIndex + i]);
         }
     }
 

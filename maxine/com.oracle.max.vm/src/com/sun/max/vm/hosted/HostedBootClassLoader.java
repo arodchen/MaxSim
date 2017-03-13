@@ -52,6 +52,7 @@ public final class HostedBootClassLoader extends HostedClassLoader {
     private static final Set<String> loadedPackages = new HashSet<String>();
     private static final Set<String> omittedClasses = new HashSet<String>();
     private static final Set<String> omittedPackages = new HashSet<String>();
+    private static final Set<String> forcedStaticNestedOfClasses = new HashSet<String>();
 
     private HostedBootClassLoader() {
     }

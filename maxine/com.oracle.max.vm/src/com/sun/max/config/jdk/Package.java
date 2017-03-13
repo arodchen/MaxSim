@@ -95,6 +95,9 @@ public class Package extends BootImagePackage {
         // Java 7 only class that indirectly caches references to JarFiles
         HostedBootClassLoader.omitClass(sun.misc.Launcher.class.getName() + "$BootClassPathHolder");
 
+        // Static members of java.util.logging.Level are hashed in a static member of nested static class java.util.logging.Level$KnownLevel
+        HostedBootClassLoader.forceStaticNestedOfClass("java.util.logging.Level");
+
         // Methods that are called using JNI during startup; we want the invocation stub in the boot image to avoid compilation at run time
         CompiledPrototype.registerImageInvocationStub(MethodActor.fromJava(Classes.getDeclaredMethod(java.lang.System.class, "getProperty", String.class)));
         CompiledPrototype.registerImageInvocationStub(MethodActor.fromJava(Classes.getDeclaredMethod(java.nio.charset.Charset.class, "isSupported", String.class)));

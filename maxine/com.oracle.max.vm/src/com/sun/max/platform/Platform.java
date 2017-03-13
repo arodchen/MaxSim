@@ -162,12 +162,14 @@ public final class Platform {
         int spillSlotSize = arch.wordSize;
         int cacheAlignment = dataModel.cacheAlignment;
         boolean inlineObjects = false;
+        int nullCheckOffset = 0;
         return new CiTarget(arch,
                         isMP,
                         spillSlotSize,
                         stackAlignment,
                         pageSize,
                         cacheAlignment,
+                        nullCheckOffset,
                         inlineObjects,
                         false,
                         false);
