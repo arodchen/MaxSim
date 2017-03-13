@@ -2892,7 +2892,7 @@ public class AMD64Assembler extends AbstractAssembler {
     }
 
     public void nullCheck(CiRegister r) {
-        testl(AMD64.rax, new CiAddress(Word, r.asValue(Word), 0));
+        testl(AMD64.rax, new CiAddress(Word, r.asValue(Word), target.nullCheckOffset));
     }
 
     public void align(int modulus) {

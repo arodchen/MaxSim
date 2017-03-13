@@ -88,6 +88,11 @@ public class CiTarget {
     public final int cacheAlignment;
 
     /**
+     * Null check offset.
+     */
+    public final int nullCheckOffset;
+
+    /**
      * Specifies how {@code long} and {@code double} constants are to be stored
      * in {@linkplain CiFrame frames}. This is useful for VMs such as HotSpot
      * where convention the interpreter uses is that the second local
@@ -111,6 +116,7 @@ public class CiTarget {
              int stackAlignment,
              int pageSize,
              int cacheAlignment,
+             int nullCheckOffset,
              boolean inlineObjects,
              boolean debugInfoDoubleWordsInSecondSlot,
              boolean invokeSnippetAfterArguments) {
@@ -127,6 +133,7 @@ public class CiTarget {
         this.stackAlignment = stackAlignment;
         this.stackBias = 0; // TODO: configure with param once SPARC port exists
         this.cacheAlignment = cacheAlignment;
+        this.nullCheckOffset = nullCheckOffset;
         this.inlineObjects = inlineObjects;
         this.spillSlotsPerKindMap = new int[CiKind.values().length];
         this.debugInfoDoubleWordsInSecondSlot = debugInfoDoubleWordsInSecondSlot;
