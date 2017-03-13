@@ -447,24 +447,22 @@ public class AMD64LIRGenerator extends LIRGenerator {
             preGCWriteBarrier(addr, false, null);
         }
 
-        CiValue pointer = newVariable(compilation.target.wordKind);
-        lir.lea(addr, pointer);
         CiValue result = createResultVariable(x);
         CiValue resultReg = AMD64.rax.asValue(dataKind);
         if (dataKind.isObject()) {
-            lir.casObj(pointer, expectedValue, newValue);
+            lir.casObj(addr, expectedValue, newValue);
         } else if (dataKind.isInt()) {
-            lir.casInt(pointer, expectedValue, newValue);
+            lir.casInt(addr, expectedValue, newValue);
         } else {
             assert dataKind.isLong();
-            lir.casLong(pointer, expectedValue, newValue);
+            lir.casLong(addr, expectedValue, newValue);
         }
 
         lir.move(resultReg, result);
 
         if (dataKind.isObject()) { // Write-barrier needed for Object fields.
             // Seems to be precise
-            postGCWriteBarrier(pointer, newValue);
+            postGCWriteBarrier(addr, newValue);
         }
     }
 
@@ -494,20 +492,17 @@ public class AMD64LIRGenerator extends LIRGenerator {
         CiValue cmp = force(x.argumentAt(3), AMD64.rax.asValue(kind));
         val.loadItem();
 
-        CiValue pointer = newVariable(compilation.target.wordKind);
-        lir.lea(addr, pointer);
-
         if (kind.isObject()) { // Write-barrier needed for Object fields.
             // Do the pre-write barrier : if any.
-            preGCWriteBarrier(pointer, false, null);
+            preGCWriteBarrier(addr, false, null);
         }
 
         if (kind.isObject()) {
-            lir.casObj(pointer, cmp, val.result());
+            lir.casObj(addr, cmp, val.result());
         } else if (kind.isInt()) {
-            lir.casInt(pointer, cmp, val.result());
+            lir.casInt(addr, cmp, val.result());
         } else if (kind.isLong()) {
-            lir.casLong(pointer, cmp, val.result());
+            lir.casLong(addr, cmp, val.result());
         } else {
             Util.shouldNotReachHere();
         }
@@ -517,7 +512,7 @@ public class AMD64LIRGenerator extends LIRGenerator {
         lir.cmove(Condition.EQ, CiConstant.INT_1, CiConstant.INT_0, result);
         if (kind.isObject()) { // Write-barrier needed for Object fields.
             // Seems to be precise
-            postGCWriteBarrier(pointer, val.result());
+            postGCWriteBarrier(addr, val.result());
         }
     }
 

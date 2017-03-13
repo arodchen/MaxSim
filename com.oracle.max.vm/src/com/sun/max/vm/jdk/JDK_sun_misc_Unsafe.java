@@ -587,21 +587,31 @@ final class JDK_sun_misc_Unsafe {
      */
     @SUBSTITUTE(optional = true)
     public void copyMemory(Object srcBase, long srcOffset,
-                                  Object destBase, long destOffset,
-                                  long bytes) {
-        Pointer src;
+                           Object destBase, long destOffset,
+                           long bytes) {
+        Pointer srcB;
+        Offset srcO;
+        Pointer destB;
+        Offset destO;
         if (srcBase == null) {
-            src = Pointer.fromLong(srcOffset);
+            srcB = Pointer.fromLong(srcOffset);
+            srcO = Offset.zero();
         } else {
-            src = Reference.fromJava(srcBase).toOrigin().plus(srcOffset);
+            srcB = Reference.fromJava(srcBase).toOrigin();
+            srcO = Offset.fromLong(srcOffset);
         }
-        Pointer dest;
         if (destBase == null) {
-            dest = Pointer.fromLong(destOffset);
+            destB = Pointer.fromLong(destOffset);
+            destO = Offset.zero();
         } else {
-            dest = Reference.fromJava(destBase).toOrigin().plus(destOffset);
+            destB = Reference.fromJava(destBase).toOrigin();
+            destO = Offset.fromLong(destOffset);
         }
-        Memory.copyBytes(src, dest, Size.fromLong(bytes));
+        if (srcO.isZero() && destO.isZero()) {
+            Memory.copyBytes(srcB, destB, Size.fromLong(bytes));
+        } else {
+            Memory.copyBytes(srcB, srcO, destB, destO, Size.fromLong(bytes));
+        }
     }
 
     /**
