@@ -95,6 +95,15 @@ public final class HostedBootClassLoader extends HostedClassLoader {
     }
 
     /**
+     * Adds a class whose static nested classes should be loaded into the {@link ClassRegistry#BOOT_CLASS_REGISTRY}.
+     *
+     * @param className the name of the class whose nested classes should be loaded
+     */
+    public static void forceStaticNestedOfClass(String className) {
+        forcedStaticNestedOfClasses.add(className);
+    }
+
+    /**
      * Adds the name of package whose constituent classes must not be loaded into the VM class registry. Calling
      * {@link #loadClass(String, boolean)} for a class in the named package will return null.
      *
@@ -131,6 +140,14 @@ public final class HostedBootClassLoader extends HostedClassLoader {
             return isOmittedType(className.substring(0, className.lastIndexOf('$')));
         }
         return false;
+    }
+
+    /**
+     * Determines if a class is a class whose static nested classes should be loaded into the
+     * {@link ClassRegistry#BOOT_CLASS_REGISTRY}.
+     */
+    public static boolean isForcedStaticNestedOfClass(String className) {
+        return forcedStaticNestedOfClasses.contains(className);
     }
 
     /**
