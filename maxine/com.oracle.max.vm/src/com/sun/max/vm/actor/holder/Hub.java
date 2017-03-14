@@ -38,7 +38,6 @@ import com.sun.max.vm.compiler.target.*;
 import com.sun.max.vm.heap.*;
 import com.sun.max.vm.layout.*;
 import com.sun.max.vm.layout.Layout.Category;
-import com.sun.max.vm.maxsim.MaxSimInterfaceHelpers;
 import com.sun.max.vm.monitor.modal.modehandlers.lightweight.biased.*;
 import com.sun.max.vm.object.*;
 import com.sun.max.vm.reference.*;
@@ -250,6 +249,8 @@ public abstract class Hub extends Hybrid {
         this.specificLayout = Layout.tupleLayout();
         this.layoutCategory = Layout.Category.TUPLE;
         this.classActor = classActor;
+        this.maxsimHubTag = MaxSimTaggingScheme.getMaxSimHubTag(this);
+        this.maxsimHubType = MaxSimInterface.HubType.HUB_TYPE_TUPLE_VALUE;
         this.iTableStartIndex = firstWordIndex() + vTableLength;
         this.iTableLength = 1;
         this.mTableStartIndex = firstIntIndex();
@@ -258,10 +259,6 @@ public abstract class Hub extends Hybrid {
         this.referenceMapLength = referenceMap.numberOfEntries();
         this.isJLRReference = false;
         this.isStatic = true;
-        if (MaxSimInterfaceHelpers.isMaxSimEnabled()) {
-            this.maxsimHubTag = MaxSimTaggingScheme.getMaxSimHubTag(this);
-            this.maxsimHubType = MaxSimInterface.HubType.HUB_TYPE_TUPLE_VALUE;
-        }
     }
 
     /**
@@ -280,22 +277,19 @@ public abstract class Hub extends Hybrid {
 
         if (layoutCategory == Category.ARRAY) {
             componentHub = classActor.componentClassActor().dynamicHub();
-            if (MaxSimInterfaceHelpers.isMaxSimEnabled()) {
-                if (componentHub != null) {
-                    maxsimHubType = MaxSimInterface.HubType.HUB_TYPE_ARRAY_OF_REFERENCES_VALUE;
-                } else {
-                    maxsimHubType = MaxSimInterface.HubType.HUB_TYPE_ARRAY_OF_PRIMITIVES_VALUE;
-                }
+            if (componentHub != null) {
+                maxsimHubType = MaxSimInterface.HubType.HUB_TYPE_ARRAY_OF_REFERENCES_VALUE;
+            } else {
+                maxsimHubType = MaxSimInterface.HubType.HUB_TYPE_ARRAY_OF_PRIMITIVES_VALUE;
             }
             assert componentHub != null || classActor.componentClassActor().kind != Kind.REFERENCE;
         } else {
+            maxsimHubType = MaxSimInterface.HubType.HUB_TYPE_TUPLE_VALUE;
             componentHub = null;
-            if (MaxSimInterfaceHelpers.isMaxSimEnabled()) {
-                maxsimHubType = MaxSimInterface.HubType.HUB_TYPE_TUPLE_VALUE;
-            }
         }
 
         this.classActor = classActor;
+        this.maxsimHubTag = MaxSimTaggingScheme.getMaxSimHubTag(this);
         this.iTableStartIndex = firstWordIndex() + vTableLength;
         this.iTableLength = getITableLength(superClassActorIds, allInterfaceActors);
         this.mTableStartIndex = firstIntIndex();
@@ -304,9 +298,6 @@ public abstract class Hub extends Hybrid {
         this.referenceMapLength = referenceMap.numberOfEntries();
         this.isJLRReference = isSupertypeOf(JLR_REFERENCE, classActor);
         this.isStatic = false;
-        if (MaxSimInterfaceHelpers.isMaxSimEnabled()) {
-            this.maxsimHubTag = MaxSimTaggingScheme.getMaxSimHubTag(this);
-        }
     }
 
     private static boolean isSupertypeOf(ClassActor c, ClassActor sub) {
