@@ -43,6 +43,8 @@ import com.sun.max.vm.layout.*;
 import com.sun.max.vm.log.*;
 import com.sun.max.vm.log.VMLog.Record;
 import com.sun.max.vm.log.hosted.*;
+import com.sun.max.vm.maxsim.MaxSimInterfaceHelpers;
+import com.sun.max.vm.maxsim.MaxSimPlatform;
 import com.sun.max.vm.monitor.*;
 import com.sun.max.vm.monitor.modal.sync.*;
 import com.sun.max.vm.object.*;
@@ -85,7 +87,7 @@ public final class Heap {
      */
     private static Address reservedVirtualSpace = Address.zero();
 
-    private static final Size MIN_HEAP_SIZE = Size.M.times(4); // To be adjusted
+    private static final Size MIN_HEAP_SIZE = Size.M.times(4).times(MaxSimInterfaceHelpers.getLayoutScaleFactor()); // To be adjusted
 
     /**
      * If initial size not specified, then it is maxSize / DEFAULT_INIT_HEAP_SIZE_RATIO.
@@ -135,11 +137,11 @@ public final class Heap {
      */
     public static class HeapSizeInfo {
         protected Size getInitialSize() {
-            return initialHeapSizeOption.getValue();
+            return initialHeapSizeOption.getValue().times(MaxSimInterfaceHelpers.getLayoutScaleFactor());
         }
 
         protected Size getMaxSize() {
-            return maxHeapSizeOption.getValue();
+            return maxHeapSizeOption.getValue().times(MaxSimInterfaceHelpers.getLayoutScaleFactor());
         }
     }
 

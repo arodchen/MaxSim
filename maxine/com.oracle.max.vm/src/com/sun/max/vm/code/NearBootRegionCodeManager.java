@@ -28,6 +28,8 @@ import com.sun.max.program.*;
 import com.sun.max.unsafe.*;
 import com.sun.max.vm.*;
 import com.sun.max.vm.heap.*;
+import com.sun.max.vm.maxsim.MaxSimInterface;
+import com.sun.max.vm.maxsim.MaxSimMediator;
 
 /**
  * A code manager that reserves and allocates virtual memory immediately after the boot region.
@@ -57,5 +59,7 @@ public class NearBootRegionCodeManager extends CodeManager {
             throw ProgramError.unexpected("could not allocate " + cr.regionName());
         }
         cr.bind(address, size);
+        MaxSimMediator.registerAddressRange(address, address.plus(size),
+            MaxSimInterface.AddressRangeType.CODE_ADDRESS_RANGE_VALUE);
     }
 }

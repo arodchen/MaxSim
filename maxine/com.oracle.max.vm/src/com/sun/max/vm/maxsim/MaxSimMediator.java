@@ -25,7 +25,9 @@ import com.sun.max.annotate.C_FUNCTION;
 import com.sun.max.annotate.INTRINSIC;
 import com.sun.max.annotate.INLINE;
 import com.sun.max.unsafe.*;
+import com.sun.max.vm.actor.holder.Hub;
 import com.sun.max.vm.intrinsics.MaxineIntrinsicIDs;
+import com.sun.max.vm.layout.Layout;
 
 import java.lang.reflect.Array;
 
@@ -70,5 +72,39 @@ public class MaxSimMediator {
         maxsimMagicOp(
             Address.fromLong(MaxSimInterface.MaxSimMagicOpcodes.MAXSIM_M_OPC_DUMP_EVENTUAL_STATS_VALUE),
             Address.fromInt(maxineVMOperationMode));
+    }
+
+    @INLINE
+    public static void beginLoopFiltering(Address address) {
+        maxsimMagicOp( Address.fromLong(MaxSimInterface.MaxSimMagicOpcodes.MAXSIM_M_OPC_FILTER_LOOP_BEGIN_VALUE), address);
+    }
+
+    @INLINE
+    public static void endLoopFiltering() {
+        MaxSimMediator.maxsimMagicOp(Address.fromLong(MaxSimInterface.MaxSimMagicOpcodes.MAXSIM_M_OPC_FILTER_LOOP_END_VALUE));
+    }
+
+    @INLINE
+    public static void reportMaxSimHubTypeOffsetToZSim() {
+        maxsimMagicOp(
+            Address.fromLong(MaxSimInterface.MaxSimMagicOpcodes.MAXSIM_M_OPC_REPORT_HUB_TYPE_OFFSET_VALUE),
+            Address.fromInt(Hub.maxsimHubTypeFieldOffset()));
+    }
+
+    @INLINE
+    public static void reportArrayFirstElemOffsetToZSim() {
+        maxsimMagicOp(
+            Address.fromLong(MaxSimInterface.MaxSimMagicOpcodes.MAXSIM_M_OPC_REPORT_ARRAY_FIRST_ELEM_OFFSET_VALUE),
+            Address.fromInt(Layout.charArrayLayout().getElementOffsetFromOrigin(0).toInt()));
+    }
+
+    @INLINE
+    public static void registerAddressRange(Address lo, Address hi, int type) {
+        maxsim_j_register_address_range(lo.toLong(), hi.toLong(), type);
+    }
+
+    @INLINE
+    public static void deregisterAddressRange(Address lo, Address hi, int type) {
+        maxsim_j_deregister_address_range(lo.toLong(), hi.toLong(), type);
     }
 }

@@ -32,6 +32,8 @@ import com.sun.max.vm.layout.*;
 import com.sun.max.vm.layout.Layout.HeaderField;
 import com.sun.max.vm.layout.SpecificLayout.ObjectCellVisitor;
 import com.sun.max.vm.layout.SpecificLayout.ObjectMirror;
+import com.sun.max.vm.maxsim.MaxSimInterfaceHelpers;
+import com.sun.max.vm.maxsim.MaxSimPlatform;
 import com.sun.max.vm.object.*;
 import com.sun.max.vm.reference.*;
 import com.sun.max.vm.type.*;
@@ -70,7 +72,7 @@ public class OhmGeneralLayout extends AbstractLayout implements GeneralLayout {
     final int miscOffset;
 
     public OhmGeneralLayout() {
-        this.miscOffset = hubOffset + Word.size();
+        this.miscOffset = hubOffset + MaxSimInterfaceHelpers.getLayoutScaleRefFactor() * Word.size();
     }
 
     @INLINE

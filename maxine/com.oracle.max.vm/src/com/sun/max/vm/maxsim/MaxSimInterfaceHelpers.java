@@ -28,15 +28,43 @@ public class MaxSimInterfaceHelpers {
         return MaxSimInterface.MaxSimConfig.getDefaultInstance().getIsMaxSimEnabled();
     }
 
+    @FOLD
+    static public int getLayoutScaleFactor() {
+        return MaxSimInterface.MaxSimConfig.getDefaultInstance().getLayoutScaleFactor();
+    }
+
+    @FOLD
+    static public int getLayoutScaleRefFactor() {
+        return MaxSimInterface.MaxSimConfig.getDefaultInstance().getLayoutScaleRefFactor();
+    }
+
+    @FOLD
+    static public boolean isClassIDTagging() {
+        return (MaxSimInterface.MaxSimConfig.getDefaultInstance().getPointerTaggingType() ==
+            MaxSimInterface.PointerTaggingType.CLASS_ID_TAGGING);
+    }
+
     static public boolean isClassIDTagging(MaxSimInterface.PointerTaggingType pointerTaggingType) {
-        return pointerTaggingType == MaxSimInterface.PointerTaggingType.CLASS_ID_TAGGING;
+        return (pointerTaggingType == MaxSimInterface.PointerTaggingType.CLASS_ID_TAGGING);
+    }
+
+    @FOLD
+    static public boolean isAllocationSiteIDTagging() {
+        return (MaxSimInterface.MaxSimConfig.getDefaultInstance().getPointerTaggingType() ==
+            MaxSimInterface.PointerTaggingType.ALLOC_SITE_ID_TAGGING);
     }
 
     static public boolean isAllocationSiteIDTagging(MaxSimInterface.PointerTaggingType pointerTaggingType) {
-        return pointerTaggingType == MaxSimInterface.PointerTaggingType.ALLOC_SITE_ID_TAGGING;
+        return (pointerTaggingType == MaxSimInterface.PointerTaggingType.ALLOC_SITE_ID_TAGGING);
+    }
+
+    @FOLD
+    static public boolean isArrayLengthTagging() {
+        return (MaxSimInterface.MaxSimConfig.getDefaultInstance().getPointerTaggingType() ==
+            MaxSimInterface.PointerTaggingType.ARRAY_LENGTH_TAGGING);
     }
 
     static public boolean isArrayLengthTagging(MaxSimInterface.PointerTaggingType pointerTaggingType) {
-        return pointerTaggingType == MaxSimInterface.PointerTaggingType.ARRAY_LENGTH_TAGGING;
+        return (pointerTaggingType == MaxSimInterface.PointerTaggingType.ARRAY_LENGTH_TAGGING);
     }
 }

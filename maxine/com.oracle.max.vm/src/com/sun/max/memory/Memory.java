@@ -31,6 +31,9 @@ import com.sun.max.annotate.*;
 import com.sun.max.program.*;
 import com.sun.max.unsafe.*;
 import com.sun.max.vm.*;
+import com.sun.max.vm.maxsim.MaxSimInterfaceHelpers;
+import com.sun.max.vm.maxsim.MaxSimMediator;
+import com.sun.max.vm.maxsim.MaxSimPlatform;
 import com.sun.max.vm.runtime.*;
 
 /**
@@ -148,16 +151,28 @@ public final class Memory {
 
     @NO_SAFEPOINT_POLLS("speed")
     public static void setWords(Pointer pointer, int numberOfWords, Word value) {
+        if (MaxSimInterfaceHelpers.getLayoutScaleFactor() != MaxSimPlatform.LSF_ONE) {
+            MaxSimMediator.beginLoopFiltering(pointer.asAddress());
+        }
         for (int i = 0; i < (numberOfWords * Word.size()); i += Word.size()) {
             pointer.writeWord(i, value);
+        }
+        if (MaxSimInterfaceHelpers.getLayoutScaleFactor() != MaxSimPlatform.LSF_ONE) {
+            MaxSimMediator.endLoopFiltering();
         }
     }
 
     @NO_SAFEPOINT_POLLS("speed, and used in code that shouldn't be interrupted by GC")
     public static void clearWords(Pointer start, int length) {
         FatalError.check(start.isWordAligned(), "Can only zero word-aligned region");
+        if (MaxSimInterfaceHelpers.getLayoutScaleFactor() != MaxSimPlatform.LSF_ONE) {
+            MaxSimMediator.beginLoopFiltering(start.asAddress());
+        }
         for (int i = 0; i < length; i++) {
             start.setWord(i, Address.zero());
+        }
+        if (MaxSimInterfaceHelpers.getLayoutScaleFactor() != MaxSimPlatform.LSF_ONE) {
+            MaxSimMediator.endLoopFiltering();
         }
     }
 
@@ -197,9 +212,15 @@ public final class Memory {
     public static void copyBytes(Pointer fromPointer, Pointer toPointer, Size numberOfBytes) {
         Offset i = Offset.zero();
         Size wordBounds = numberOfBytes.alignDown(Word.size());
+        if (MaxSimInterfaceHelpers.getLayoutScaleFactor() != MaxSimPlatform.LSF_ONE) {
+            MaxSimMediator.beginLoopFiltering(toPointer.asAddress());
+        }
         while (i.lessThan(wordBounds.asOffset())) {
             toPointer.writeWord(i, fromPointer.readWord(i));
             i = i.plus(Word.size());
+        }
+        if (MaxSimInterfaceHelpers.getLayoutScaleFactor() != MaxSimPlatform.LSF_ONE) {
+            MaxSimMediator.endLoopFiltering();
         }
         while (i.lessThan(numberOfBytes.asOffset())) {
             toPointer.writeByte(i, fromPointer.readByte(i));
@@ -214,9 +235,15 @@ public final class Memory {
                                  Size numberOfBytes) {
         Offset i = Offset.zero();
         Size wordBounds = numberOfBytes.alignDown(Word.size());
+        if (MaxSimInterfaceHelpers.getLayoutScaleFactor() != MaxSimPlatform.LSF_ONE) {
+            MaxSimMediator.beginLoopFiltering(toPointer.asAddress());
+        }
         while (i.lessThan(wordBounds.asOffset())) {
             toPointer.writeWord(toOffset.plus(i), fromPointer.readWord(fromOffset.plus(i)));
             i = i.plus(Word.size());
+        }
+        if (MaxSimInterfaceHelpers.getLayoutScaleFactor() != MaxSimPlatform.LSF_ONE) {
+            MaxSimMediator.endLoopFiltering();
         }
         while (i.lessThan(numberOfBytes.asOffset())) {
             toPointer.writeByte(toOffset.plus(i), fromPointer.readByte(fromOffset.plus(i)));

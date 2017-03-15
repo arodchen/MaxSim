@@ -27,6 +27,7 @@ import com.sun.max.unsafe.*;
 import com.sun.max.vm.actor.holder.*;
 import com.sun.max.vm.actor.member.*;
 import com.sun.max.vm.layout.*;
+import com.sun.max.vm.maxsim.MaxSimPlatform;
 import com.sun.max.vm.object.*;
 import com.sun.max.vm.type.*;
 import com.sun.max.vm.value.*;
@@ -60,7 +61,8 @@ public final class OhmHybridLayout extends OhmArrayLayout implements HybridLayou
     }
 
     public Size layoutFields(ClassActor superClassActor, FieldActor[] fieldActors) {
-        final Size tupleSize = tupleLayout.layoutFields(superClassActor, fieldActors, headerSize());
+        final Size tupleSize = tupleLayout.layoutFields(superClassActor, fieldActors, headerSize(),
+            MaxSimPlatform.LSF_ONE, MaxSimPlatform.LSF_ONE);
         return getArraySize(firstAvailableWordArrayIndex(tupleSize));
     }
 

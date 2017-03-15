@@ -52,6 +52,7 @@ import com.sun.max.vm.reference.*;
 import com.sun.max.vm.runtime.*;
 import com.sun.max.vm.thread.*;
 import com.sun.max.vm.ti.*;
+import com.sun.max.vm.maxsim.*;
 
 /**
  * A simple semispace scavenger heap.
@@ -467,6 +468,8 @@ public class SemiSpaceHeapScheme extends HeapSchemeWithTLAB implements CellVisit
             space.setStart(base);
             space.mark.set(base); // debugging
             space.setSize(size);
+            MaxSimMediator.registerAddressRange(base, base.plus(size),
+                MaxSimInterface.AddressRangeType.HEAP_ADDRESS_RANGE_VALUE);
         }
         return base;
     }
@@ -476,6 +479,8 @@ public class SemiSpaceHeapScheme extends HeapSchemeWithTLAB implements CellVisit
      * Sets the region start to zero but does not change the size.
      */
     private static void deallocateSpace(MemoryRegion space) {
+        MaxSimMediator.deregisterAddressRange(space.start(), space.start().plus(space.size()),
+            MaxSimInterface.AddressRangeType.HEAP_ADDRESS_RANGE_VALUE);
         VirtualMemory.deallocate(space.start(), space.size(), VirtualMemory.Type.HEAP);
         space.setStart(Address.zero());
     }

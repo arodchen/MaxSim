@@ -29,6 +29,8 @@ import com.sun.max.vm.actor.holder.*;
 import com.sun.max.vm.actor.member.*;
 import com.sun.max.vm.layout.*;
 import com.sun.max.vm.layout.Layout.HeaderField;
+import com.sun.max.vm.maxsim.MaxSimInterfaceHelpers;
+import com.sun.max.vm.maxsim.MaxSimPlatform;
 import com.sun.max.vm.object.*;
 import com.sun.max.vm.type.*;
 import com.sun.max.vm.value.*;
@@ -56,7 +58,9 @@ public final class OhmTupleLayout extends OhmGeneralLayout implements TupleLayou
         return hub.tupleSize;
     }
 
-    private final int headerSize = 2 * Word.size();
+    private final int headerSize =
+        (MaxSimInterfaceHelpers.getLayoutScaleRefFactor() * Word.size()) +
+        (MaxSimInterfaceHelpers.getLayoutScaleFactor() * Word.size());
 
     @INLINE
     public int headerSize() {
@@ -101,8 +105,10 @@ public final class OhmTupleLayout extends OhmGeneralLayout implements TupleLayou
                     break;
                 }
                 if (fieldActor.offset() == INVALID_OFFSET && fieldActor.kind.width.numberOfBytes == scale) {
+                    int fieldScaleFactor = (fieldActor.kind == Kind.REFERENCE) ?
+                        MaxSimInterfaceHelpers.getLayoutScaleRefFactor() : MaxSimInterfaceHelpers.getLayoutScaleFactor();
                     fieldActor.setOffset(currentOffset);
-                    currentOffset += scale;
+                    currentOffset += fieldScaleFactor * scale;
                     assert nBytesToFill >= 0;
                     if (nBytesToFill == 0) {
                         assert currentOffset % nAlignmentBytes == 0;
@@ -114,10 +120,9 @@ public final class OhmTupleLayout extends OhmGeneralLayout implements TupleLayou
         }
         return Ints.roundUp(currentOffset, nAlignmentBytes);
     }
-
-    Size layoutFields(ClassActor superClassActor, FieldActor[] fieldActors, int headerSize) {
+    Size layoutFields(ClassActor superClassActor, FieldActor[] fieldActors, int headerSize, int scaleFactor, int scaleRefFactor) {
         setInvalidOffsets(fieldActors);
-        final int nAlignmentBytes = Word.size();
+        final int nAlignmentBytes = MaxSimInterfaceHelpers.getLayoutScaleFactor() * Word.size();
         int offset;
         if (superClassActor == null || superClassActor.typeDescriptor == JavaTypeDescriptor.OBJECT || superClassActor.typeDescriptor == JavaTypeDescriptor.HYBRID) {
             offset = headerSize;
@@ -130,8 +135,10 @@ public final class OhmTupleLayout extends OhmGeneralLayout implements TupleLayou
         for (int scale = 8; scale >= 1; scale >>= 1) {
             for (FieldActor fieldActor : fieldActors) {
                 if (fieldActor.offset() == INVALID_OFFSET && fieldActor.kind.width.numberOfBytes == scale) {
+                    int fieldScaleFactor = (fieldActor.kind == Kind.REFERENCE) ?
+                        scaleRefFactor : scaleFactor;
                     fieldActor.setOffset(offset);
-                    offset += scale;
+                    offset += (fieldScaleFactor * scale);
                 }
             }
         }
@@ -141,7 +148,8 @@ public final class OhmTupleLayout extends OhmGeneralLayout implements TupleLayou
     }
 
     public Size layoutFields(ClassActor superClassActor, FieldActor[] fieldActors) {
-        return layoutFields(superClassActor, fieldActors, headerSize());
+        return layoutFields(superClassActor, fieldActors, headerSize(), MaxSimInterfaceHelpers.getLayoutScaleFactor(),
+            MaxSimInterfaceHelpers.getLayoutScaleRefFactor());
     }
 
     @HOSTED_ONLY

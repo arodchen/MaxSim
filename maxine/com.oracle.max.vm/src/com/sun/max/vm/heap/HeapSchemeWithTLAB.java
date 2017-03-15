@@ -38,6 +38,7 @@ import com.sun.max.vm.intrinsics.*;
 import com.sun.max.vm.layout.*;
 import com.sun.max.vm.log.VMLog.Record;
 import com.sun.max.vm.log.hosted.*;
+import com.sun.max.vm.maxsim.MaxSimInterfaceHelpers;
 import com.sun.max.vm.object.*;
 import com.sun.max.vm.reference.*;
 import com.sun.max.vm.run.java.JavaRunScheme;
@@ -102,7 +103,7 @@ public abstract class HeapSchemeWithTLAB extends HeapSchemeAdaptor {
     /**
      * A VM option for specifying the size of a TLAB. Default is 64 K.
      */
-    private static final VMSizeOption tlabSizeOption = register(new VMSizeOption("-XX:TLABSize=", Size.K.times(64),
+    private static final VMSizeOption tlabSizeOption = register(new VMSizeOption("-XX:TLABSize=", Size.K.times(MaxSimInterfaceHelpers.getLayoutScaleFactor() * 64),
         "The size of thread-local allocation buffers."), MaxineVM.Phase.PRISTINE);
 
     /**

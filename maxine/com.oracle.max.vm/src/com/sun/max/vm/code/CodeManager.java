@@ -37,10 +37,13 @@ import com.sun.max.vm.compiler.target.TargetBundleLayout.ArrayField;
 import com.sun.max.vm.heap.*;
 import com.sun.max.vm.heap.debug.*;
 import com.sun.max.vm.layout.*;
+import com.sun.max.vm.maxsim.MaxSimInterfaceHelpers;
+import com.sun.max.vm.maxsim.MaxSimPlatform;
 import com.sun.max.vm.reference.*;
 import com.sun.max.vm.runtime.*;
 import com.sun.max.vm.tele.*;
 import com.sun.max.vm.type.*;
+import com.sun.max.vm.maxsim.MaxSimInterface;
 
 /**
  * Target machine code cache management.
@@ -420,10 +423,23 @@ public abstract class CodeManager {
 
     void visitAllIn(CellVisitor v, CodeRegion cr) {
         Pointer firstCell = cr.gcstart().asPointer();
-        Pointer cell = firstCell;
+        Pointer nextCell, cell = firstCell;
         while (cell.lessThan(cr.getAllocationMark())) {
             cell = DebugHeap.checkDebugCellTag(firstCell, cell);
-            cell = v.visitCell(cell);
+            nextCell = v.visitCell(cell);
+            if (MaxSimInterfaceHelpers.getLayoutScaleFactor() != MaxSimPlatform.LSF_ONE) {
+                final Pointer nextCellFirstElementOffset = cell.plus(Layout.firstElementIndex() * Word.size());
+                final Pointer origin = Layout.cellToOrigin(cell);
+                final Hub hub = Layout.getHub(origin);
+                int length = Layout.readArrayLength(origin);
+                if (hub.maxsimHubType == MaxSimInterface.HubType.HUB_TYPE_ARRAY_OF_REFERENCES_VALUE) {
+                    cell = nextCellFirstElementOffset.plus(length * Word.size());
+                } else {
+                    cell = nextCellFirstElementOffset.plus(length).alignUp(Word.size()).asPointer();
+                }
+            } else {
+                cell = nextCell;
+            }
         }
     }
 

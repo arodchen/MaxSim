@@ -43,6 +43,9 @@ import com.sun.max.vm.classfile.constant.*;
 import com.sun.max.vm.heap.*;
 import com.sun.max.vm.jdk.*;
 import com.sun.max.vm.layout.*;
+import com.sun.max.vm.maxsim.MaxSimInterface;
+import com.sun.max.vm.maxsim.MaxSimInterfaceHelpers;
+import com.sun.max.vm.maxsim.MaxSimPlatform;
 import com.sun.max.vm.monitor.*;
 import com.sun.max.vm.object.*;
 import com.sun.max.vm.reference.*;
@@ -50,6 +53,7 @@ import com.sun.max.vm.runtime.*;
 import com.sun.max.vm.thread.*;
 import com.sun.max.vm.type.*;
 import com.sun.max.vm.value.*;
+import com.sun.max.vm.maxsim.MaxSimMediator;
 
 /**
  * Template from which (parts of) {@link JniFunctions} is generated. The static initializer of
@@ -1657,8 +1661,15 @@ public final class JniFunctionsSource {
     private static Pointer GetPrimitiveArrayCritical(Pointer env, JniHandle array, Pointer isCopy) {
         final Object arrayObject = array.unhand();
         if (Heap.useDirectPointer(arrayObject)) {
+            Pointer pBegin = Reference.fromJava(arrayObject).toOrigin();
+            Size arraySize = Layout.size(Reference.fromJava(arrayObject).toOrigin());
+            Pointer pEnd = pBegin.plus(arraySize);
+            Pointer p = pBegin.plus(Layout.byteArrayLayout().getElementOffsetFromOrigin(0));
             setCopyPointer(isCopy, false);
-            return Reference.fromJava(arrayObject).toOrigin().plus(Layout.byteArrayLayout().getElementOffsetFromOrigin(0));
+            if (MaxSimInterfaceHelpers.getLayoutScaleFactor() != MaxSimPlatform.LSF_ONE) {
+                MaxSimMediator.registerAddressRange(p, pEnd, MaxSimInterface.AddressRangeType.ARRAY_CRITICAL_ADDRESS_RANGE_VALUE);
+            }
+            return p;
         }
 
         if (arrayObject instanceof boolean[]) {
@@ -1685,6 +1696,13 @@ public final class JniFunctionsSource {
     private static void ReleasePrimitiveArrayCritical(Pointer env, JniHandle array, Pointer elements, int mode) {
         final Object arrayObject = array.unhand();
         if (Heap.releasedDirectPointer(arrayObject)) {
+            Pointer pBegin = Reference.fromJava(arrayObject).toOrigin();
+            Size arraySize = Layout.size(Reference.fromJava(arrayObject).toOrigin());
+            Pointer pEnd = pBegin.plus(arraySize);
+            Pointer p = pBegin.plus(Layout.byteArrayLayout().getElementOffsetFromOrigin(0));
+            if (MaxSimInterfaceHelpers.getLayoutScaleFactor() != MaxSimPlatform.LSF_ONE) {
+                MaxSimMediator.deregisterAddressRange(p, pEnd, MaxSimInterface.AddressRangeType.ARRAY_CRITICAL_ADDRESS_RANGE_VALUE);
+            }
             return;
         }
         if (arrayObject instanceof boolean[]) {

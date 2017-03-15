@@ -44,6 +44,9 @@ public class MaxSimPlatform {
      * Instructs MaxSim to exit fast forwarding mode.
      */
     public static synchronized void exitMaxSimFastForwardingMode() {
+        // report Maxine parameters
+        MaxSimMediator.reportMaxSimHubTypeOffsetToZSim();
+        MaxSimMediator.reportArrayFirstElemOffsetToZSim();
         MaxSimMediator.exitZSimFastForwardingMode();
         isMaxSimFastForwarding = false;
         MaxSimMediator.dumpEventualStats(
@@ -59,4 +62,9 @@ public class MaxSimPlatform {
         isMaxSimFastForwarding = true;
         MaxSimMediator.enterZSimFastForwardingMode();
     }
+
+    /**
+     * Layout scale factor equal to one.
+     */
+    public static final int LSF_ONE = 1;
 }

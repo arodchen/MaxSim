@@ -29,6 +29,8 @@ import com.sun.max.unsafe.*;
 import com.sun.max.vm.actor.holder.*;
 import com.sun.max.vm.layout.*;
 import com.sun.max.vm.layout.Layout.HeaderField;
+import com.sun.max.vm.maxsim.MaxSimInterfaceHelpers;
+import com.sun.max.vm.maxsim.MaxSimPlatform;
 import com.sun.max.vm.object.*;
 import com.sun.max.vm.reference.*;
 import com.sun.max.vm.type.*;
@@ -57,8 +59,8 @@ public class OhmArrayLayout extends OhmGeneralLayout implements ArrayLayout {
     }
 
     OhmArrayLayout(Kind elementKind) {
-        lengthOffset = miscOffset + Word.size();
-        headerSize = lengthOffset + Word.size();
+        lengthOffset = miscOffset + MaxSimInterfaceHelpers.getLayoutScaleFactor() * Word.size();
+        headerSize = lengthOffset + MaxSimInterfaceHelpers.getLayoutScaleFactor() * Word.size();
         this.elementKind = elementKind;
     }
 
@@ -68,7 +70,9 @@ public class OhmArrayLayout extends OhmGeneralLayout implements ArrayLayout {
 
     @INLINE
     public final Size getArraySize(Kind kind, int length) {
-        return Size.fromInt(kind.width.numberOfBytes).times(length).plus(headerSize).wordAligned();
+        int scaleFactor = (kind == Kind.REFERENCE) ?
+            MaxSimInterfaceHelpers.getLayoutScaleRefFactor() : MaxSimInterfaceHelpers.getLayoutScaleFactor();
+        return Size.fromInt(scaleFactor * kind.width.numberOfBytes).times(length).plus(headerSize).alignUp(Word.size() * MaxSimInterfaceHelpers.getLayoutScaleFactor());
     }
 
     @Override
@@ -131,6 +135,13 @@ public class OhmArrayLayout extends OhmGeneralLayout implements ArrayLayout {
 
     @INLINE
     public final Size getArraySize(int length) {
+        int scaleFactor = (elementKind == Kind.REFERENCE) ?
+            MaxSimInterfaceHelpers.getLayoutScaleRefFactor() : MaxSimInterfaceHelpers.getLayoutScaleFactor();
+        return getElementOffsetInCell(scaleFactor * length).aligned(MaxSimInterfaceHelpers.getLayoutScaleFactor()).asSize();
+    }
+
+    @INLINE
+    public final Size getArraySizeUnscaled(int length) {
         return getElementOffsetInCell(length).aligned().asSize();
     }
 
