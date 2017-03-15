@@ -317,6 +317,7 @@ message MaxineInfoDB {
   repeated MethodInfo methodInfo = 4;
   required MethodInfo bootCodeRegInfo = 5;
   required MaxSimConfig MaxSimConfig = 6;
+  required int32 nullCheckOffset = 7;
 }
 
 // Allocation profe.

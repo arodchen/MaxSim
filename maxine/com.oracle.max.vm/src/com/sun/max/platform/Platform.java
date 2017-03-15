@@ -36,6 +36,7 @@ import com.sun.max.lang.*;
 import com.sun.max.program.*;
 import com.sun.max.vm.hosted.*;
 import com.sun.max.vm.runtime.*;
+import com.sun.max.vm.maxsim.*;
 
 /**
  * Platform configuration information. This class maintains a current {@link #platform() platform} context
@@ -124,6 +125,11 @@ public final class Platform {
     public final int pageSize;
 
     /**
+     * Null check offset.
+     */
+    public final int nullCheckOffset;
+
+    /**
      * Stack bias added to the stack pointer to obtain the actual top of the stack frame.
      */
     public final int stackBias;
@@ -162,7 +168,6 @@ public final class Platform {
         int spillSlotSize = arch.wordSize;
         int cacheAlignment = dataModel.cacheAlignment;
         boolean inlineObjects = false;
-        int nullCheckOffset = 0;
         return new CiTarget(arch,
                         isMP,
                         spillSlotSize,
@@ -254,7 +259,9 @@ public final class Platform {
         this.dataModel = dataModel;
         this.pageSize = pageSize;
         this.nsig = nsig;
-
+        // Set null check offset at one reference word plus half primitive word to be able to differentiate it from hub access.
+        this.nullCheckOffset = ((MaxSimInterfaceHelpers.getLayoutScaleRefFactor() * dataModel.wordWidth.numberOfBytes) +
+            (MaxSimInterfaceHelpers.getLayoutScaleFactor()  * dataModel.wordWidth.numberOfBytes / 2));
         if (cpu == CPU.SPARCV9 && os == OS.SOLARIS) {
             this.stackBias = 2047;
         } else {
