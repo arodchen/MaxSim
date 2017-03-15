@@ -45,6 +45,9 @@ class SimpleCore : public Core {
         uint64_t phaseEndCycle; //next stopping point
         uint64_t haltedCycles;
 
+        bool isCondBrunch;
+        bool doSimulateBbl;
+
 #ifdef MA_STATS_ENABLED
         Address curBblAddr;
 #endif
@@ -66,7 +69,7 @@ class SimpleCore : public Core {
         //Simulation functions
         inline void load(Address addr, MASize_t size, Address base);
         inline void store(Address addr, MASize_t size, Address base);
-        inline void bbl(Address bblAddr, BblInfo* bblInstrs);
+        inline void bbl(THREADID tid, Address bblAddr, BblInfo* bblInstrs);
 
         static void LoadFunc(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base);
         static void StoreFunc(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base);
@@ -74,7 +77,9 @@ class SimpleCore : public Core {
         static void PredLoadFunc(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base, BOOL pred);
         static void PredStoreFunc(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base, BOOL pred);
 
-        static void BranchFunc(THREADID, ADDRINT, BOOL, ADDRINT, ADDRINT) {}
+        static void BranchFunc(THREADID tid, ADDRINT addr, BOOL taken, ADDRINT takenNpc, ADDRINT notTakenNpc) {
+            static_cast<SimpleCore*>(cores[tid])->isCondBrunch = (addr != 0);
+        }
 }  ATTR_LINE_ALIGNED; //This needs to take up a whole cache line, or false sharing will be extremely frequent
 
 #endif  // SIMPLE_CORE_H_

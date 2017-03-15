@@ -30,13 +30,14 @@
 
 #ifdef MAXSIM_ENABLED
 #include "maxsim_stats.h"
+#include "maxsim_address_space_morphing.h"
 #endif // MAXSIM_ENABLED
 
 #define DEBUG_MSG(args...)
 //#define DEBUG_MSG(args...) info(args)
 
 TimingCore::TimingCore(FilterCache* _l1i, FilterCache* _l1d, uint32_t _domain, g_string& _name)
-    : Core(_name), l1i(_l1i), l1d(_l1d), instrs(0), curCycle(0), cRec(_domain, _name) {
+    : Core(_name), l1i(_l1i), l1d(_l1d), instrs(0), curCycle(0), cRec(_domain, _name), isCondBrunch(false), doSimulateBbl(true) {
 #ifdef MA_STATS_ENABLED
     curBblAddr = UNDEF_VIRTUAL_ADDRESS;
 #endif
@@ -100,6 +101,10 @@ void TimingCore::loadAndRecord(Address addr, MASize_t size, Address base) {
     MAOffset_t offset = addr - base;
 
 #   ifdef MAXSIM_ENABLED
+    if (!doSimulateBbl) {
+        return;
+    }
+    addr = MaxSimAddressSpaceMorphing::getInst().processMAAddressAndRemap(addr, base, offset, tag);
     MaxSimStatsDB::getInst().addMemoryAccess(tag, offset, curBblAddr, false);
 #   else
     UNUSED_VAR(tag); UNUSED_VAR(offset); UNUSED_VAR(curBblAddr);
@@ -127,6 +132,10 @@ void TimingCore::storeAndRecord(Address addr, MASize_t size, Address base) {
     MAOffset_t offset = addr - base;
 
 #   ifdef MAXSIM_ENABLED
+    if (!doSimulateBbl) {
+        return;
+    }
+    addr = MaxSimAddressSpaceMorphing::getInst().processMAAddressAndRemap(addr, base, offset, tag);
     MaxSimStatsDB::getInst().addMemoryAccess(tag, offset, curBblAddr, true);
 #   else
     UNUSED_VAR(tag); UNUSED_VAR(offset); UNUSED_VAR(curBblAddr);
@@ -143,13 +152,22 @@ void TimingCore::storeAndRecord(Address addr, MASize_t size, Address base) {
     cRec.record(startCycle);
 }
 
-void TimingCore::bblAndRecord(Address bblAddr, BblInfo* bblInfo) {
+void TimingCore::bblAndRecord(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
+#ifdef MAXSIM_ENABLED
+    doSimulateBbl = MaxSimAddressSpaceMorphing::getInst().processBBlAndDoSimulate(tid, bblAddr, isCondBrunch);
+    if (!doSimulateBbl) {
+        isCondBrunch = false;
+        return;
+    }
+#endif // MAXSIM_ENABLED
+
     instrs += bblInfo->instrs;
     curCycle += bblInfo->instrs;
 
 #ifdef MA_STATS_ENABLED
     curBblAddr = bblAddr;
 #endif
+    isCondBrunch = false;
 
     Address endBblAddr = bblAddr + bblInfo->bytes;
     for (Address fetchAddr = bblAddr; fetchAddr < endBblAddr; fetchAddr+=(1 << lineBits)) {
@@ -186,7 +204,7 @@ void TimingCore::StoreAndRecordFunc(THREADID tid, ADDRINT addr, UINT32 size, ADD
 
 void TimingCore::BblAndRecordFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
     TimingCore* core = static_cast<TimingCore*>(cores[tid]);
-    core->bblAndRecord(bblAddr, bblInfo);
+    core->bblAndRecord(tid, bblAddr, bblInfo);
 
     while (core->curCycle > core->phaseEndCycle) {
         core->phaseEndCycle += zinfo->phaseLength;

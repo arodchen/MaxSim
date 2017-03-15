@@ -47,6 +47,9 @@ class TimingCore : public Core {
 
         CoreRecorder cRec;
 
+        bool isCondBrunch;
+        bool doSimulateBbl;
+
 #ifdef MA_STATS_ENABLED
         Address curBblAddr;
 #endif
@@ -73,7 +76,7 @@ class TimingCore : public Core {
     private:
         inline void loadAndRecord(Address addr, MASize_t size, Address base);
         inline void storeAndRecord(Address addr, MASize_t size, Address base);
-        inline void bblAndRecord(Address bblAddr, BblInfo* bblInstrs);
+        inline void bblAndRecord(THREADID tid, Address bblAddr, BblInfo* bblInstrs);
         inline void record(uint64_t startCycle);
 
         static void LoadAndRecordFunc(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base);
@@ -82,7 +85,9 @@ class TimingCore : public Core {
         static void PredLoadAndRecordFunc(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base, BOOL pred);
         static void PredStoreAndRecordFunc(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base, BOOL pred);
 
-        static void BranchFunc(THREADID, ADDRINT, BOOL, ADDRINT, ADDRINT) {}
+        static void BranchFunc(THREADID tid, ADDRINT addr, BOOL taken, ADDRINT takenNpc, ADDRINT notTakenNpc) {
+            static_cast<TimingCore*>(cores[tid])->isCondBrunch = (addr != 0);
+        }
 } ATTR_LINE_ALIGNED;
 
 #endif  // TIMING_CORE_H_

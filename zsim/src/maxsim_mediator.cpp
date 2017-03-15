@@ -33,7 +33,7 @@
 #include "cpuenum.h"
 #include "maxsim_runtime_info.h"
 #include "maxsim_interface_helpers.h"
-
+#include "maxsim_address_space_morphing.h"
 
 VOID MaxSimMediator::HandleMaxSimMagicOp(THREADID tid, ADDRINT * op, ADDRINT arg) {
     if (!MaxSimInterfaceHelpers::isMaxSimEnabled()) {
@@ -76,7 +76,15 @@ VOID MaxSimMediator::HandleMaxSimMagicOp(THREADID tid, ADDRINT * op, ADDRINT arg
             DumpEventualStats(procIdx, "Request from Maxine VM to dump eventual stats", maxineVMOperationMode);
             return;
         }
-
+        case MAXSIM_M_OPC_FILTER_LOOP_BEGIN: {
+            Address addr = (Address) arg;
+            MaxSimAddressSpaceMorphing::getInst().beginLoopFiltering(tid, addr);
+            return;
+        }
+        case MAXSIM_M_OPC_FILTER_LOOP_END: {
+            MaxSimAddressSpaceMorphing::getInst().endLoopFiltering(tid);
+            return;
+        }
         default:
             panic("Thread %d issued unknown MaxSim magic op %ld!", tid, *op);
     }

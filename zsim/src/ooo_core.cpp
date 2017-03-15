@@ -37,6 +37,7 @@
 
 #ifdef MAXSIM_ENABLED
 #include "maxsim_stats.h"
+#include "maxsim_address_space_morphing.h"
 #endif // MAXSIM_ENABLED
 
 /* Uncomment to induce backpressure to the IW when the load/store buffers fill up. In theory, more detailed,
@@ -175,7 +176,12 @@ inline void OOOCore::load(Address addr, uint32_t size, Address base) {
 #ifdef CLU_STATS_ENABLED
     loadSizes[loads] = (MASize_t) size;
 #endif
-    loadAddrs[loads++] = addr;
+    loadAddrs[loads++] =
+#ifdef MAXSIM_ENABLED
+        MaxSimAddressSpaceMorphing::getInst().processMAAddressAndRemap(addr, base, offset, tag);
+#else
+        addr;
+#endif
 }
 
 void OOOCore::store(Address addr, uint32_t size, Address base) {
@@ -195,7 +201,12 @@ void OOOCore::store(Address addr, uint32_t size, Address base) {
 #ifdef CLU_STATS_ENABLED
     storeSizes[stores] = (MASize_t) size;
 #endif
-    storeAddrs[stores++] = addr;
+    storeAddrs[stores++] =
+#ifdef MAXSIM_ENABLED
+        MaxSimAddressSpaceMorphing::getInst().processMAAddressAndRemap(addr, base, offset, tag);
+#else
+        addr;
+#endif
 }
 
 // Predicated loads and stores call this function, gets recorded as a 0-cycle op.
@@ -235,6 +246,12 @@ inline void OOOCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
 #ifdef MA_STATS_ENABLED
     prevBblAddr = bblAddr;
 #endif
+
+    if (MaxSimAddressSpaceMorphing::getInst().processBBlAndDoSimulate(tid, bblIP, (branchPc != 0)) == false) {
+        loads = stores = 0;
+        branchPc = 0;  // clear for next BBL
+        return;
+    }
 
     uint32_t loadIdx = 0;
     uint32_t storeIdx = 0;
