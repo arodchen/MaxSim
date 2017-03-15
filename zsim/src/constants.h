@@ -46,6 +46,9 @@
 // Undefined virtual address.
 #define UNDEF_VIRTUAL_ADDRESS ((Address) -1L)
 
+// Nop virtual address. Memory accesses to such address shoud be simulated as 1-cylce nop.
+#define NOP_VIRTUAL_ADDRESS ((Address) -2L)
+
 // Undefined line address.
 #define UNDEF_CACHE_LINE_ADDRESS ((Address) -1L)
 
