@@ -98,7 +98,7 @@ public final class TargetBundleLayout {
             targetBundleLayout.lengths[ordinal] = length;
             final Size cellSize;
             if (allocateEmptyArray || length != 0) {
-                cellSize = arrayLayout.getArraySize(length);
+                cellSize = arrayLayout.getArraySizeUnscaled(length);
             } else {
                 cellSize = Size.zero();
             }

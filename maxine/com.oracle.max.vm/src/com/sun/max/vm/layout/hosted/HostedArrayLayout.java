@@ -121,6 +121,10 @@ public class HostedArrayLayout extends HostedGeneralLayout implements ArrayLayou
         throw ProgramError.unexpected();
     }
 
+    public Size getArraySizeUnscaled(int length) {
+        throw ProgramError.unexpected();
+    }
+
     public Size specificSize(Accessor accessor) {
         throw ProgramError.unexpected();
     }

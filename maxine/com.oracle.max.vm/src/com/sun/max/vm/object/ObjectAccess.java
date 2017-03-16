@@ -176,6 +176,20 @@ public final class ObjectAccess {
         return Layout.size(Reference.fromJava(object));
     }
 
+    /**
+     * Compute the unscaled cell size of an array object using the appropriate layout.
+     *
+     * @param object the object for which to compute the size
+     * @return the size of the objects in bytes
+     */
+    @HOSTED_ONLY
+    public static Size sizeArrayUnscaled(Object object) {
+        assert object.getClass().isArray();
+        Hub hub = readHub(object);
+        final ArrayLayout arrayLayout = (ArrayLayout) hub.specificLayout;
+        return arrayLayout.getArraySizeUnscaled(Array.getLength(object));
+    }
+
     @INTRINSIC(UNSAFE_CAST)
     private static native ObjectAccess asThis(Object buffer);
 

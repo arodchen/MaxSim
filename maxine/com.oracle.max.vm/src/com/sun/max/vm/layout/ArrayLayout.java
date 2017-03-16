@@ -67,6 +67,8 @@ public interface ArrayLayout extends SpecificLayout {
      */
     Size getArraySize(int length);
 
+    Size getArraySizeUnscaled(int length);
+
     Offset getElementOffsetFromOrigin(int index);
 
     Offset getElementOffsetInCell(int index);

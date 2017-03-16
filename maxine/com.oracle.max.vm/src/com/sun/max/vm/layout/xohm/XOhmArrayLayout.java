@@ -137,6 +137,11 @@ public class XOhmArrayLayout extends XOhmGeneralLayout implements ArrayLayout {
     }
 
     @INLINE
+    public final Size getArraySizeUnscaled(int length) {
+        return getElementOffsetInCell(length).aligned().asSize();
+    }
+
+    @INLINE
     public final Size specificSize(Accessor accessor) {
         return getArraySize(readLength(accessor));
     }

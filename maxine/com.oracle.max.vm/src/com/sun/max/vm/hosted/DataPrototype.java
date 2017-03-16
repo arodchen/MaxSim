@@ -140,7 +140,7 @@ public final class DataPrototype extends Prototype {
             final Pointer cell = start.plus(targetBundleLayout.cellOffset(field)).asPointer();
             if (assignCell(object, cell)) {
                 codeObjects.add(object);
-                assert ObjectAccess.size(object).equals(cellSize);
+                assert ObjectAccess.sizeArrayUnscaled(object).equals(cellSize);
             }
         }
     }
@@ -824,7 +824,7 @@ public final class DataPrototype extends Prototype {
                     for (int i = start; i < end; i++) {
                         final Object object = objects.get(i);
                         final Hub hub = ObjectAccess.readHub(object);
-                        final int size = ObjectAccess.size(object).toInt();
+                        final int size = (objects == codeObjects) ? ObjectAccess.sizeArrayUnscaled(object).toInt() : ObjectAccess.size(object).toInt();
                         numberOfBytes += size;
 
                         final int offset = objectToCell(object).minus(regionStart).toInt();
