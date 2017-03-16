@@ -132,4 +132,9 @@ public interface RuntimeCompiler {
             return getClass().getSimpleName();
         }
     }
+
+    /**
+     * Returns allocation frontier methods.
+     */
+    List<TargetMethod> getAllocationFrontierMethods();
 }

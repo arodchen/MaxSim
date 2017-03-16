@@ -37,6 +37,8 @@ import com.sun.max.vm.compiler.*;
 import com.sun.max.vm.compiler.target.*;
 import com.sun.max.vm.runtime.*;
 
+import java.util.List;
+
 /**
  * Integration of the C1X + Graal compiler into Maxine's compilation framework.
  * This umbrella compiler chooses C1X or Graal depending on context.
@@ -152,4 +154,8 @@ public class C1XGraal implements RuntimeCompiler {
         return compilerName.equals("C1X") || compilerName.equals("Graal");
     }
 
+    public List<TargetMethod> getAllocationFrontierMethods() {
+        List<TargetMethod> list = c1x.getAllocationFrontierMethods();
+        throw FatalError.unimplemented();
+    }
 }

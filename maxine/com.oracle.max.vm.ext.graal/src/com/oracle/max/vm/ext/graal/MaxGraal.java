@@ -67,6 +67,7 @@ import com.sun.max.vm.compiler.*;
 import com.sun.max.vm.compiler.deps.*;
 import com.sun.max.vm.compiler.target.*;
 import com.sun.max.vm.hosted.*;
+import com.sun.max.vm.runtime.FatalError;
 import com.sun.max.vm.type.*;
 
 /**
@@ -619,4 +620,7 @@ public class MaxGraal extends RuntimeCompiler.DefaultNameAdapter implements Runt
 
     }
 
+    public List<TargetMethod> getAllocationFrontierMethods() {
+        throw FatalError.unimplemented();
+    }
 }

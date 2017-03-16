@@ -24,10 +24,15 @@ import static com.sun.max.vm.intrinsics.MaxineIntrinsicIDs.*;
 import com.sun.max.annotate.C_FUNCTION;
 import com.sun.max.annotate.INTRINSIC;
 import com.sun.max.annotate.INLINE;
+import com.sun.max.lang.Classes;
 import com.sun.max.unsafe.*;
+import com.sun.max.vm.MaxineVM;
 import com.sun.max.vm.actor.holder.Hub;
+import com.sun.max.vm.actor.member.ClassMethodActor;
+import com.sun.max.vm.compiler.target.TargetMethod;
 import com.sun.max.vm.intrinsics.MaxineIntrinsicIDs;
 import com.sun.max.vm.layout.Layout;
+import com.sun.max.vm.object.Hybrid;
 
 import java.lang.reflect.Array;
 
@@ -76,7 +81,7 @@ public class MaxSimMediator {
 
     @INLINE
     public static void beginLoopFiltering(Address address) {
-        maxsimMagicOp( Address.fromLong(MaxSimInterface.MaxSimMagicOpcodes.MAXSIM_M_OPC_FILTER_LOOP_BEGIN_VALUE), address);
+        maxsimMagicOp(Address.fromLong(MaxSimInterface.MaxSimMagicOpcodes.MAXSIM_M_OPC_FILTER_LOOP_BEGIN_VALUE), address);
     }
 
     @INLINE
@@ -106,5 +111,32 @@ public class MaxSimMediator {
     @INLINE
     public static void deregisterAddressRange(Address lo, Address hi, int type) {
         maxsim_j_deregister_address_range(lo.toLong(), hi.toLong(), type);
+    }
+
+    public static void reportAllocationFrontierAddressRanges() {
+        for (TargetMethod tm : MaxineVM.vm().compilationBroker.optimizingCompiler.getAllocationFrontierMethods()) {
+            maxsim_j_register_address_range(tm.start().toLong(), tm.end().toLong(),
+                MaxSimInterface.AddressRangeType.ALLOCATION_FRONTIER_ADDRESS_RANGE_VALUE);
+        }
+
+        for (TargetMethod tm : MaxineVM.vm().compilationBroker.baselineCompiler.getAllocationFrontierMethods()) {
+            maxsim_j_register_address_range(tm.start().toLong(), tm.end().toLong(),
+                MaxSimInterface.AddressRangeType.ALLOCATION_FRONTIER_ADDRESS_RANGE_VALUE);
+        }
+
+        TargetMethod tm = ClassMethodActor.fromJava(
+            Classes.getDeclaredMethod(Object.class, "clone")).currentTargetMethod();
+        maxsim_j_register_address_range(tm.start().toLong(), tm.end().toLong(),
+            MaxSimInterface.AddressRangeType.ALLOCATION_FRONTIER_ADDRESS_RANGE_VALUE);
+
+        tm = ClassMethodActor.fromJava(
+            Classes.getDeclaredMethod(Hybrid.class, "expand", int.class)).currentTargetMethod();
+        maxsim_j_register_address_range(tm.start().toLong(), tm.end().toLong(),
+            MaxSimInterface.AddressRangeType.ALLOCATION_FRONTIER_ADDRESS_RANGE_VALUE);
+
+        tm = ClassMethodActor.fromJava(
+            Classes.getDeclaredMethod(Array.class, "newArray", Class.class, int.class)).currentTargetMethod();
+        maxsim_j_register_address_range(tm.start().toLong(), tm.end().toLong(),
+            MaxSimInterface.AddressRangeType.ALLOCATION_FRONTIER_ADDRESS_RANGE_VALUE);
     }
 }

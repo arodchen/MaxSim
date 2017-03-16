@@ -645,4 +645,18 @@ public class T1X extends RuntimeCompiler.DefaultNameAdapter implements RuntimeCo
     public static FatalError unimplISA() {
         throw FatalError.unexpected("Unimplemented platform: " + platform().isa);
     }
+
+    public List<TargetMethod> getAllocationFrontierMethods() {
+        List<TargetMethod> list = new ArrayList<TargetMethod>();
+        Method [] methods = T1XTemplateSource.class.getDeclaredMethods();
+
+        for (Method m : methods) {
+            if (m.getName().startsWith("t1x_stub_allocate")) {
+                TargetMethod tm = ClassMethodActor.fromJava(m).currentTargetMethod();
+                list.add(tm);
+            }
+        }
+
+        return list;
+    }
 }

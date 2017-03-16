@@ -50,7 +50,7 @@ class MaxSimRuntimeInfo {
             Global,
             // Heap address subspace containing array critical (see JNI GetPrimitiveArrayCritical) address ranges
             HeapArrayCritical,
-            // Code address subspace containing allocation frontier code address ranges
+            // Code address subspace containing allocation frontier (functions called at allocation sites) code address ranges
             CodeAllocationFrontier,
             // Number of address spaces
             AddressSpacesNum

@@ -37,6 +37,7 @@ import com.sun.c1x.graph.*;
 import com.sun.c1x.ir.*;
 import com.sun.c1x.lir.*;
 import com.sun.c1x.observer.*;
+import com.sun.c1x.stub.CompilerStub;
 import com.sun.cri.ci.CiCompiler.DebugInfoLevel;
 import com.sun.cri.ci.*;
 import com.sun.cri.ri.*;
@@ -324,5 +325,20 @@ public class C1X extends RuntimeCompiler.DefaultNameAdapter implements RuntimeCo
     @Override
     public boolean matches(String compilerName) {
         return compilerName.equals("C1X");
+    }
+
+    public List<TargetMethod> getAllocationFrontierMethods() {
+        List<TargetMethod> list = new ArrayList<TargetMethod>();
+
+        for (CompilerStub cs : compiler.stubs.values()) {
+            if (cs.stubObject instanceof Stub) {
+                Stub s =  (Stub) cs.stubObject;
+                if (s.regionName().startsWith("c1x-stub-allocate")) {
+                    list.add(s);
+                }
+            }
+        }
+
+        return list;
     }
 }

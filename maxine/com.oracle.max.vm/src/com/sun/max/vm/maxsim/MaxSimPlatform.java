@@ -47,6 +47,7 @@ public class MaxSimPlatform {
         // report Maxine parameters
         MaxSimMediator.reportMaxSimHubTypeOffsetToZSim();
         MaxSimMediator.reportArrayFirstElemOffsetToZSim();
+        MaxSimMediator.reportAllocationFrontierAddressRanges();
         MaxSimMediator.exitZSimFastForwardingMode();
         isMaxSimFastForwarding = false;
         MaxSimMediator.dumpEventualStats(

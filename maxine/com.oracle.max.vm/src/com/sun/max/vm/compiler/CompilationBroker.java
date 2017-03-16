@@ -916,6 +916,10 @@ public class CompilationBroker {
         public String toString() {
             return getClass().getSimpleName() + "@" + Integer.toHexString(hashCode()) + "[" + nature + "]";
         }
+
+        public List<TargetMethod> getAllocationFrontierMethods() {
+            throw FatalError.unimplemented();
+        }
     }
 
     public static class NullOptCompiler extends NullCompiler {
