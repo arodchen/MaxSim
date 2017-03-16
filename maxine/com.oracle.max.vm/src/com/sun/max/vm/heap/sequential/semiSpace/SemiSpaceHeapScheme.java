@@ -653,7 +653,12 @@ public class SemiSpaceHeapScheme extends HeapSchemeWithTLAB implements CellVisit
     }
 
     void scanBootHeap() {
-        Heap.bootHeapRegion.visitReferences(refUpdater);
+        if (MaxSimInterfaceHelpers.isMaxSimEnabled()) {
+            // this visitor is less optimal but it preserves [base + offset] object fields addressing
+            Heap.bootHeapRegion.visitCells(this);
+        } else {
+            Heap.bootHeapRegion.visitReferences(refUpdater);
+        }
     }
 
     void scanCode() {
