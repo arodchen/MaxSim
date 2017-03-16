@@ -76,7 +76,7 @@ for i in $(seq 0 $LAST_I) ; do
 
         executeExitOnFail rm -rf heartbeat out.cfg zsim-cmp.h5 zsim-ev.h5 zsim.h5 zsim.log.0 zsim.out
 
-        ZSIM_COMMAND="../maxine/com.oracle.max.vm.native/generated/linux/maxvm $EXTRA_MAXINE_FLAGS -XX:-InlineTLAB -Xss1M -Xms2G -Xmx2G -XX:ReservedBaselineCodeCacheSize=384M $CP_JAR_FLAGS ${TESTS[j]} -n${ITERS[j]}"
+        ZSIM_COMMAND="../maxine/com.oracle.max.vm.native/generated/linux/maxvm $EXTRA_MAXINE_FLAGS -Xss1M -Xms2G -Xmx2G -XX:ReservedBaselineCodeCacheSize=384M $CP_JAR_FLAGS ${TESTS[j]} -n${ITERS[j]}"
         SIMULATOR_TEST_CFG="${SIMULATOR_TMPL_CFG_BASENAME/.tmpl/_${TESTS[j]}.cfg}"
         executeExitOnFail cp $SIMULATOR_TMPL_CFG ${SIMULATOR_TEST_CFG}
         executeExitOnFail sed -i s\|COMMAND_TEMPLATE\|"$ZSIM_COMMAND"\|g ${SIMULATOR_TEST_CFG}

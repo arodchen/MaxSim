@@ -60,7 +60,7 @@ public abstract class HeapSchemeWithTLAB extends HeapSchemeAdaptor {
     public static final String TLAB_DISABLED_THREAD_LOCAL_NAME = "TLAB_DISABLED";
 
     // TODO: clean this up. Used just for testing with and without inlined XIR tlab allocation.
-    public static boolean GenInlinedTLABAlloc = true;
+    public static boolean GenInlinedTLABAlloc = !MaxSimInterfaceHelpers.isMaxSimEnabled();
 
     /**
      * Determines if TLABs should be traced.
