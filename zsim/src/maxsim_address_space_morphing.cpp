@@ -68,7 +68,7 @@ Address MaxSimAddressSpaceMorphing::processMAAddressAndRemap(Address addr, Addre
 
             if (arrayCriticalAddressRange.type == ARRAY_CRITICAL_ADDRESS_RANGE) {
                 untaggedBase = arrayCriticalAddressRange.lo - MaxSimRuntimeInfo::getInst().getMaxineArrayFirstElementOffset();
-                offset = untaggedAddress - arrayCriticalAddressRange.lo;
+                offset = untaggedAddress - untaggedBase;
                 hubType = HUB_TYPE_ARRAY_OF_PRIMITIVES;
             } else {
                 if (offset > MaxSimRuntimeInfo::getInst().getMaxineArrayFirstElementOffset()) {
