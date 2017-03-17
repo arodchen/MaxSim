@@ -238,9 +238,9 @@ message MaxSimConfig {
   //
   optional bool isMaxSimEnabled = 1 [default = true];
 
-  // Type of pointer tagging performed in MaxSim.
+  // Type of pointer tagging acrive in MaxSim.
   //
-  optional PointerTaggingType pointerTaggingType = 2 [default = CLASS_ID_TAGGING];
+  optional PointerTaggingType pointerTaggingType = 2 [default = NO_TAGGING];
 
   // Scaling factor for primitives in Maxine VM and contraction factor in ZSim used in address space morphing.
   //
