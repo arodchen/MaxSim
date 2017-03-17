@@ -213,10 +213,11 @@ enum MaxineVMOperationMode {
 // Pointer tagging type.
 //
 enum PointerTaggingType {
-  CLASS_ID_TAGGING = 0;
-  ALLOC_SITE_ID_TAGGING = 1;
-  ARRAY_LENGTH_TAGGING = 2;
-  UNDEFINED_TAGGING = 3;
+  NO_TAGGING = 0;
+  CLASS_ID_TAGGING = 1;
+  ALLOC_SITE_ID_TAGGING = 2;
+  ARRAY_LENGTH_TAGGING = 3;
+  UNDEFINED_TAGGING = 4 ;
 }
 
 // Hub type.
