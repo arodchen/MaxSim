@@ -100,6 +100,9 @@ void TimingCore::loadAndRecord(Address addr, MASize_t size, Address base) {
 #   endif
     MAOffset_t offset = addr - base;
 
+    addr = getUntaggedPointerSE(addr);
+    base = getUntaggedPointerSE(base);
+
 #   ifdef MAXSIM_ENABLED
     if (!doSimulateBbl) {
         return;

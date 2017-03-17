@@ -28,6 +28,7 @@
 #ifdef MAXSIM_ENABLED
 
 #include "maxsim_stats.h"
+#include "pointer_tagging.h"
 
 bool MaxSimAddressSpaceMorphing::processBBlAndDoSimulate(uint16_t tid, Address addressBbl, bool isCondBranch) {
     switch (maxineSimulationState[tid]) {
@@ -58,21 +59,19 @@ Address MaxSimAddressSpaceMorphing::processMAAddressAndRemap(Address addr, Addre
     if ((addr == UNDEF_VIRTUAL_ADDRESS) || (addr == NOP_VIRTUAL_ADDRESS)) {
         return addr;
     }
-    Address untaggedAddress = getUntaggedPointerSE(addr);
     if (LAYOUT_SCALE_FACTOR != 1) {
-        AddressRange_t addressRange = MaxSimRuntimeInfo::getInst().getRegisteredAddressRange(untaggedAddress, MaxSimRuntimeInfo::MaxineAddressSpace_t::Global);
+        AddressRange_t addressRange = MaxSimRuntimeInfo::getInst().getRegisteredAddressRange(addr, MaxSimRuntimeInfo::MaxineAddressSpace_t::Global);
         if (addressRange.type == HEAP_ADDRESS_RANGE) {
             unsigned char hubType = HUB_TYPE_TUPLE;
-            Address untaggedBase = getUntaggedPointerSE(base);
-            AddressRange_t arrayCriticalAddressRange = MaxSimRuntimeInfo::getInst().getRegisteredAddressRange(untaggedAddress, MaxSimRuntimeInfo::MaxineAddressSpace_t::HeapArrayCritical);
+            AddressRange_t arrayCriticalAddressRange = MaxSimRuntimeInfo::getInst().getRegisteredAddressRange(addr, MaxSimRuntimeInfo::MaxineAddressSpace_t::HeapArrayCritical);
 
             if (arrayCriticalAddressRange.type == ARRAY_CRITICAL_ADDRESS_RANGE) {
-                untaggedBase = arrayCriticalAddressRange.lo - MaxSimRuntimeInfo::getInst().getMaxineArrayFirstElementOffset();
-                offset = untaggedAddress - untaggedBase;
+                base = arrayCriticalAddressRange.lo - MaxSimRuntimeInfo::getInst().getMaxineArrayFirstElementOffset();
+                offset = addr - base;
                 hubType = HUB_TYPE_ARRAY_OF_PRIMITIVES;
             } else {
                 if (offset > MaxSimRuntimeInfo::getInst().getMaxineArrayFirstElementOffset()) {
-                    Address hubAddress = *((Address *) untaggedBase);
+                    Address hubAddress = *((Address *) base);
                     if (hubAddress != 0) {
                         hubType = * ((char *) (getUntaggedPointerSE(hubAddress) + MaxSimRuntimeInfo::getInst().getMaxineHubTypeOffset()));
                     }
@@ -84,19 +83,19 @@ Address MaxSimAddressSpaceMorphing::processMAAddressAndRemap(Address addr, Addre
 
             if ((hubType == HUB_TYPE_TUPLE) || (offset <= MaxSimRuntimeInfo::getInst().getMaxineArrayFirstElementOffset()) ||
                 ((hubType == HUB_TYPE_ARRAY_OF_REFERENCES) && (LAYOUT_SCALE_REF_FACTOR == LAYOUT_SCALE_FACTOR_ONE))) {
-                untaggedAddress = ((addressRange.hi - addressRange.lo) / LAYOUT_SCALE_FACTOR) +
-                                  ((addressRange.lo + untaggedAddress) / LAYOUT_SCALE_FACTOR);
+                addr = ((addressRange.hi - addressRange.lo) / LAYOUT_SCALE_FACTOR) +
+                                  ((addressRange.lo + addr) / LAYOUT_SCALE_FACTOR);
             } else {
                 int offsetScaleFactor = (hubType == HUB_TYPE_ARRAY_OF_REFERENCES) ?
                      LAYOUT_SCALE_REF_FACTOR : LAYOUT_SCALE_FACTOR;
-                untaggedAddress = ((addressRange.hi - addressRange.lo) / LAYOUT_SCALE_FACTOR) +
-                                  ((addressRange.lo + untaggedBase + offsetScaleFactor * offset -
+                addr = ((addressRange.hi - addressRange.lo) / LAYOUT_SCALE_FACTOR) +
+                                  ((addressRange.lo + base + offsetScaleFactor * offset -
                                     MaxSimRuntimeInfo::getInst().getMaxineArrayFirstElementOffset()) / LAYOUT_SCALE_FACTOR);
 
             }
         }
     }
-    return untaggedAddress;
+    return addr;
 }
 
 #endif // MAXSIM_ENABLED

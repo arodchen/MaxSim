@@ -168,6 +168,9 @@ inline void OOOCore::load(Address addr, uint32_t size, Address base) {
 #ifdef MA_STATS_ENABLED
     MAOffset_t offset = addr - base;
 
+    addr = getUntaggedPointerSE(addr);
+    base = getUntaggedPointerSE(base);
+
     loadOffset[loads] = offset;
 #endif
 #ifdef POINTER_TAGGING_ENABLED
@@ -192,6 +195,9 @@ void OOOCore::store(Address addr, uint32_t size, Address base) {
 #endif
 #ifdef MA_STATS_ENABLED
     MAOffset_t offset = addr - base;
+
+    addr = getUntaggedPointerSE(addr);
+    base = getUntaggedPointerSE(base);
 
     storeOffset[stores] = offset;
 #endif

@@ -31,22 +31,29 @@
 #ifdef MAXSIM_ENABLED
 
 #include "constants.h"
-#include "pointer_tagging.h"
 #include "maxsim_interface_c.h"
 #include "maxsim_runtime_info.h"
 
 class MaxSimAddressSpaceMorphing {
   public:
     // Processes basic block; returns true if basic block should be simulated and false if it should be filtered.
+    //
+    // Precondition: passed addresses should be untagged.
+    //
     bool processBBlAndDoSimulate(uint16_t tid, Address addressBbl, bool isCondBranch);
 
     // Processes memory access address and remap; returns re-mapped address.
+    //
+    // Precondition: passed addresses should be untagged.
+    //
     Address processMAAddressAndRemap(Address addr, Address base, int32_t offset, uint16_t tag);
 
     // Begin loop filtering.
+    //
+    // Precondition: passed addresses should be untagged.
+    //
     void beginLoopFiltering(uint16_t tid, Address addr) {
-        Address untaggedAddr = getUntaggedPointerSE(addr);
-        AddressRange_t addressRange = MaxSimRuntimeInfo::getInst().getRegisteredAddressRange(untaggedAddr,
+        AddressRange_t addressRange = MaxSimRuntimeInfo::getInst().getRegisteredAddressRange(addr,
             MaxSimRuntimeInfo::MaxineAddressSpace_t::Global);
         if (addressRange.type == HEAP_ADDRESS_RANGE) {
             maxineSimulationState[tid] = MaxineSimulationState_t::EstimateFilteredLoopHead;

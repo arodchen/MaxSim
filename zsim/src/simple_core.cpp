@@ -65,6 +65,9 @@ void SimpleCore::load(Address addr, MASize_t size, Address base) {
 #   endif
     MAOffset_t offset = addr - base;
 
+    addr = getUntaggedPointerSE(addr);
+    base = getUntaggedPointerSE(base);
+
 #   ifdef MAXSIM_ENABLED
     if (!doSimulateBbl) {
         return;
@@ -93,6 +96,9 @@ void SimpleCore::store(Address addr, MASize_t size, Address base) {
     PointerTag_t tag = UNDEF_TAG;
 #   endif
     MAOffset_t offset = addr - base;
+
+    addr = getUntaggedPointerSE(addr);
+    base = getUntaggedPointerSE(base);
 
 #   ifdef MAXSIM_ENABLED
     if (!doSimulateBbl) {
