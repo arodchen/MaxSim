@@ -1319,8 +1319,9 @@ public final class AMD64LIRAssembler extends LIRAssembler {
                     case Float   : masm.ucomiss(reg1, tasm.recordDataReferenceInCode(CiConstant.forFloat(((CiConstant) opr2).asFloat()))); break;
                     case Double  : masm.ucomisd(reg1, tasm.recordDataReferenceInCode(CiConstant.forDouble(((CiConstant) opr2).asDouble()))); break;
                     case Long    : {
-                        if (c.asLong() == 0) {
-                            masm.cmpq(reg1, 0);
+                        long cl = c.asLong();
+                        if (NumUtil.isInt(cl)) {
+                            masm.cmpq(reg1, (int) cl);
                         } else {
                             masm.movq(rscratch1, c.asLong());
                             masm.cmpq(reg1, rscratch1);
@@ -1491,7 +1492,12 @@ public final class AMD64LIRAssembler extends LIRAssembler {
         if (dest.kind.isInt()) {
             // first move left into dest so that left is not destroyed by the shift
             CiRegister value = dest.asRegister();
-            count = count & 0x1F; // Java spec
+
+            if (left.kind == CiKind.Int) {
+                count = count & 0x1F; // Java spec
+            } else if (left.kind == CiKind.Long) {
+                count = count & 0x3F; // Java spec
+            }
 
             moveRegs(left.asRegister(), value);
             // Checkstyle: off
@@ -1505,7 +1511,12 @@ public final class AMD64LIRAssembler extends LIRAssembler {
 
             // first move left into dest so that left is not destroyed by the shift
             CiRegister value = dest.asRegister();
-            count = count & 0x1F; // Java spec
+
+            if (left.kind == CiKind.Int) {
+                count = count & 0x1F; // Java spec
+            } else if (left.kind == CiKind.Long) {
+                count = count & 0x3F; // Java spec
+            }
 
             moveRegs(left.asRegister(), value);
             switch (code) {
