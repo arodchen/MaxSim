@@ -99,6 +99,14 @@ public final class Pointer extends Address implements Accessor {
         return "^" + toHexString();
     }
 
+    /**
+     * Performs untagged pointers equality test.
+     */
+    @INLINE
+    public static boolean equalsUntagged(Pointer p1, Pointer p2) {
+        return  p1.shiftedLeft(POINTER_TAG_MASK_SIZE) == p2.shiftedLeft(POINTER_TAG_MASK_SIZE);
+    }
+
     @Override
     @INLINE
     public Pointer plus(int addend) {
@@ -217,6 +225,30 @@ public final class Pointer extends Address implements Accessor {
     @INLINE
     public boolean isWordAligned() {
         return super.isWordAligned();
+    }
+
+    @Override
+    @INLINE
+    public Pointer tagSet(short tag) {
+        return super.tagSet(tag).asPointer();
+    }
+
+    @INLINE
+    public boolean isUntagged() {
+        short tag = tagGet();
+        return (tag == ONES_TAG) || (tag == ZERO_TAG);
+    }
+
+    @Override
+    @INLINE
+    public Pointer tagClear() {
+        return super.tagClear().asPointer();
+    }
+
+    @Override
+    @INLINE
+    public short tagGet() {
+        return super.tagGet();
     }
 
     @Override

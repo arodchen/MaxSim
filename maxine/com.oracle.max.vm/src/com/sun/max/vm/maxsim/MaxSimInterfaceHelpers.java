@@ -29,6 +29,12 @@ public class MaxSimInterfaceHelpers {
     }
 
     @FOLD
+    static public boolean isTaggingEnabled() {
+        return MaxSimInterface.MaxSimConfig.getDefaultInstance().getPointerTaggingType() !=
+            MaxSimInterface.PointerTaggingType.NO_TAGGING;
+    }
+
+    @FOLD
     static public int getLayoutScaleFactor() {
         return MaxSimInterface.MaxSimConfig.getDefaultInstance().getLayoutScaleFactor();
     }

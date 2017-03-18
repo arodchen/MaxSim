@@ -37,6 +37,19 @@ import com.sun.max.program.*;
  */
 public class Address extends Word {
 
+    /**
+     * Reserved tag value which is a natural x86 pointer tag (sign extension of address bit #47 when it is zero).
+     */
+    final public static short ZERO_TAG = 0;
+
+    /**
+     * Reserved tag value which is a natural x86 pointer tag (sign extension of address bit #47 when it is one).
+     */
+    final public static short ONES_TAG = -1;
+
+    final public static int POINTER_TAG_MASK_SIZE = Short.SIZE;
+    final public static int POINTER_TAG_MASK_MAX = Short.SIZE;
+
     @INLINE
     public static Address zero() {
         return isHosted() ? ZERO : fromInt(0);
@@ -45,6 +58,16 @@ public class Address extends Word {
     @INLINE
     public static Address max() {
         return isHosted() ? MAX : fromLong(-1L);
+    }
+
+    @INLINE
+    public static int tagWidth() {
+        return POINTER_TAG_MASK_SIZE;
+    }
+
+    @INLINE
+    public static int nonTagWidth() {
+        return Word.width() - tagWidth();
     }
 
     /**
@@ -403,6 +426,21 @@ public class Address extends Word {
     @INLINE
     public final boolean isBitSet(int index) {
         return (toLong() & (1L << index)) != 0;
+    }
+
+    @INLINE
+    public Address tagSet(short tag) {
+        return fromLong(toLong() & ((1L << nonTagWidth()) - 1) | (UnsafeCast.asLong(tag) << (nonTagWidth())));
+    }
+
+    @INLINE
+    public short tagGet() {
+        return UnsafeCast.asShort(toLong() >>> nonTagWidth());
+    }
+
+    @INLINE
+    public Address tagClear() {
+        return fromLong((toLong() << tagWidth()) >> tagWidth());
     }
 
     @INLINE

@@ -26,6 +26,7 @@ import java.lang.management.*;
 
 import com.sun.max.annotate.*;
 import com.sun.max.unsafe.*;
+import com.sun.max.vm.maxsim.MaxSimPlatform;
 
 /**
  * A named region of memory in the VM.
@@ -107,6 +108,9 @@ public class MemoryRegion {
     }
 
     public final boolean contains(Address address) {
+        if (MaxSimPlatform.isPointerTaggingActive()) {
+            address = address.tagClear();
+        }
         return address.greaterEqual(start()) && address.lessThan(end());
     }
 

@@ -41,6 +41,32 @@ public class MaxSimPlatform {
     }
 
     /**
+     * Indicator of the phase when pointer tagging is generative (pointer are being tagged).
+     *
+     * When set to false (during untagging) no new tags are introduced on allocation and pointer materialization
+     * (e.g. InflatedMonitorLockword64#getBoundMonitor).
+     */
+    private static boolean isPointerTaggingGenerative = false;
+
+    /**
+     * Indicates whether tagging is active in MaxSim (tagged pointers are present).
+     */
+    @INLINE
+    public static boolean isPointerTaggingActive() {
+        return MaxSimInterfaceHelpers.isMaxSimEnabled() && MaxSimInterfaceHelpers.isTaggingEnabled() &&
+            !isMaxSimFastForwarding;
+    }
+
+    /**
+     * Indicates whether pointer tagging is generative in MaxSim (pointers are being tagged).
+     */
+    @INLINE
+    public static boolean isPointerTaggingGenerative() {
+        return MaxSimInterfaceHelpers.isMaxSimEnabled() && MaxSimInterfaceHelpers.isTaggingEnabled() &&
+            isPointerTaggingGenerative;
+    }
+
+    /**
      * Instructs MaxSim to exit fast forwarding mode.
      */
     public static synchronized void exitMaxSimFastForwardingMode() {
