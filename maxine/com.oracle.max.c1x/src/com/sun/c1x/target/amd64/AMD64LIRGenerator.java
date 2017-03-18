@@ -365,7 +365,7 @@ public class AMD64LIRGenerator extends LIRGenerator {
     public void visitShiftOp(ShiftOp x) {
         // count must always be in rcx
         CiValue count = makeOperand(x.y());
-        boolean mustLoadCount = !count.isConstant() || x.kind == CiKind.Long;
+        boolean mustLoadCount = !count.isConstant();
         if (mustLoadCount) {
             // count for long must be in register
             count = force(x.y(), SHIFT_COUNT_IN);
