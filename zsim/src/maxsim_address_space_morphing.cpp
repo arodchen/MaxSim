@@ -75,9 +75,9 @@ Address MaxSimAddressSpaceMorphing::processMAAddressAndRemap(Address addr, Addre
                     if (hubAddress != NULL_VIRTUAL_ADDRESS) {
                         hubType = * ((char *) (getUntaggedPointerSE(hubAddress) + MaxSimRuntimeInfo::getInst().getMaxineHubTypeOffset()));
                     }
-                }
-                if (hubType >= HUB_TYPE_UNDEF) {
-                    panic("Object hubByte should be less than %d!", HUB_TYPE_UNDEF);
+                    if (hubType >= HUB_TYPE_UNDEF) {
+                        panic("Object hubByte should be less than %d!", HUB_TYPE_UNDEF);
+                    }
                 }
             }
 
