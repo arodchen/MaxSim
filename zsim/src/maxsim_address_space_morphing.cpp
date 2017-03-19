@@ -72,7 +72,7 @@ Address MaxSimAddressSpaceMorphing::processMAAddressAndRemap(Address addr, Addre
             } else {
                 if (offset > MaxSimRuntimeInfo::getInst().getMaxineArrayFirstElementOffset()) {
                     Address hubAddress = *((Address *) base);
-                    if (hubAddress != 0) {
+                    if (hubAddress != NULL_VIRTUAL_ADDRESS) {
                         hubType = * ((char *) (getUntaggedPointerSE(hubAddress) + MaxSimRuntimeInfo::getInst().getMaxineHubTypeOffset()));
                     }
                 }

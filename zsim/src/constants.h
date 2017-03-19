@@ -43,6 +43,9 @@
 //If you use it, make sure it does not fail silently if violated.
 #define MAX_IPC (4)
 
+// Null virtual address.
+#define NULL_VIRTUAL_ADDRESS ((Address) 0L)
+
 // Undefined virtual address.
 #define UNDEF_VIRTUAL_ADDRESS ((Address) -1L)
 
