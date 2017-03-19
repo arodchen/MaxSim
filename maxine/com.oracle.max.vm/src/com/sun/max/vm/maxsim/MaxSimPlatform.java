@@ -71,11 +71,21 @@ public class MaxSimPlatform {
      */
     public static synchronized void exitMaxSimFastForwardingMode() {
         // report Maxine parameters
-        MaxSimMediator.reportMaxSimHubTypeOffsetToZSim();
+        MaxSimMediator.reportHubTypeOffsetToZSim();
         MaxSimMediator.reportArrayFirstElemOffsetToZSim();
         MaxSimMediator.reportAllocationFrontierAddressRanges();
+
+        // exit ZSim fast forwarding mode
         MaxSimMediator.exitZSimFastForwardingMode();
         isMaxSimFastForwarding = false;
+
+        if (isPointerTaggingActive()) {
+            // do pointer tagging of all object pointers
+            isPointerTaggingGenerative = true;
+            MaxSimTaggingScheme.doTagging();
+        }
+
+        // dump ZSim eventual stats
         MaxSimMediator.dumpEventualStats(
             MaxSimInterface.MaxineVMOperationMode.MAXINE_VM_OPERATION_MODE_RUNNING_NON_GC_VALUE);
     }
@@ -84,8 +94,17 @@ public class MaxSimPlatform {
      * Instructs MaxSim to enter fast forwarding mode.
      */
     public static synchronized void enterMaxSimFastForwardingMode() {
+        // dump ZSim eventual stats
         MaxSimMediator.dumpEventualStats(
             MaxSimInterface.MaxineVMOperationMode.MAXINE_VM_OPERATION_MODE_UNKNOWN_VALUE);
+
+        if (isPointerTaggingActive()) {
+            // do pointer untagging of all object pointers
+            isPointerTaggingGenerative = false;
+            MaxSimTaggingScheme.doUntagging();
+        }
+
+        // enter ZSim fast forwarding mode
         isMaxSimFastForwarding = true;
         MaxSimMediator.enterZSimFastForwardingMode();
     }

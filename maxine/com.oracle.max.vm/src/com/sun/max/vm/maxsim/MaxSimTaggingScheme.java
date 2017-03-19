@@ -32,4 +32,16 @@ public class MaxSimTaggingScheme {
     static public short getMaxSimHubTag(Hub hub) {
         return 0;
     }
+
+    /**
+     * Do tagging.
+     */
+    static public void doTagging() {
+    }
+
+    /**
+     * Do untagging.
+     */
+    static public void doUntagging() {
+    }
 }

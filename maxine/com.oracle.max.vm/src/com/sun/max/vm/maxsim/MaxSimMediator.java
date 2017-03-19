@@ -90,7 +90,7 @@ public class MaxSimMediator {
     }
 
     @INLINE
-    public static void reportMaxSimHubTypeOffsetToZSim() {
+    public static void reportHubTypeOffsetToZSim() {
         maxsimMagicOp(
             Address.fromLong(MaxSimInterface.MaxSimMagicOpcodes.MAXSIM_M_OPC_REPORT_HUB_TYPE_OFFSET_VALUE),
             Address.fromInt(Hub.maxsimHubTypeFieldOffset()));
