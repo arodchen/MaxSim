@@ -471,8 +471,7 @@ public abstract class ClassActor extends Actor implements RiResolvedType {
      * @return {@code true} if indeed all classes were addressed, {@code false} if {@code c} terminated traversal prematurely.
      */
     public static boolean allClassesDo(Closure c) {
-        final int largestClassID = ClassIDManager.largestClassId();
-        for (int id = 0; id <= largestClassID; ++id) {
+        for (int id = 0; id <= ClassIDManager.largestClassId(); ++id) {
             final ClassActor ca = ClassIDManager.toClassActor(id);
             if (ca != null && !c.doClass(ca)) {
                 return false;
@@ -491,8 +490,7 @@ public abstract class ClassActor extends Actor implements RiResolvedType {
      * prematurely.
      */
     public static boolean allNonInstanceClassesDo(Closure c) {
-        final int largestClassID = ClassIDManager.largestClassId();
-        for (int id = 0; id <= largestClassID; ++id) {
+        for (int id = 0; id <= ClassIDManager.largestClassId(); ++id) {
             final ClassActor ca = ClassIDManager.toClassActor(id);
             if (ca != null && !ca.isInstanceClass() && !c.doClass(ca)) {
                 return false;
