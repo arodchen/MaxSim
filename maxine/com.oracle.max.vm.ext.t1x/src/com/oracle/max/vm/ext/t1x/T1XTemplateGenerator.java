@@ -782,19 +782,29 @@ public class T1XTemplateGenerator {
     public void generateNewTemplate(T1XTemplateTag tag) {
         startMethodGeneration();
         if (tag == T1XTemplateTag.NEW) {
-            generateTemplateTag(tag.name());
-            out.printf("    public static Object new_(ResolutionGuard guard%s) {%n", suffixParams(true));
+            out.printf("    @NEVER_INLINE%n");
+            out.printf("    public static Object t1x_stub_allocate_new_(ResolutionGuard guard%s) {%n", suffixParams(true));
             out.printf("        Object object = resolveClassForNewAndCreate(guard);%n");
             generateAfterAdvice(NULL_ARGS);
             out.printf("        return object;%n");
             out.printf("    }%n");
             newLine();
-        } else {
             generateTemplateTag(tag.name());
-            out.printf("    public static Object %s(DynamicHub hub%s) {%n", tag == T1XTemplateTag.NEW$init ? "new_" : "new_hybrid", suffixParams(true));
+            out.printf("    public static Object new_(ResolutionGuard guard%s) {%n", suffixParams(true));
+            out.printf("        return t1x_stub_allocate_new_(guard);%n");
+            out.printf("    }%n");
+            newLine();
+        } else {
+            out.printf("    @NEVER_INLINE%n");
+            out.printf("    public static Object t1x_stub_allocate_%s(DynamicHub hub%s) {%n", tag == T1XTemplateTag.NEW$init ? "new_" : "new_hybrid", suffixParams(true));
             out.printf("        Object object = Heap.create%s(hub);%n", tag == T1XTemplateTag.NEW$init ? "Tuple" : "Hybrid");
             generateAfterAdvice(NULL_ARGS);
             out.printf("        return object;%n");
+            out.printf("    }%n");
+            newLine();
+            generateTemplateTag(tag.name());
+            out.printf("    public static Object %s(DynamicHub hub%s) {%n", tag == T1XTemplateTag.NEW$init ? "new_" : "new_hybrid", suffixParams(true));
+            out.printf("        return t1x_stub_allocate_%s(hub%s);%n", tag == T1XTemplateTag.NEW$init ? "new_" : "new_hybrid", suffixParams(true));
             out.printf("    }%n");
             newLine();
         }
@@ -805,11 +815,16 @@ public class T1XTemplateGenerator {
 
     public void generateNewArrayTemplate() {
         startMethodGeneration();
-        generateTemplateTag("NEWARRAY");
-        out.printf("    public static Object newarray(ClassActor arrayClass, @Slot(0) int length%s) {%n", suffixParams(true));
+        out.printf("    @NEVER_INLINE%n");
+        out.printf("    public static Object t1x_stub_allocate_newarray(ClassActor arrayClass, int length%s) {%n", suffixParams(true));
         out.printf("        Object array = Snippets.createArray(arrayClass, length);%n");
         generateAfterAdvice(NULL_ARGS);
         out.printf("        return array;%n");
+        out.printf("    }%n");
+        newLine();
+        generateTemplateTag("NEWARRAY");
+        out.printf("    public static Object newarray(ClassActor arrayClass, @Slot(0) int length%s) {%n", suffixParams(true));
+        out.printf("        return t1x_stub_allocate_newarray(arrayClass, length%s);%n", suffixParams(true));
         out.printf("    }%n");
         newLine();
         endTemplateMethodGeneration();
@@ -840,8 +855,8 @@ public class T1XTemplateGenerator {
             v = "arrayType";
         }
         startMethodGeneration();
-        generateTemplateTag("ANEWARRAY%s", prefixDollar(resolved));
-        out.printf("    public static Object anewarray(%s %s, @Slot(0) int length%s) {%n", t, v, suffixParams(true));
+        out.printf("    @NEVER_INLINE%n");
+        out.printf("    public static Object t1x_stub_allocate_anewarray(%s %s, int length%s) {%n", t, v, suffixParams(true));
         if (resolved.equals("")) {
             out.printf("        ArrayClassActor<?> arrayClassActor = UnsafeCast.asArrayClassActor(Snippets.resolveArrayClass(arrayType));%n");
         } else {
@@ -850,6 +865,11 @@ public class T1XTemplateGenerator {
         out.printf("        Object array = Snippets.createArray(arrayClassActor, length);%n");
         generateAfterAdvice(NULL_ARGS);
         out.printf("        return array;%n");
+        out.printf("    }%n");
+        newLine();
+        generateTemplateTag("ANEWARRAY%s", prefixDollar(resolved));
+        out.printf("    public static Object anewarray(%s %s, @Slot(0) int length%s) {%n", t, v, suffixParams(true));
+        out.printf("        return t1x_stub_allocate_anewarray(%s, length%s);%n", v, suffixParams(true));
         out.printf("    }%n");
         newLine();
         endTemplateMethodGeneration();
@@ -880,14 +900,21 @@ public class T1XTemplateGenerator {
             v = "arrayClassActor";
         }
         startMethodGeneration();
-        generateTemplateTag("MULTIANEWARRAY%s", prefixDollar(resolved));
-        out.printf("    public static Reference multianewarray(%s %s, int[] lengths%s) {%n", t, v, suffixParams(true));
+
+        out.printf("    @NEVER_INLINE%n");
+        out.printf("    public static Reference t1x_stub_allocate_multianewarray(%s %s, int[] lengths%s) {%n", t, v, suffixParams(true));
         if (resolved.equals("")) {
             out.printf("        ClassActor arrayClassActor = Snippets.resolveClass(guard);%n");
         }
         out.printf("        Object array = Snippets.createMultiReferenceArray(arrayClassActor, lengths);%n");
         generateAfterAdvice(NULL_ARGS);
         out.printf("        return Reference.fromJava(array);%n");
+        out.printf("    }%n");
+        newLine();
+
+        generateTemplateTag("MULTIANEWARRAY%s", prefixDollar(resolved));
+        out.printf("    public static Reference multianewarray(%s %s, int[] lengths%s) {%n", t, v, suffixParams(true));
+        out.printf("        return t1x_stub_allocate_multianewarray(%s, lengths%s);%n", v, suffixParams(true));
         out.printf("    }%n");
         newLine();
         endTemplateMethodGeneration();

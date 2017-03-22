@@ -2264,55 +2264,95 @@ public class T1XTemplateSource {
         return result;
     }
 
+    @NEVER_INLINE
+    public static Object t1x_stub_allocate_new_(ResolutionGuard guard) {
+        Object object = resolveClassForNewAndCreate(guard);
+        return object;
+    }
+
     @T1X_TEMPLATE(NEW)
     public static Object new_(ResolutionGuard guard) {
-        Object object = resolveClassForNewAndCreate(guard);
+        return t1x_stub_allocate_new_(guard);
+    }
+
+    @NEVER_INLINE
+    public static Object t1x_stub_allocate_new_(DynamicHub hub) {
+        Object object = Heap.createTuple(hub);
         return object;
     }
 
     @T1X_TEMPLATE(NEW$init)
     public static Object new_(DynamicHub hub) {
-        Object object = Heap.createTuple(hub);
+        return t1x_stub_allocate_new_(hub);
+    }
+
+    @NEVER_INLINE
+    public static Object t1x_stub_allocate_new_hybrid(DynamicHub hub) {
+        Object object = Heap.createHybrid(hub);
         return object;
     }
 
     @T1X_TEMPLATE(NEW_HYBRID)
     public static Object new_hybrid(DynamicHub hub) {
-        Object object = Heap.createHybrid(hub);
-        return object;
+        return t1x_stub_allocate_new_hybrid(hub);
+    }
+
+    @NEVER_INLINE
+    public static Object t1x_stub_allocate_newarray(ClassActor arrayClass, int length) {
+        Object array = Snippets.createArray(arrayClass, length);
+        return array;
     }
 
     @T1X_TEMPLATE(NEWARRAY)
     public static Object newarray(ClassActor arrayClass, @Slot(0) int length) {
-        Object array = Snippets.createArray(arrayClass, length);
+        return t1x_stub_allocate_newarray(arrayClass, length);
+    }
+
+    @NEVER_INLINE
+    public static Object t1x_stub_allocate_anewarray(ResolutionGuard arrayType, int length) {
+        ArrayClassActor<?> arrayClassActor = UnsafeCast.asArrayClassActor(Snippets.resolveArrayClass(arrayType));
+        Object array = Snippets.createArray(arrayClassActor, length);
         return array;
     }
 
     @T1X_TEMPLATE(ANEWARRAY)
     public static Object anewarray(ResolutionGuard arrayType, @Slot(0) int length) {
-        ArrayClassActor<?> arrayClassActor = UnsafeCast.asArrayClassActor(Snippets.resolveArrayClass(arrayType));
+        return t1x_stub_allocate_anewarray(arrayType, length);
+    }
+
+    @NEVER_INLINE
+    public static Object t1x_stub_allocate_anewarray(ArrayClassActor<?> arrayType, int length) {
+        ArrayClassActor<?> arrayClassActor = arrayType;
         Object array = Snippets.createArray(arrayClassActor, length);
         return array;
     }
 
     @T1X_TEMPLATE(ANEWARRAY$resolved)
     public static Object anewarray(ArrayClassActor<?> arrayType, @Slot(0) int length) {
-        ArrayClassActor<?> arrayClassActor = arrayType;
-        Object array = Snippets.createArray(arrayClassActor, length);
-        return array;
+        return t1x_stub_allocate_anewarray(arrayType, length);
+    }
+
+    @NEVER_INLINE
+    public static Reference t1x_stub_allocate_multianewarray(ResolutionGuard guard, int[] lengths) {
+        ClassActor arrayClassActor = Snippets.resolveClass(guard);
+        Object array = Snippets.createMultiReferenceArray(arrayClassActor, lengths);
+        return Reference.fromJava(array);
     }
 
     @T1X_TEMPLATE(MULTIANEWARRAY)
     public static Reference multianewarray(ResolutionGuard guard, int[] lengths) {
-        ClassActor arrayClassActor = Snippets.resolveClass(guard);
+        return t1x_stub_allocate_multianewarray(guard, lengths);
+    }
+
+    @NEVER_INLINE
+    public static Reference t1x_stub_allocate_multianewarray(ArrayClassActor<?> arrayClassActor, int[] lengths) {
         Object array = Snippets.createMultiReferenceArray(arrayClassActor, lengths);
         return Reference.fromJava(array);
     }
 
     @T1X_TEMPLATE(MULTIANEWARRAY$resolved)
     public static Reference multianewarray(ArrayClassActor<?> arrayClassActor, int[] lengths) {
-        Object array = Snippets.createMultiReferenceArray(arrayClassActor, lengths);
-        return Reference.fromJava(array);
+        return t1x_stub_allocate_multianewarray(arrayClassActor, lengths);
     }
 
     @T1X_TEMPLATE(CHECKCAST)
