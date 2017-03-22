@@ -133,14 +133,6 @@ enum MaxSimMagicOpcodes {
   //
   MAXSIM_M_OPC_FILTER_LOOP_END                           = 1115;
 
-  // Activates simulation of array length handling via tagging.
-  //
-  MAXSIM_M_OPC_ACTIVATE_ARRAY_LENGTH_VIA_TAGGING         = 1116;
-
-  // Deactivates simulation of array length handling via tagging.
-  //
-  MAXSIM_M_OPC_DEACTIVATE_ARRAY_LENGTH_VIA_TAGGING       = 1117;
-
   MAXSIM_M_OPC_HI                                        = 1200;
 }
 
@@ -213,20 +205,93 @@ enum MaxineVMOperationMode {
 // Pointer tagging type.
 //
 enum PointerTaggingType {
-  NO_TAGGING = 0;
-  CLASS_ID_TAGGING = 1;
-  ALLOC_SITE_ID_TAGGING = 2;
-  ARRAY_LENGTH_TAGGING = 3;
-  UNDEFINED_TAGGING = 4 ;
+  NO_TAGGING              = 0;
+  CLASS_ID_TAGGING        = 1;
+  ALLOC_SITE_ID_TAGGING   = 2;
+  UNDEFINED_TAGGING       = 3;
 }
 
 // Hub type.
 //
 enum HubType {
-   HUB_TYPE_TUPLE = 0;
+   HUB_TYPE_TUPLE               = 0;
    HUB_TYPE_ARRAY_OF_REFERENCES = 1;
    HUB_TYPE_ARRAY_OF_PRIMITIVES = 2;
-   HUB_TYPE_UNDEF = 3;
+   HUB_TYPE_UNDEF               = 3;
+}
+
+// Pointer tags.
+//
+enum PointerTag {
+  option allow_alias = true;
+
+  // Represents lowest aggregate tag.
+  //
+  TAG_AGGREGATE_LO           = -0x1;
+
+  // Represents undefined tag.
+  //
+  TAG_UNDEFINED              = -0x1;
+
+  // Represents code fetch memory accesses.
+  //
+  TAG_FETCHES                = 0x0;
+
+  // Represents self-referencing or self-modifying code memory accesses.
+  //
+  TAG_CODE                   = 0x1;
+
+  // Represents raw heap memory accesses (e.g. initializing heap with zeroes).
+  //
+  TAG_HEAP                   = 0x2;
+
+  // Represents stack memory accesses.
+  //
+  TAG_STACK                  = 0x3;
+
+  // Represents thread-local storage memory accesses.
+  //
+  TAG_TLS                    = 0x4;
+
+  // Represents static class members accesses.
+  //
+  TAG_STATIC                 = 0x5;
+
+  // Represents undefined general purpose tag (out of range [TAG_GP_LO; TAG_GP_HI]).
+  //
+  TAG_UNDEFINED_GP           = 0x6;
+
+  // Represents highest aggregate tag.
+  //
+  TAG_AGGREGATE_HI           = 0x6;
+
+  // Represents lowest reserved tag.
+  //
+  TAG_RESERVED_LO            = 0x7;
+
+  // Represents highest reserved tag.
+  //
+  TAG_RESERVED_HI            = 0x9;
+
+  // Represents lowest transformation tag.
+  //
+  TAG_TRANSFORMATION_LO      = 0xA;
+
+  // Represents highest transformation tag.
+  //
+  TAG_TRANSFORMATION_HI      = 0xF;
+
+  // Represents lowest general purpose tag.
+  //
+  TAG_GP_LO                  = 0x10;
+
+  // Represents highest general purpose tag.
+  //
+  TAG_GP_HI                  = 0xFFFE;
+
+  // Number of defined tags.
+  //
+  DEFINED_TAGS_NUM           = 0xFFFF;
 }
 
 
