@@ -44,6 +44,7 @@ import com.sun.max.vm.log.*;
 import com.sun.max.vm.reference.*;
 import com.sun.max.vm.runtime.*;
 import com.sun.max.vm.stack.*;
+import com.sun.max.vm.maxsim.MaxSimTaggingScheme;
 
 /**
  * VM thread local variables and mechanisms for accessing them. The majority of thread locals
@@ -643,7 +644,8 @@ public class VmThreadLocal implements FormatWithToString {
      */
     @NEVER_INLINE
     private void storeCheckAddress(Pointer etla) {
-        if (nature != Nature.Single || !etla.readWord(ETLA.offset).equals(etla)) {
+        if (!MaxSimTaggingScheme.compareUntaggedObjects(nature, Nature.Single) ||
+            !etla.readWord(ETLA.offset).equals(etla)) {
             Log.print("Triple thread local being stored to as a single: ");
             Log.println(name);
             FatalError.unexpected("Triple thread local updated as a single");
@@ -734,7 +736,7 @@ public class VmThreadLocal implements FormatWithToString {
     }
 
     private void checkLoad(Pointer tla) {
-        if (nature == Nature.Single) {
+        if (MaxSimTaggingScheme.compareUntaggedObjects(nature, Nature.Single)) {
             if (!tla.readWord(ETLA.offset).equals(tla)) {
                 Log.print("Single thread local must be loaded from ETLA: ");
                 Log.println(name);

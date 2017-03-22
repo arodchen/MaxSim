@@ -325,7 +325,7 @@ public final class JDK_java_lang_System {
             return;
         }
         final Hub toHub = ObjectAccess.readHub(toArray);
-        if (toHub == fromHub) {
+        if (MaxSimTaggingScheme.compareUntaggedObjects(toHub, fromHub)) {
             if (fromIndex < 0 || toIndex < 0 || length < 0 ||
                     fromIndex + length > ArrayAccess.readArrayLength(fromArray) ||
                     toIndex + length > ArrayAccess.readArrayLength(toArray)) {

@@ -30,6 +30,7 @@ import java.io.*;
 import java.lang.annotation.*;
 import java.lang.reflect.*;
 
+import com.sun.max.vm.maxsim.MaxSimTaggingScheme;
 import sun.reflect.*;
 
 import com.sun.cri.ci.*;
@@ -163,7 +164,7 @@ public class FieldActor extends MemberActor implements RiResolvedField {
      *         {@code null} when {@linkplain MaxineVM#isHosted() hosted}.
      */
     private Reference access(Object obj, Kind kind) {
-        if (kind != this.kind && kind != null) {
+        if (!MaxSimTaggingScheme.compareUntaggedObjects(kind, this.kind) && kind != null) {
             throw new IllegalArgumentException("Cannot access " + this + " as an " + kind.javaClass.getName());
         }
         if (MaxineVM.isHosted()) {

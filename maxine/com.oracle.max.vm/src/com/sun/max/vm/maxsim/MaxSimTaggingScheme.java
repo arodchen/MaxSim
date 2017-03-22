@@ -44,4 +44,21 @@ public class MaxSimTaggingScheme {
      */
     static public void doUntagging() {
     }
+
+    /**
+     * Comparison of untagged objects.
+     *
+     * NOTE: The places for insertion of untagged comparison were identified empirically.
+     * NOTE: All the code dynamically reachable from doTagging should perform untagged pointers comparison.
+     *
+     * Returns true if objects are equal ignoring tags,false otherwise.
+     */
+    @INLINE
+    public static boolean compareUntaggedObjects(Object object1, Object object2) {
+        if (MaxSimInterfaceHelpers.isTaggingEnabled() && !MaxineVM.isHosted()) {
+            return Pointer.equalsUntagged(ObjectAccess.toOrigin(object1), ObjectAccess.toOrigin(object2));
+        } else {
+            return object1 == object2;
+        }
+    }
 }

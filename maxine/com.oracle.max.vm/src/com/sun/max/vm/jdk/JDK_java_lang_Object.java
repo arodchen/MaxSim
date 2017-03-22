@@ -26,6 +26,7 @@ import static com.sun.max.vm.MaxineVM.*;
 
 import com.sun.max.annotate.*;
 import com.sun.max.vm.heap.*;
+import com.sun.max.vm.maxsim.MaxSimTaggingScheme;
 import com.sun.max.vm.object.*;
 
 /**
@@ -113,4 +114,8 @@ final class JDK_java_lang_Object {
         vm().config.monitorScheme().monitorWait(this, timeout);
     }
 
+    @SUBSTITUTE("equals")
+    public boolean equals_SUBSTITUTE(Object obj) {
+        return MaxSimTaggingScheme.compareUntaggedObjects(this, obj);
+    }
 }

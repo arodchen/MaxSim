@@ -35,6 +35,7 @@ import com.sun.max.vm.object.*;
 import com.sun.max.vm.reference.*;
 import com.sun.max.vm.type.*;
 import com.sun.max.vm.value.*;
+import com.sun.max.vm.maxsim.MaxSimTaggingScheme;
 
 /**
  */
@@ -70,7 +71,7 @@ public class OhmArrayLayout extends OhmGeneralLayout implements ArrayLayout {
 
     @INLINE
     public final Size getArraySize(Kind kind, int length) {
-        int scaleFactor = (kind == Kind.REFERENCE) ?
+        int scaleFactor = MaxSimTaggingScheme.compareUntaggedObjects(kind, Kind.REFERENCE) ?
             MaxSimInterfaceHelpers.getLayoutScaleRefFactor() : MaxSimInterfaceHelpers.getLayoutScaleFactor();
         return Size.fromInt(scaleFactor * kind.width.numberOfBytes).times(length).plus(headerSize).alignUp(Word.size() * MaxSimInterfaceHelpers.getLayoutScaleFactor());
     }
@@ -135,7 +136,7 @@ public class OhmArrayLayout extends OhmGeneralLayout implements ArrayLayout {
 
     @INLINE
     public final Size getArraySize(int length) {
-        int scaleFactor = (elementKind == Kind.REFERENCE) ?
+        int scaleFactor = MaxSimTaggingScheme.compareUntaggedObjects(elementKind, Kind.REFERENCE) ?
             MaxSimInterfaceHelpers.getLayoutScaleRefFactor() : MaxSimInterfaceHelpers.getLayoutScaleFactor();
         return getElementOffsetInCell(scaleFactor * length).aligned(MaxSimInterfaceHelpers.getLayoutScaleFactor()).asSize();
     }

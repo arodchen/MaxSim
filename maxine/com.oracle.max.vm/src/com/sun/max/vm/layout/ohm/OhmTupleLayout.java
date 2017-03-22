@@ -34,6 +34,7 @@ import com.sun.max.vm.maxsim.MaxSimPlatform;
 import com.sun.max.vm.object.*;
 import com.sun.max.vm.type.*;
 import com.sun.max.vm.value.*;
+import com.sun.max.vm.maxsim.MaxSimTaggingScheme;
 
 /**
  */
@@ -105,7 +106,7 @@ public final class OhmTupleLayout extends OhmGeneralLayout implements TupleLayou
                     break;
                 }
                 if (fieldActor.offset() == INVALID_OFFSET && fieldActor.kind.width.numberOfBytes == scale) {
-                    int fieldScaleFactor = (fieldActor.kind == Kind.REFERENCE) ?
+                    int fieldScaleFactor = MaxSimTaggingScheme.compareUntaggedObjects(fieldActor.kind, Kind.REFERENCE) ?
                         MaxSimInterfaceHelpers.getLayoutScaleRefFactor() : MaxSimInterfaceHelpers.getLayoutScaleFactor();
                     fieldActor.setOffset(currentOffset);
                     currentOffset += fieldScaleFactor * scale;
