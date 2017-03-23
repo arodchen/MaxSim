@@ -31,6 +31,7 @@ import com.sun.max.annotate.*;
 import com.sun.max.unsafe.*;
 import com.sun.max.vm.actor.holder.*;
 import com.sun.max.vm.layout.*;
+import com.sun.max.vm.maxsim.MaxSimInterfaceHelpers;
 import com.sun.max.vm.reference.*;
 import com.sun.max.vm.runtime.*;
 
@@ -112,12 +113,20 @@ public final class ArrayAccess {
     }
 
     public static Pointer elementPointer(byte[] array, int index) {
-        return Reference.fromJava(array).toOrigin().plus(Layout.byteArrayLayout().getElementOffsetFromOrigin(index));
+        Pointer p = Reference.fromJava(array).toOrigin().plus(Layout.byteArrayLayout().getElementOffsetFromOrigin(index));
+        if (MaxSimInterfaceHelpers.isTaggingEnabled()) {
+            p = p.tagClear();
+        }
+        return p;
     }
 
     @INLINE
     public static Pointer elementPointer(int[] array, int index) {
-        return Reference.fromJava(array).toOrigin().plus(Layout.byteArrayLayout().getElementOffsetFromOrigin(index));
+        Pointer p = Reference.fromJava(array).toOrigin().plus(Layout.byteArrayLayout().getElementOffsetFromOrigin(index));
+        if (MaxSimInterfaceHelpers.isTaggingEnabled()) {
+            p = p.tagClear();
+        }
+        return p;
     }
 
     /**
