@@ -39,6 +39,7 @@ import com.sun.max.vm.layout.*;
 import com.sun.max.vm.log.VMLog.Record;
 import com.sun.max.vm.log.hosted.*;
 import com.sun.max.vm.maxsim.MaxSimInterfaceHelpers;
+import com.sun.max.vm.maxsim.MaxSimTaggingScheme;
 import com.sun.max.vm.object.*;
 import com.sun.max.vm.reference.*;
 import com.sun.max.vm.run.java.JavaRunScheme;
@@ -571,7 +572,7 @@ public abstract class HeapSchemeWithTLAB extends HeapSchemeAdaptor {
         final Size size = Layout.size(Reference.fromJava(object));
         Hub hub = Layout.getHub(Reference.fromJava(object).toOrigin());
         short tag = hub.getMaxSimHubTag();
-        final Pointer cell = tlabAllocate(size);
+        Pointer cell = tlabAllocate(size);
         cell = MaxSimTaggingScheme.setTagDuringAllocation(cell, tag, size);
         return Cell.plantClone(cell, size, object);
     }
