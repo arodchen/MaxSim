@@ -524,7 +524,9 @@ public abstract class HeapSchemeWithTLAB extends HeapSchemeAdaptor {
     @NO_SAFEPOINT_POLLS("object allocation and initialization must be atomic")
     public final Object createArray(DynamicHub dynamicHub, int length) {
         final Size size = Layout.getArraySize(dynamicHub.classActor.componentClassActor().kind, length);
-        final Pointer cell = tlabAllocate(size);
+        short tag = dynamicHub.getMaxSimHubTag();
+        Pointer cell = tlabAllocate(size);
+        cell = MaxSimTaggingScheme.setTagDuringAllocation(cell, tag, size);
 
         return Cell.plantArray(cell, size, dynamicHub, length);
     }
@@ -532,7 +534,9 @@ public abstract class HeapSchemeWithTLAB extends HeapSchemeAdaptor {
     @INLINE
     @NO_SAFEPOINT_POLLS("object allocation and initialization must be atomic")
     public final Object createTuple(Hub hub) {
+        short tag = hub.getMaxSimHubTag();
         Pointer cell = tlabAllocate(hub.tupleSize);
+        cell = MaxSimTaggingScheme.setTagDuringAllocation(cell, tag, hub.tupleSize);
         if (MaxineVM.isDebug()) {
             Reference.fromJava(hub).toOrigin().getReference().toOrigin().getReference().toOrigin();
             Object result = Cell.plantTuple(cell, hub);
@@ -545,7 +549,9 @@ public abstract class HeapSchemeWithTLAB extends HeapSchemeAdaptor {
     @NO_SAFEPOINT_POLLS("object allocation and initialization must be atomic")
     public final Object createHybrid(DynamicHub hub) {
         final Size size = hub.tupleSize;
-        final Pointer cell = tlabAllocate(size);
+        short tag = hub.getMaxSimHubTag();
+        Pointer cell = tlabAllocate(size);
+        cell = MaxSimTaggingScheme.setTagDuringAllocation(cell, tag, size);
 
         return Cell.plantHybrid(cell, size, hub);
     }
@@ -553,14 +559,20 @@ public abstract class HeapSchemeWithTLAB extends HeapSchemeAdaptor {
     @NO_SAFEPOINT_POLLS("object allocation and initialization must be atomic")
     public final Hybrid expandHybrid(Hybrid hybrid, int length) {
         final Size size = Layout.hybridLayout().getArraySize(length);
-        final Pointer cell = tlabAllocate(size);
+        Hub hub = Layout.getHub(Reference.fromJava(hybrid).toOrigin());
+        short tag = hub.getMaxSimHubTag();
+        Pointer cell = tlabAllocate(size);
+        cell = MaxSimTaggingScheme.setTagDuringAllocation(cell, tag, size);
         return Cell.plantExpandedHybrid(cell, size, hybrid, length);
     }
 
     @NO_SAFEPOINT_POLLS("object allocation and initialization must be atomic")
     public final Object clone(Object object) {
         final Size size = Layout.size(Reference.fromJava(object));
+        Hub hub = Layout.getHub(Reference.fromJava(object).toOrigin());
+        short tag = hub.getMaxSimHubTag();
         final Pointer cell = tlabAllocate(size);
+        cell = MaxSimTaggingScheme.setTagDuringAllocation(cell, tag, size);
         return Cell.plantClone(cell, size, object);
     }
 

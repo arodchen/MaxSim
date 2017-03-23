@@ -139,4 +139,11 @@ public class MaxSimMediator {
         maxsim_j_register_address_range(tm.start().toLong(), tm.end().toLong(),
             MaxSimInterface.AddressRangeType.ALLOCATION_FRONTIER_ADDRESS_RANGE_VALUE);
     }
+
+    @INLINE
+    public static short getAllocationSiteEstimationId(short tag) {
+        return (short) maxsimMagicOp(
+            Address.fromLong(MaxSimInterface.MaxSimMagicOpcodes.MAXSIM_M_OPC_GET_ALLOCATION_SITE_ESTIMATION_ID_VALUE),
+            Address.fromInt(tag)).asAddress().toInt();
+    }
 }

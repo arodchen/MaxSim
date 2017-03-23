@@ -85,4 +85,22 @@ public class MaxSimTaggingScheme {
             return classIDToTag(hub.classActor.id);
         }
     }
+
+    /**
+     * Sets tag during allocation.
+     */
+    @INLINE
+    static public Pointer setTagDuringAllocation(Pointer p, short tag, Size size) {
+        if (MaxSimPlatform.isPointerTaggingGenerative()) {
+            if (MaxSimInterfaceHelpers.isClassIDTagging()) {
+                p = p.tagSet(tag);
+            } else if (MaxSimInterfaceHelpers.isAllocationSiteIDTagging()) {
+                short allocationSiteEstimationId = MaxSimMediator.getAllocationSiteEstimationId(tag);
+                p = p.tagSet(allocationSiteEstimationId);
+            } else {
+                FatalError.unimplemented();
+            }
+        }
+        return p;
+    }
 }
