@@ -527,7 +527,7 @@ public abstract class HeapSchemeWithTLAB extends HeapSchemeAdaptor {
         final Size size = Layout.getArraySize(dynamicHub.classActor.componentClassActor().kind, length);
         short tag = dynamicHub.getMaxSimHubTag();
         Pointer cell = tlabAllocate(size);
-        cell = MaxSimTaggingScheme.setTagDuringAllocation(cell, tag, size);
+        cell = MaxSimTaggingScheme.setTagDuringAllocation(cell, tag);
 
         return Cell.plantArray(cell, size, dynamicHub, length);
     }
@@ -537,7 +537,7 @@ public abstract class HeapSchemeWithTLAB extends HeapSchemeAdaptor {
     public final Object createTuple(Hub hub) {
         short tag = hub.getMaxSimHubTag();
         Pointer cell = tlabAllocate(hub.tupleSize);
-        cell = MaxSimTaggingScheme.setTagDuringAllocation(cell, tag, hub.tupleSize);
+        cell = MaxSimTaggingScheme.setTagDuringAllocation(cell, tag);
         if (MaxineVM.isDebug()) {
             Reference.fromJava(hub).toOrigin().getReference().toOrigin().getReference().toOrigin();
             Object result = Cell.plantTuple(cell, hub);
@@ -552,7 +552,7 @@ public abstract class HeapSchemeWithTLAB extends HeapSchemeAdaptor {
         final Size size = hub.tupleSize;
         short tag = hub.getMaxSimHubTag();
         Pointer cell = tlabAllocate(size);
-        cell = MaxSimTaggingScheme.setTagDuringAllocation(cell, tag, size);
+        cell = MaxSimTaggingScheme.setTagDuringAllocation(cell, tag);
 
         return Cell.plantHybrid(cell, size, hub);
     }
@@ -563,7 +563,7 @@ public abstract class HeapSchemeWithTLAB extends HeapSchemeAdaptor {
         Hub hub = Layout.getHub(Reference.fromJava(hybrid).toOrigin());
         short tag = hub.getMaxSimHubTag();
         Pointer cell = tlabAllocate(size);
-        cell = MaxSimTaggingScheme.setTagDuringAllocation(cell, tag, size);
+        cell = MaxSimTaggingScheme.setTagDuringAllocation(cell, tag);
         return Cell.plantExpandedHybrid(cell, size, hybrid, length);
     }
 
@@ -573,7 +573,7 @@ public abstract class HeapSchemeWithTLAB extends HeapSchemeAdaptor {
         Hub hub = Layout.getHub(Reference.fromJava(object).toOrigin());
         short tag = hub.getMaxSimHubTag();
         Pointer cell = tlabAllocate(size);
-        cell = MaxSimTaggingScheme.setTagDuringAllocation(cell, tag, size);
+        cell = MaxSimTaggingScheme.setTagDuringAllocation(cell, tag);
         return Cell.plantClone(cell, size, object);
     }
 

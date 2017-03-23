@@ -23,11 +23,13 @@ import com.sun.max.annotate.INLINE;
 import com.sun.max.unsafe.*;
 import com.sun.max.vm.MaxineVM;
 import com.sun.max.vm.actor.holder.*;
+import com.sun.max.vm.layout.Layout;
 import com.sun.max.vm.object.ObjectAccess;
+import com.sun.max.vm.reference.Reference;
 import com.sun.max.vm.runtime.FatalError;
 
 /**
- * Maxsim tagging scheme.
+ * MaxSim (un)tagging scheme.
  */
 public class MaxSimTaggingScheme {
 
@@ -87,16 +89,56 @@ public class MaxSimTaggingScheme {
     }
 
     /**
+     * Sets tag using a hub accessible from an object pointer.
+     */
+    @INLINE
+    static public Pointer setTagUsingObjectHub(Pointer p) {
+        if (MaxSimPlatform.isPointerTaggingGenerative()) {
+            final Hub hub = Layout.getHub(p);
+            if (hub.isStatic) {
+                return p.tagSet((short) MaxSimInterface.PointerTag.TAG_STATIC_VALUE);
+            }
+            if (MaxSimInterfaceHelpers.isClassIDTagging()) {
+                final short tag = hub.getMaxSimHubTag();
+                return p.tagSet(tag);
+            } else if (MaxSimInterfaceHelpers.isAllocationSiteIDTagging()) {
+                return p.tagSet((short) MaxSimInterface.PointerTag.TAG_UNDEFINED_GP_VALUE);
+            } else {
+                FatalError.unimplemented();
+            }
+
+        }
+        return p;
+    }
+
+    /**
      * Sets tag during allocation.
      */
     @INLINE
-    static public Pointer setTagDuringAllocation(Pointer p, short tag, Size size) {
+    static public Pointer setTagDuringAllocation(Pointer p, short tag) {
         if (MaxSimPlatform.isPointerTaggingGenerative()) {
             if (MaxSimInterfaceHelpers.isClassIDTagging()) {
                 p = p.tagSet(tag);
             } else if (MaxSimInterfaceHelpers.isAllocationSiteIDTagging()) {
                 short allocationSiteEstimationId = MaxSimMediator.getAllocationSiteEstimationId(tag);
                 p = p.tagSet(allocationSiteEstimationId);
+            } else {
+                FatalError.unimplemented();
+            }
+        }
+        return p;
+    }
+
+    /**
+     * Sets tag during copying garbage collection.
+     */
+    @INLINE
+    static public Pointer setTagDuringCopyingGC(Pointer p, Reference fromRef) {
+        if (MaxSimPlatform.isPointerTaggingGenerative()) {
+            if (MaxSimInterfaceHelpers.isClassIDTagging() ||
+                MaxSimInterfaceHelpers.isAllocationSiteIDTagging()) {
+                final short fromTag = fromRef.toOrigin().tagGet();
+                p = p.tagSet(fromTag);
             } else {
                 FatalError.unimplemented();
             }

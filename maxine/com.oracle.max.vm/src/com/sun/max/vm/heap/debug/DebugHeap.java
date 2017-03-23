@@ -165,7 +165,7 @@ public class DebugHeap {
             Log.print("cell: ");
             Log.print(cell);
             Log.print("  origin: ");
-            Log.print(Layout.cellToOrigin(cell));
+            Log.print(Layout.cellToOriginPreservingTag(cell));
             Log.print("  tag: ");
             Log.print(tag.asPointer());
             Log.println();

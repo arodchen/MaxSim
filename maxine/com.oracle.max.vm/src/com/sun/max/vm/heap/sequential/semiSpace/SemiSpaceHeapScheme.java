@@ -282,8 +282,9 @@ public class SemiSpaceHeapScheme extends HeapSchemeWithTLAB implements CellVisit
 
         public boolean isReachable(Reference ref) {
             final Pointer origin = ref.toOrigin();
-            if (fromSpace.contains(origin)) {
-                final Reference forwardRef = Layout.readForwardRef(origin);
+            if (fromSpaceContains(origin)) {
+                final Pointer originUntagged = MaxSimInterfaceHelpers.isTaggingEnabled() ? origin.tagClear() : origin;
+                final Reference forwardRef = Layout.readForwardRef(originUntagged);
                 if (forwardRef.isZero()) {
                     return false;
                 }
@@ -545,7 +546,9 @@ public class SemiSpaceHeapScheme extends HeapSchemeWithTLAB implements CellVisit
     private Reference mapRef(Reference ref) {
         final Pointer fromOrigin = ref.toOrigin();
         if (fromSpace.contains(fromOrigin)) {
-            final Reference forwardRef = Layout.readForwardRef(fromOrigin);
+            final Pointer fromOriginUntagged = MaxSimInterfaceHelpers.isTaggingEnabled() ?
+                fromOrigin.tagClear() : fromOrigin;
+            final Reference forwardRef = Layout.readForwardRef(fromOriginUntagged);
             if (!forwardRef.isZero()) {
                 return forwardRef;
             }
@@ -554,10 +557,11 @@ public class SemiSpaceHeapScheme extends HeapSchemeWithTLAB implements CellVisit
             }
             final Pointer fromCell = Layout.originToCell(fromOrigin);
             final Size size = Layout.size(fromOrigin);
-            final Pointer toCell = gcAllocate(size);
-            if (DebugHeap.isTagging()) {
-                DebugHeap.writeCellTag(toCell);
-            }
+            Pointer toCell = gcAllocate(size);
+
+            toCell = MaxSimTaggingScheme.setTagDuringCopyingGC(Layout.cellToOriginPreservingTag(toCell), ref);
+
+            DebugHeap.writeCellTag(toCell);
 
             if (detailLogger.enabled()) {
                 final Hub hub = UnsafeCast.asHub(Layout.readHubReference(ref).toJava());
@@ -566,9 +570,9 @@ public class SemiSpaceHeapScheme extends HeapSchemeWithTLAB implements CellVisit
 
             Memory.copyBytes(fromCell, toCell, size);
 
-            final Pointer toOrigin = Layout.cellToOrigin(toCell);
+            final Pointer toOrigin = Layout.cellToOriginPreservingTag(toCell);
             final Reference toRef = Reference.fromOrigin(toOrigin);
-            Layout.writeForwardRef(fromOrigin, toRef);
+            Layout.writeForwardRef(fromOriginUntagged, toRef);
 
 
             return toRef;
@@ -958,6 +962,10 @@ public class SemiSpaceHeapScheme extends HeapSchemeWithTLAB implements CellVisit
             }
         } while (!toSpace.mark.compareAndSwap(oldAllocationMark, end).equals(oldAllocationMark));
 
+        if (MaxSimInterfaceHelpers.isTaggingEnabled()) {
+            cell = cell.tagClear();
+        }
+
         // Zero the allocated chunk before returning
         Memory.clearWords(cell, size.dividedBy(Word.size()).toInt());
 
@@ -979,7 +987,15 @@ public class SemiSpaceHeapScheme extends HeapSchemeWithTLAB implements CellVisit
     }
 
     public boolean contains(Address address) {
+        return toSpaceContains(address);
+    }
+
+    public boolean toSpaceContains(Address address) {
         return toSpace.contains(address);
+    }
+
+    public boolean fromSpaceContains(Address address) {
+        return fromSpace.contains(address);
     }
 
     /**

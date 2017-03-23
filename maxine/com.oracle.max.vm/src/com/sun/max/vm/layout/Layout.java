@@ -28,6 +28,7 @@ import com.sun.max.annotate.*;
 import com.sun.max.unsafe.*;
 import com.sun.max.vm.*;
 import com.sun.max.vm.actor.holder.*;
+import com.sun.max.vm.maxsim.MaxSimTaggingScheme;
 import com.sun.max.vm.reference.*;
 import com.sun.max.vm.type.*;
 
@@ -145,6 +146,18 @@ public final class Layout {
      */
     @INLINE
     public static Pointer cellToOrigin(Pointer cell) {
+        return MaxSimTaggingScheme.setTagUsingObjectHub(cellToOriginPreservingTag(cell));
+    }
+
+    /**
+     * Computes the <strong>origin</strong> of an object preserving cell pointer tag, using layout information in
+     * the context of the current {@linkplain VMConfiguration VM configuration}.
+     *
+     * @param cell starting location of an object in memory
+     * @return the location of the object's origin
+     */
+    @INLINE
+    public static Pointer cellToOriginPreservingTag(Pointer cell) {
         return generalLayout().cellToOrigin(cell);
     }
 
