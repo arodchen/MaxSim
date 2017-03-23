@@ -99,6 +99,8 @@ public class DebugHeap {
                     Log.print(" (start + ");
                     Log.print(cell.minus(regionStart).asOffset().toInt());
                     Log.print(")");
+                    Log.print(" tag:");
+                    Log.print(cell.getWord());
                 }
                 Log.println();
                 FatalError.unexpected("INVALID CELL TAG");
@@ -164,18 +166,16 @@ public class DebugHeap {
             Log.print(cell);
             Log.print("  origin: ");
             Log.print(Layout.cellToOrigin(cell));
+            Log.print("  tag: ");
+            Log.print(tag.asPointer());
             Log.println();
             FatalError.unexpected("missing object tag");
         }
     }
 
     private static void checkRefTag(Reference ref) {
-        if (isTagging()) {
-            if (!ref.isZero()) {
-                final Pointer origin = ref.toOrigin();
-                final Pointer cell = Layout.originToCell(origin);
-                checkCellTag(cell, cell.minusWords(1).getWord(0));
-            }
+        if (!ref.isZero()) {
+            checkNonNullRefTag(ref);
         }
     }
 
