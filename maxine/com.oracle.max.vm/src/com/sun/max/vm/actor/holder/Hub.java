@@ -95,7 +95,7 @@ public abstract class Hub extends Hybrid {
     /**
      * Maxsim tag associated with this hub.
      */
-    public short maxsimHubTag;
+    private short maxsimHubTag;
 
     /**
      * Maxsim hub type.
@@ -249,7 +249,7 @@ public abstract class Hub extends Hybrid {
         this.specificLayout = Layout.tupleLayout();
         this.layoutCategory = Layout.Category.TUPLE;
         this.classActor = classActor;
-        this.maxsimHubTag = MaxSimTaggingScheme.getMaxSimHubTag(this);
+        this.maxsimHubTag = MaxSimTaggingScheme.defineMaxSimHubTag(this);
         this.maxsimHubType = MaxSimInterface.HubType.HUB_TYPE_TUPLE_VALUE;
         this.iTableStartIndex = firstWordIndex() + vTableLength;
         this.iTableLength = 1;
@@ -289,7 +289,7 @@ public abstract class Hub extends Hybrid {
         }
 
         this.classActor = classActor;
-        this.maxsimHubTag = MaxSimTaggingScheme.getMaxSimHubTag(this);
+        this.maxsimHubTag = MaxSimTaggingScheme.defineMaxSimHubTag(this);
         this.iTableStartIndex = firstWordIndex() + vTableLength;
         this.iTableLength = getITableLength(superClassActorIds, allInterfaceActors);
         this.mTableStartIndex = firstIntIndex();
@@ -464,5 +464,21 @@ public abstract class Hub extends Hybrid {
             final int index = getInt(i);
             visitor.visit(origin, index);
         }
+    }
+
+    /**
+     * Sets MaxSim hub tag.
+     */
+    @INLINE
+    public void setMaxSimHubTag(short tag) {
+        maxsimHubTag = tag;
+    }
+
+    /**
+     * Returns MaxSim hub tag.
+     */
+    @INLINE
+    public short getMaxSimHubTag() {
+        return maxsimHubTag;
     }
 }

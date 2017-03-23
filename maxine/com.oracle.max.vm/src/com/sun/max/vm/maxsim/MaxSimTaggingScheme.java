@@ -24,6 +24,7 @@ import com.sun.max.unsafe.*;
 import com.sun.max.vm.MaxineVM;
 import com.sun.max.vm.actor.holder.*;
 import com.sun.max.vm.object.ObjectAccess;
+import com.sun.max.vm.runtime.FatalError;
 
 /**
  * Maxsim tagging scheme.
