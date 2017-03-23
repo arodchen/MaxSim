@@ -4549,6 +4549,10 @@ public final class JniFunctions {
                 Pointer pEnd = pBegin.plus(arraySize);
                 Pointer p = pBegin.plus(Layout.byteArrayLayout().getElementOffsetFromOrigin(0));
                 setCopyPointer(isCopy, false);
+                if (MaxSimInterfaceHelpers.isTaggingEnabled()) {
+                    pEnd = pEnd.tagClear();
+                    p = p.tagClear();
+                }
                 if (MaxSimInterfaceHelpers.getLayoutScaleFactor() != MaxSimPlatform.LSF_ONE) {
                     MaxSimMediator.registerAddressRange(p, pEnd, MaxSimInterface.AddressRangeType.ARRAY_CRITICAL_ADDRESS_RANGE_VALUE);
                 }
@@ -4587,7 +4591,7 @@ public final class JniFunctions {
 
     @VM_ENTRY_POINT
     private static void ReleasePrimitiveArrayCritical(Pointer env, JniHandle array, Pointer elements, int mode) {
-        // Source: JniFunctionsSource.java:1696
+        // Source: JniFunctionsSource.java:1700
         Pointer anchor = prologue(env);
         if (logger.enabled()) {
             logger.log(LogOperations.ReleasePrimitiveArrayCritical.ordinal(), UPCALL_ENTRY, anchor, env, array, elements, Address.fromInt(mode));
@@ -4600,6 +4604,10 @@ public final class JniFunctions {
                 Size arraySize = Layout.size(Reference.fromJava(arrayObject).toOrigin());
                 Pointer pEnd = pBegin.plus(arraySize);
                 Pointer p = pBegin.plus(Layout.byteArrayLayout().getElementOffsetFromOrigin(0));
+                if (MaxSimInterfaceHelpers.isTaggingEnabled()) {
+                    pEnd = pEnd.tagClear();
+                    p = p.tagClear();
+                }
                 if (MaxSimInterfaceHelpers.getLayoutScaleFactor() != MaxSimPlatform.LSF_ONE) {
                     MaxSimMediator.deregisterAddressRange(p, pEnd, MaxSimInterface.AddressRangeType.ARRAY_CRITICAL_ADDRESS_RANGE_VALUE);
                 }
@@ -4635,7 +4643,7 @@ public final class JniFunctions {
 
     @VM_ENTRY_POINT
     private static Pointer GetStringCritical(Pointer env, JniHandle string, Pointer isCopy) {
-        // Source: JniFunctionsSource.java:1728
+        // Source: JniFunctionsSource.java:1736
         Pointer anchor = prologue(env);
         if (logger.enabled()) {
             logger.log(LogOperations.GetStringCritical.ordinal(), UPCALL_ENTRY, anchor, env, string, isCopy);
@@ -4667,7 +4675,7 @@ public final class JniFunctions {
 
     @VM_ENTRY_POINT
     private static void ReleaseStringCritical(Pointer env, JniHandle string, Pointer chars) {
-        // Source: JniFunctionsSource.java:1743
+        // Source: JniFunctionsSource.java:1751
         Pointer anchor = prologue(env);
         if (logger.enabled()) {
             logger.log(LogOperations.ReleaseStringCritical.ordinal(), UPCALL_ENTRY, anchor, env, string, chars);
@@ -4688,7 +4696,7 @@ public final class JniFunctions {
 
     @VM_ENTRY_POINT
     private static JniHandle NewWeakGlobalRef(Pointer env, JniHandle handle) {
-        // Source: JniFunctionsSource.java:1748
+        // Source: JniFunctionsSource.java:1756
         Pointer anchor = prologue(env);
         if (logger.enabled()) {
             logger.log(LogOperations.NewWeakGlobalRef.ordinal(), UPCALL_ENTRY, anchor, env, handle);
@@ -4710,7 +4718,7 @@ public final class JniFunctions {
 
     @VM_ENTRY_POINT
     private static void DeleteWeakGlobalRef(Pointer env, JniHandle handle) {
-        // Source: JniFunctionsSource.java:1753
+        // Source: JniFunctionsSource.java:1761
         Pointer anchor = prologue(env);
         if (logger.enabled()) {
             logger.log(LogOperations.DeleteWeakGlobalRef.ordinal(), UPCALL_ENTRY, anchor, env, handle);
@@ -4731,7 +4739,7 @@ public final class JniFunctions {
 
     @VM_ENTRY_POINT
     private static boolean ExceptionCheck(Pointer env) {
-        // Source: JniFunctionsSource.java:1758
+        // Source: JniFunctionsSource.java:1766
         Pointer anchor = prologue(env);
         if (logger.enabled()) {
             logger.log(LogOperations.ExceptionCheck.ordinal(), UPCALL_ENTRY, anchor, env);
@@ -4755,7 +4763,7 @@ public final class JniFunctions {
 
     @VM_ENTRY_POINT
     private static JniHandle NewDirectByteBuffer(Pointer env, Pointer address, long capacity) throws Exception {
-        // Source: JniFunctionsSource.java:1765
+        // Source: JniFunctionsSource.java:1773
         Pointer anchor = prologue(env);
         if (logger.enabled()) {
             logger.log(LogOperations.NewDirectByteBuffer.ordinal(), UPCALL_ENTRY, anchor, env, address, Address.fromLong(capacity));
@@ -4778,7 +4786,7 @@ public final class JniFunctions {
 
     @VM_ENTRY_POINT
     private static Pointer GetDirectBufferAddress(Pointer env, JniHandle buffer) throws Exception {
-        // Source: JniFunctionsSource.java:1771
+        // Source: JniFunctionsSource.java:1779
         Pointer anchor = prologue(env);
         if (logger.enabled()) {
             logger.log(LogOperations.GetDirectBufferAddress.ordinal(), UPCALL_ENTRY, anchor, env, buffer);
@@ -4805,7 +4813,7 @@ public final class JniFunctions {
 
     @VM_ENTRY_POINT
     private static long GetDirectBufferCapacity(Pointer env, JniHandle buffer) {
-        // Source: JniFunctionsSource.java:1781
+        // Source: JniFunctionsSource.java:1789
         Pointer anchor = prologue(env);
         if (logger.enabled()) {
             logger.log(LogOperations.GetDirectBufferCapacity.ordinal(), UPCALL_ENTRY, anchor, env, buffer);
@@ -4831,7 +4839,7 @@ public final class JniFunctions {
 
     @VM_ENTRY_POINT
     private static int GetObjectRefType(Pointer env, JniHandle obj) {
-        // Source: JniFunctionsSource.java:1790
+        // Source: JniFunctionsSource.java:1798
         Pointer anchor = prologue(env);
         if (logger.enabled()) {
             logger.log(LogOperations.GetObjectRefType.ordinal(), UPCALL_ENTRY, anchor, env, obj);

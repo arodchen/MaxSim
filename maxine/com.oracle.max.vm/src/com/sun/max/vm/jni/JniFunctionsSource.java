@@ -1666,6 +1666,10 @@ public final class JniFunctionsSource {
             Pointer pEnd = pBegin.plus(arraySize);
             Pointer p = pBegin.plus(Layout.byteArrayLayout().getElementOffsetFromOrigin(0));
             setCopyPointer(isCopy, false);
+            if (MaxSimInterfaceHelpers.isTaggingEnabled()) {
+                pEnd = pEnd.tagClear();
+                p = p.tagClear();
+            }
             if (MaxSimInterfaceHelpers.getLayoutScaleFactor() != MaxSimPlatform.LSF_ONE) {
                 MaxSimMediator.registerAddressRange(p, pEnd, MaxSimInterface.AddressRangeType.ARRAY_CRITICAL_ADDRESS_RANGE_VALUE);
             }
@@ -1700,6 +1704,10 @@ public final class JniFunctionsSource {
             Size arraySize = Layout.size(Reference.fromJava(arrayObject).toOrigin());
             Pointer pEnd = pBegin.plus(arraySize);
             Pointer p = pBegin.plus(Layout.byteArrayLayout().getElementOffsetFromOrigin(0));
+            if (MaxSimInterfaceHelpers.isTaggingEnabled()) {
+                pEnd = pEnd.tagClear();
+                p = p.tagClear();
+            }
             if (MaxSimInterfaceHelpers.getLayoutScaleFactor() != MaxSimPlatform.LSF_ONE) {
                 MaxSimMediator.deregisterAddressRange(p, pEnd, MaxSimInterface.AddressRangeType.ARRAY_CRITICAL_ADDRESS_RANGE_VALUE);
             }
