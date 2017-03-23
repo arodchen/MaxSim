@@ -32,6 +32,9 @@ import com.sun.max.unsafe.*;
 import com.sun.max.vm.*;
 import com.sun.max.vm.heap.*;
 import com.sun.max.vm.layout.*;
+import com.sun.max.vm.maxsim.MaxSimInterface;
+import com.sun.max.vm.maxsim.MaxSimPlatform;
+import com.sun.max.vm.runtime.FatalError;
 import com.sun.max.vm.type.*;
 
 /**
@@ -203,6 +206,19 @@ public final class TargetBundleLayout {
      * @throws IllegalArgumentException if no cell has been allocated for {@code field} in this target bundle
      */
     public Pointer cell(Address start, ArrayField field) {
+        if (MaxSimPlatform.isPointerTaggingGenerative()) {
+            switch (field) {
+                case scalarLiterals:
+                case referenceLiterals:
+                case code:
+                    start = start.tagSet((short) MaxSimInterface.PointerTag.TAG_CODE_VALUE);
+                    break;
+                default:
+                    if (MaxineVM.isDebug()) {
+                        FatalError.unexpected("Unexpected ArrayField!");
+                    }
+            }
+        }
         return start.plus(cellOffset(field)).asPointer();
     }
 
