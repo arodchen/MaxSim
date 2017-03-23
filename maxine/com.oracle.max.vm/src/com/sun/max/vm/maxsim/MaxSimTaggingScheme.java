@@ -31,13 +31,6 @@ import com.sun.max.vm.object.ObjectAccess;
 public class MaxSimTaggingScheme {
 
     /**
-     * Returns MaxSim tag associated with the hub.
-     */
-    static public short getMaxSimHubTag(Hub hub) {
-        return 0;
-    }
-
-    /**
      * Do tagging.
      */
     static public void doTagging() {
@@ -63,6 +56,32 @@ public class MaxSimTaggingScheme {
             return Pointer.equalsUntagged(ObjectAccess.toOrigin(object1), ObjectAccess.toOrigin(object2));
         } else {
             return object1 == object2;
+        }
+    }
+
+    /**
+     * Converts class ID to tag.
+     */
+    @INLINE
+    public static short classIDToTag(int classId) {
+        if (MaxineVM.isDebug() && (classId < 0)) {
+            FatalError.unexpected("Class ID passed to classIDToTag should not be negative!");
+        }
+        int tag = classId + MaxSimInterface.PointerTag.TAG_GP_LO_VALUE;
+        if ((tag >= MaxSimInterface.PointerTag.DEFINED_TAGS_NUM_VALUE)) {
+            return MaxSimInterface.PointerTag.TAG_UNDEFINED_GP_VALUE;
+        }
+        return (short) tag;
+    }
+
+    /**
+     * Defines MaxSim tag associated with a hub.
+     */
+    static public short defineMaxSimHubTag(Hub hub) {
+        if (hub.isStatic) {
+            return MaxSimInterface.PointerTag.TAG_STATIC_VALUE;
+        } else {
+            return classIDToTag(hub.classActor.id);
         }
     }
 }

@@ -55,6 +55,7 @@ import com.sun.max.vm.heap.*;
 import com.sun.max.vm.heap.gcx.*;
 import com.sun.max.vm.hosted.*;
 import com.sun.max.vm.layout.*;
+import com.sun.max.vm.maxsim.MaxSimTaggingScheme;
 import com.sun.max.vm.object.*;
 import com.sun.max.vm.reference.*;
 import com.sun.max.vm.runtime.*;
@@ -1892,5 +1893,16 @@ public abstract class ClassActor extends Actor implements RiResolvedType {
             return sortedFields.toArray(new RiResolvedField[0]);
         }
         return fields;
+    }
+
+    /**
+     * Returns MaxSim tag.
+     */
+    public short getMaxSimTag() {
+        if (dynamicHub != null) {
+            return dynamicHub.getMaxSimHubTag();
+        } else {
+            return MaxSimTaggingScheme.classIDToTag(id);
+        }
     }
 }
