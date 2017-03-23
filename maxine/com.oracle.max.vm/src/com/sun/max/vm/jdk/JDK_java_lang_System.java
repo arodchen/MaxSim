@@ -36,6 +36,7 @@ import java.util.*;
 import com.sun.max.vm.maxsim.MaxSimInterfaceHelpers;
 import com.sun.max.vm.maxsim.MaxSimPlatform;
 import com.sun.max.vm.maxsim.MaxSimMediator;
+import com.sun.max.vm.maxsim.MaxSimTaggingScheme;
 import sun.misc.*;
 import sun.reflect.*;
 
