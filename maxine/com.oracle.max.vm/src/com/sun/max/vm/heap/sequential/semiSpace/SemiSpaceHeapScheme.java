@@ -559,7 +559,7 @@ public class SemiSpaceHeapScheme extends HeapSchemeWithTLAB implements CellVisit
             final Size size = Layout.size(fromOrigin);
             Pointer toCell = gcAllocate(size);
 
-            toCell = MaxSimTaggingScheme.setTagDuringCopyingGC(Layout.cellToOriginPreservingTag(toCell), ref);
+            toCell = MaxSimTaggingScheme.setTagDuringCopyingGC(Layout.cellToOrigin(toCell), ref);
 
             DebugHeap.writeCellTag(toCell);
 
@@ -570,7 +570,7 @@ public class SemiSpaceHeapScheme extends HeapSchemeWithTLAB implements CellVisit
 
             Memory.copyBytes(fromCell, toCell, size);
 
-            final Pointer toOrigin = Layout.cellToOriginPreservingTag(toCell);
+            final Pointer toOrigin = Layout.cellToOrigin(toCell);
             final Reference toRef = Reference.fromOrigin(toOrigin);
             Layout.writeForwardRef(fromOriginUntagged, toRef);
 
@@ -604,7 +604,7 @@ public class SemiSpaceHeapScheme extends HeapSchemeWithTLAB implements CellVisit
         if (detailLogger.enabled()) {
             detailLogger.logVisitCell(cell);
         }
-        final Pointer origin = Layout.cellToOrigin(cell);
+        final Pointer origin = MaxSimTaggingScheme.setTagUsingObjectHub(Layout.cellToOrigin(cell));
 
         // Update the hub first so that is can be dereferenced to obtain
         // the reference map needed to find the other references in the object

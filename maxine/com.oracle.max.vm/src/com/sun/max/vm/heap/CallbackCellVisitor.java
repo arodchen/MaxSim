@@ -25,6 +25,7 @@ package com.sun.max.vm.heap;
 import com.sun.max.unsafe.*;
 import com.sun.max.vm.actor.holder.*;
 import com.sun.max.vm.layout.*;
+import com.sun.max.vm.maxsim.MaxSimTaggingScheme;
 import com.sun.max.vm.reference.*;
 
 /**
@@ -35,7 +36,7 @@ public abstract class CallbackCellVisitor implements CellVisitor {
 
     @Override
     public Pointer visitCell(Pointer cell) {
-        final Pointer origin = Layout.cellToOrigin(cell);
+        final Pointer origin = MaxSimTaggingScheme.setTagUsingObjectHub(Layout.cellToOrigin(cell));
         final Hub hub = UnsafeCast.asHub(Layout.readHubReference(origin).toJava());
 
         Object object = Reference.fromOrigin(origin).toJava();

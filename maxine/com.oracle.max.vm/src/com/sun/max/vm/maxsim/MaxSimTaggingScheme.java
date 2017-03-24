@@ -137,7 +137,7 @@ public class MaxSimTaggingScheme {
              * Visits a cell for an object and (un)tags it.
              */
             public Pointer visitCell(Pointer cell) {
-                final Pointer origin = Layout.cellToOrigin(cell);
+                final Pointer origin = setTagUsingObjectHub(Layout.cellToOrigin(cell));
                 final Hub hub = Layout.getHub(origin);
 
                 // Update hub reference

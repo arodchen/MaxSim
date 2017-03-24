@@ -37,6 +37,7 @@ import com.sun.max.vm.layout.*;
 import com.sun.max.vm.layout.Layout.HeaderField;
 import com.sun.max.vm.log.VMLog.Record;
 import com.sun.max.vm.log.hosted.*;
+import com.sun.max.vm.maxsim.MaxSimTaggingScheme;
 import com.sun.max.vm.object.*;
 import com.sun.max.vm.reference.*;
 import com.sun.max.vm.runtime.*;
@@ -165,7 +166,7 @@ public class DebugHeap {
             Log.print("cell: ");
             Log.print(cell);
             Log.print("  origin: ");
-            Log.print(Layout.cellToOriginPreservingTag(cell));
+            Log.print(Layout.cellToOrigin(cell));
             Log.print("  tag: ");
             Log.print(tag.asPointer());
             Log.println();
@@ -243,7 +244,7 @@ public class DebugHeap {
 
         @Override
         public Pointer visitCell(Pointer cell) {
-            final Pointer origin = Layout.cellToOrigin(cell);
+            final Pointer origin = MaxSimTaggingScheme.setTagUsingObjectHub(Layout.cellToOrigin(cell));
             visitedCellsCount++;
             checkRef(origin,  Layout.hubIndex());
             final Hub hub =  Layout.getHub(origin);
@@ -464,7 +465,7 @@ public class DebugHeap {
             }
             cell = checkDebugCellTag(start, cell);
 
-            final Pointer origin = Layout.cellToOrigin(cell);
+            final Pointer origin = MaxSimTaggingScheme.setTagUsingObjectHub(Layout.cellToOrigin(cell));
             final Hub hub = checkHub(origin, verifier);
 
             if (hub.isJLRReference) {
