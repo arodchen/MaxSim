@@ -25,6 +25,11 @@
 package com.sun.max.vm.maxsim;
 
 import com.sun.max.annotate.INLINE;
+import com.sun.max.unsafe.Address;
+import com.sun.max.vm.MaxineVM;
+import com.sun.max.vm.VMOptions;
+import com.sun.max.vm.VMStringOption;
+import com.sun.max.vm.runtime.*;
 
 public class MaxSimPlatform {
     /**
@@ -53,8 +58,7 @@ public class MaxSimPlatform {
      */
     @INLINE
     public static boolean isPointerTaggingActive() {
-        return MaxSimInterfaceHelpers.isMaxSimEnabled() && MaxSimInterfaceHelpers.isTaggingEnabled() &&
-            !isMaxSimFastForwarding;
+        return MaxSimInterfaceHelpers.isTaggingEnabled() && !isMaxSimFastForwarding;
     }
 
     /**
@@ -62,8 +66,7 @@ public class MaxSimPlatform {
      */
     @INLINE
     public static boolean isPointerTaggingGenerative() {
-        return MaxSimInterfaceHelpers.isMaxSimEnabled() && MaxSimInterfaceHelpers.isTaggingEnabled() &&
-            isPointerTaggingGenerative;
+        return MaxSimInterfaceHelpers.isTaggingEnabled() && isPointerTaggingGenerative;
     }
 
     /**
@@ -110,7 +113,57 @@ public class MaxSimPlatform {
     }
 
     /**
+     * Checks the validity of MaxSim configuration.
+     */
+    public static void checkConfiguration() {
+        if (!MaxSimInterfaceHelpers.isMaxSimEnabled()) {
+            return;
+        }
+        FatalError.check(Address.POINTER_TAG_MASK_SIZE <= Address.POINTER_TAG_MASK_MAX,
+            "POINTER_TAG_MASK_SIZE is greater POINTER_TAG_MASK_MAX.");
+    }
+
+    /**
+     * Do actions related to MaxSim when VM has just entered running phase.
+     */
+    public static void doMaxSimOnVMEnteringRunningPhase() {
+        assert MaxineVM.isRunning();
+        if (MaxSimInterfaceHelpers.isMaxSimEnabled() && MaxSimExitFFOnVMEnter && isMaxSimFastForwarding) {
+            exitMaxSimFastForwardingMode();
+        }
+    }
+
+    /**
+     * Do actions related to MaxSim when VM is about to exit running phase.
+     */
+    public static void doMaxSimOnVMExitingRunningPhase() {
+        assert MaxineVM.isRunning() || MaxineVM.isStarting();
+        if (MaxSimInterfaceHelpers.isMaxSimEnabled() && MaxSimEnterFFOnVMExit && !isMaxSimFastForwarding) {
+            enterMaxSimFastForwardingMode();
+        }
+    }
+
+    public static boolean MaxSimExitFFOnVMEnter;
+    static {
+        VMOptions.addFieldOption("-XX:", "MaxSimExitFFOnVMEnter", MaxSimPlatform.class,
+            "Make MaxSim exit fast forwarding mode on VM enter (default: false).", MaxineVM.Phase.PRISTINE);
+    }
+
+    public static boolean MaxSimEnterFFOnVMExit;
+    static {
+        VMOptions.addFieldOption("-XX:", "MaxSimEnterFFOnVMExit", MaxSimPlatform.class,
+            "Make MaxSim enter fast forwarding mode on VM exit (default: false).", MaxineVM.Phase.PRISTINE);
+    }
+
+    /**
      * Layout scale factor equal to one.
      */
     public static final int LSF_ONE = 1;
+
+    /**
+     * Checks the validity of MaxSim configuration.
+     */
+    static {
+        MaxSimPlatform.checkConfiguration();
+    }
 }
