@@ -28,6 +28,7 @@ import com.sun.max.vm.VMConfiguration;
 import com.sun.max.vm.VMOptions;
 import com.sun.max.vm.actor.holder.*;
 import com.sun.max.vm.code.Code;
+import com.sun.max.vm.compiler.target.TargetBundleLayout;
 import com.sun.max.vm.heap.*;
 import com.sun.max.vm.layout.Layout;
 import com.sun.max.vm.layout.SpecificLayout;
@@ -440,6 +441,27 @@ public class MaxSimTaggingScheme {
                 p = p.tagSet(fromTag);
             } else {
                 FatalError.unimplemented();
+            }
+        }
+        return p;
+    }
+
+    /**
+     * Sets tag during code cell visit.
+     */
+    @INLINE
+    static public Pointer setTagDuringCodeCellVisit(Pointer p, TargetBundleLayout.ArrayField field) {
+        if (MaxSimPlatform.isPointerTaggingGenerative()) {
+            switch (field) {
+                case scalarLiterals:
+                case referenceLiterals:
+                case code:
+                    p = p.tagSet((short) MaxSimInterface.PointerTag.TAG_CODE_VALUE);
+                    break;
+                default:
+                    if (MaxineVM.isDebug()) {
+                        FatalError.unexpected("Unexpected ArrayField!");
+                    }
             }
         }
         return p;
