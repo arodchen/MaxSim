@@ -35,6 +35,7 @@ import java.security.*;
 import java.util.*;
 import java.util.jar.*;
 
+import com.sun.max.vm.maxsim.MaxSimInterfaceHelpers;
 import com.sun.max.vm.maxsim.MaxSimPlatform;
 import sun.misc.*;
 
@@ -326,7 +327,9 @@ public class JavaRunScheme extends AbstractVMScheme implements RunScheme {
             classKindName = "main";
             Class<?> mainClass = loadMainClass();
             if (mainClass != null) {
-                MaxSimPlatform.doMaxSimOnVMEnteringRunningPhase();
+                if (MaxSimInterfaceHelpers.isMaxSimEnabled()) {
+                    MaxSimPlatform.doMaxSimOnVMEnteringRunningPhase();
+                }
                 lookupAndInvokeMain(mainClass);
                 error = false;
             }

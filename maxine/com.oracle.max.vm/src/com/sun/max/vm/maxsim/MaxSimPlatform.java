@@ -128,7 +128,7 @@ public class MaxSimPlatform {
      */
     public static void doMaxSimOnVMEnteringRunningPhase() {
         assert MaxineVM.isRunning();
-        if (MaxSimInterfaceHelpers.isMaxSimEnabled() && MaxSimExitFFOnVMEnter && isMaxSimFastForwarding) {
+        if (MaxSimExitFFOnVMEnter && isMaxSimFastForwarding) {
             exitMaxSimFastForwardingMode();
         }
     }
@@ -138,9 +138,24 @@ public class MaxSimPlatform {
      */
     public static void doMaxSimOnVMExitingRunningPhase() {
         assert MaxineVM.isRunning() || MaxineVM.isStarting();
-        if (MaxSimInterfaceHelpers.isMaxSimEnabled() && MaxSimEnterFFOnVMExit && !isMaxSimFastForwarding) {
+        if (MaxSimEnterFFOnVMExit && !isMaxSimFastForwarding) {
             enterMaxSimFastForwardingMode();
         }
+        if (MaxSimProfiling && MaxSimPrintProfileOnVMExit) {
+            MaxSimMediator.printProfileToFile();
+        }
+    }
+
+    public static boolean MaxSimPrintProfileOnVMExit;
+    static {
+        VMOptions.addFieldOption("-XX:", "MaxSimPrintProfileOnVMExit", MaxSimPlatform.class,
+            "Prints MaxSim profiling information on VM exit (default: false).", MaxineVM.Phase.PRISTINE);
+    }
+
+    public static boolean MaxSimProfiling;
+    static {
+        VMOptions.addFieldOption("-XX:", "MaxSimProfiling", MaxSimPlatform.class,
+            "Enables MaxSim profiling (default: false).", MaxineVM.Phase.PRISTINE);
     }
 
     public static boolean MaxSimExitFFOnVMEnter;
