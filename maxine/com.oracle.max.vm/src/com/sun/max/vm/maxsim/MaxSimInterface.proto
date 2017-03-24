@@ -91,31 +91,31 @@ enum MaxSimMagicOpcodes {
   //
   MAXSIM_M_OPC_GET_ALLOCATION_SITE_ESTIMATION_ID         = 1107;
 
-  // Enables MaxSim statistics collection.
+  // Enables MaxSim profile collection.
   //
-  // Receives MaxineVMOperationMode after enabling statistic collection.
+  // Receives MaxineVMOperationMode after enabling profile collection.
   //
-  MAXSIM_M_OPC_ENABLE_STATS_COLLECTION                   = 1108;
+  MAXSIM_M_OPC_ENABLE_PROFILE_COLLECTION                 = 1108;
 
-  // Disables MaxSim statistics collection.
+  // Disables MaxSim profile collection.
   //
-  // Receives MaxineVMOperationMode after disabling statistic collection.
+  // Receives MaxineVMOperationMode after disabling profile collection.
   //
-  MAXSIM_M_OPC_DISABLE_STATS_COLLECTION                  = 1109;
+  MAXSIM_M_OPC_DISABLE_PROFILE_COLLECTION                = 1109;
 
-  // Resets MaxSim statistics collection.
+  // Resets MaxSim profile collection.
   //
-  MAXSIM_M_OPC_RESET_STATS_COLLECTION                    = 1110;
+  MAXSIM_M_OPC_RESET_PROFILE_COLLECTION                  = 1110;
 
-  // Prints MaxSim statistics to a file.
+  // Prints MaxSim profile to a file.
   //
-  MAXSIM_M_OPC_PRINT_STATS_TO_FILE                       = 1111;
+  MAXSIM_M_OPC_PRINT_PROFILE_TO_FILE                     = 1111;
 
-  // Sets MaxSim statistics file prefix.
+  // Sets MaxSim profile file prefix.
   //
   // Receives an address of a null terminated string in the rbx register.
   //
-  MAXSIM_M_OPC_SET_STATS_FILE_PREFIX                     = 1112;
+  MAXSIM_M_OPC_SET_PROFILE_FILE_PREFIX                   = 1112;
 
   // Dumps eventual statistics.
   //
