@@ -25,8 +25,8 @@
 
 #include "ma_stats.h"
 
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
 
-vector<string> MAStatsCacheGroupNames;
+vector<string> MAProfCacheGroupNames;
 
 #endif

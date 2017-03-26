@@ -137,7 +137,7 @@ class FilterCache : public Cache {
 #ifdef CLU_STATS_ENABLED
                              , MASize_t size, MemReqStatType_t memReqStatType
 #endif
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
                              , PointerTag_t tag, MAOffset_t offset, Address bblIP
 #endif
                              ) {
@@ -155,7 +155,7 @@ class FilterCache : public Cache {
 #ifdef CLU_STATS_ENABLED
                                , size, memReqStatType
 #endif
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
                                , tag, offset, bblIP
 #endif
                                );
@@ -166,7 +166,7 @@ class FilterCache : public Cache {
 #ifdef CLU_STATS_ENABLED
                               , MASize_t size
 #endif
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
                               , PointerTag_t tag, MAOffset_t offset, Address bblIP
 #endif
                               ) {
@@ -186,7 +186,7 @@ class FilterCache : public Cache {
 #ifdef CLU_STATS_ENABLED
                                , size, StoreData
 #endif
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
                                , tag, offset, bblIP
 #endif
                                );
@@ -197,7 +197,7 @@ class FilterCache : public Cache {
 #ifdef CLU_STATS_ENABLED
                          , MASize_t size, MemReqStatType_t memReqStatType
 #endif
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
                          , PointerTag_t tag, MAOffset_t offset, Address bblIP
 #endif
                          ) {
@@ -208,7 +208,7 @@ class FilterCache : public Cache {
 #ifdef CLU_STATS_ENABLED
                     , {vAddr, size, memReqStatType, filterArray[idx].rdAddr, filterArray[idx].accessMask}
 #endif
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
                     , {tag, offset, bblIP}
 #endif
                 };

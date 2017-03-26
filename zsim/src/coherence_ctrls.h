@@ -87,8 +87,8 @@ class MESIBottomCC : public GlobAlloc {
         uint32_t numLines;
         uint32_t selfId;
 
-#ifdef MA_STATS_ENABLED
-        MAStatsCacheGroupId_t MAStatsCacheGroupId;
+#ifdef MA_PROF_ENABLED
+        MAProfCacheGroupId_t MAProfCacheGroupId;
 #endif
 
         //Profiling counters
@@ -119,8 +119,8 @@ class MESIBottomCC : public GlobAlloc {
         }
 
         void init(const g_vector<MemObject*>& _parents, Network* network, const char* name
-#ifdef MA_STATS_ENABLED
-                  , MAStatsCacheGroupId_t _MAStatsCacheGroupId
+#ifdef MA_PROF_ENABLED
+                  , MAProfCacheGroupId_t _MAProfCacheGroupId
 #endif
                   );
 
@@ -169,7 +169,7 @@ class MESIBottomCC : public GlobAlloc {
 #ifdef CLU_STATS_ENABLED
                                , Address virtualAddr, MASize_t memoryAccessSize, MemReqStatType_t memReqStatType
 #endif
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
                                , PointerTag_t tag, MAOffset_t offset, Address bblIP
 #endif
                                );
@@ -198,8 +198,8 @@ class MESIBottomCC : public GlobAlloc {
     private:
         uint32_t getParentId(Address lineAddr);
 
-#ifdef MA_STATS_ENABLED
-        void initMAStats(MAStatsCacheGroupId_t _MAStatsCacheGroupId);
+#ifdef MA_PROF_ENABLED
+        void initMAProf(MAProfCacheGroupId_t _MAProfCacheGroupId);
 #endif
 };
 
@@ -311,27 +311,27 @@ class MESICC : public CC {
         uint32_t numLines;
         bool nonInclusiveHack;
         g_string name;
-#ifdef MA_STATS_ENABLED
-        MAStatsCacheGroupId_t MAStatsCacheGroupId;
+#ifdef MA_PROF_ENABLED
+        MAProfCacheGroupId_t MAProfCacheGroupId;
 #endif
 
     public:
         //Initialization
         MESICC(uint32_t _numLines, bool _nonInclusiveHack, g_string& _name
-#ifdef MA_STATS_ENABLED
-               , MAStatsCacheGroupId_t _MAStatsCacheGroupId
+#ifdef MA_PROF_ENABLED
+               , MAProfCacheGroupId_t _MAProfCacheGroupId
 #endif
                ) : tcc(nullptr), bcc(nullptr), numLines(_numLines), nonInclusiveHack(_nonInclusiveHack), name(_name)
-#ifdef MA_STATS_ENABLED
-                   , MAStatsCacheGroupId(_MAStatsCacheGroupId)
+#ifdef MA_PROF_ENABLED
+                   , MAProfCacheGroupId(_MAProfCacheGroupId)
 #endif
         {}
 
         void setParents(uint32_t childId, const g_vector<MemObject*>& parents, Network* network) {
             bcc = new MESIBottomCC(numLines, childId, nonInclusiveHack);
             bcc->init(parents, network, name.c_str()
-#ifdef MA_STATS_ENABLED
-                      , MAStatsCacheGroupId
+#ifdef MA_PROF_ENABLED
+                      , MAProfCacheGroupId
 #endif
                       );
         }
@@ -410,8 +410,8 @@ class MESICC : public CC {
 #ifdef CLU_STATS_ENABLED
                                                , req.CLUStatsAttrs.virtualAddress, req.CLUStatsAttrs.memoryAccessSize, req.CLUStatsAttrs.memoryAccessType
 #endif
-#ifdef MA_STATS_ENABLED
-                                               , req.MAStatsAttrs.tag, req.MAStatsAttrs.offset, req.MAStatsAttrs.bblIP
+#ifdef MA_PROF_ENABLED
+                                               , req.MAProfAttrs.tag, req.MAProfAttrs.offset, req.MAProfAttrs.bblIP
 #endif
                 );
                 if (getDoneCycle) *getDoneCycle = respCycle;
@@ -464,27 +464,27 @@ class MESITerminalCC : public CC {
         MESIBottomCC* bcc;
         uint32_t numLines;
         g_string name;
-#ifdef MA_STATS_ENABLED
-        MAStatsCacheGroupId_t MAStatsCacheGroupId;
+#ifdef MA_PROF_ENABLED
+        MAProfCacheGroupId_t MAProfCacheGroupId;
 #endif
 
     public:
         //Initialization
         MESITerminalCC(uint32_t _numLines, const g_string& _name
-#ifdef MA_STATS_ENABLED
-                       , MAStatsCacheGroupId_t _MAStatsCacheGroupId
+#ifdef MA_PROF_ENABLED
+                       , MAProfCacheGroupId_t _MAProfCacheGroupId
 #endif
                        ) : bcc(nullptr), numLines(_numLines), name(_name)
-#ifdef MA_STATS_ENABLED
-                           , MAStatsCacheGroupId(_MAStatsCacheGroupId)
+#ifdef MA_PROF_ENABLED
+                           , MAProfCacheGroupId(_MAProfCacheGroupId)
 #endif
         {}
 
         void setParents(uint32_t childId, const g_vector<MemObject*>& parents, Network* network) {
             bcc = new MESIBottomCC(numLines, childId, false /*inclusive*/);
             bcc->init(parents, network, name.c_str()
-#ifdef MA_STATS_ENABLED
-                      , MAStatsCacheGroupId
+#ifdef MA_PROF_ENABLED
+                      , MAProfCacheGroupId
 #endif
                       );
         }
@@ -536,8 +536,8 @@ class MESITerminalCC : public CC {
 #ifdef CLU_STATS_ENABLED
                                                     , req.CLUStatsAttrs.virtualAddress, req.CLUStatsAttrs.memoryAccessSize, req.CLUStatsAttrs.memoryAccessType
 #endif
-#ifdef MA_STATS_ENABLED
-                                                    , req.MAStatsAttrs.tag, req.MAStatsAttrs.offset, req.MAStatsAttrs.bblIP
+#ifdef MA_PROF_ENABLED
+                                                    , req.MAProfAttrs.tag, req.MAProfAttrs.offset, req.MAProfAttrs.bblIP
 #endif
             );
             //at this point, the line is in a good state w.r.t. upper levels

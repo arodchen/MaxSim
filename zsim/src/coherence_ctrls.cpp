@@ -49,15 +49,15 @@ uint32_t MESIBottomCC::getParentId(Address lineAddr) {
     return (res % parents.size());
 }
 
-#ifdef MA_STATS_ENABLED
-void MESIBottomCC::initMAStats(MAStatsCacheGroupId_t _MAStatsCacheGroupId) {
-    MAStatsCacheGroupId = _MAStatsCacheGroupId;
+#ifdef MA_PROF_ENABLED
+void MESIBottomCC::initMAProf(MAProfCacheGroupId_t _MAProfCacheGroupId) {
+    MAProfCacheGroupId = _MAProfCacheGroupId;
 }
 #endif
 
 void MESIBottomCC::init(const g_vector<MemObject*>& _parents, Network* network, const char* name
-#ifdef MA_STATS_ENABLED
-                        , MAStatsCacheGroupId_t _MAStatsCacheGroupId
+#ifdef MA_PROF_ENABLED
+                        , MAProfCacheGroupId_t _MAProfCacheGroupId
 #endif
                         ) {
     parents.resize(_parents.size());
@@ -66,8 +66,8 @@ void MESIBottomCC::init(const g_vector<MemObject*>& _parents, Network* network, 
         parents[p] = _parents[p];
         parentRTTs[p] = (network)? network->getRTT(name, parents[p]->getName()) : 0;
     }
-#ifdef MA_STATS_ENABLED
-    initMAStats(_MAStatsCacheGroupId);
+#ifdef MA_PROF_ENABLED
+    initMAProf(_MAProfCacheGroupId);
 #endif
 }
 
@@ -91,7 +91,7 @@ uint64_t MESIBottomCC::processEviction(Address wbLineAddr, uint32_t lineId, bool
 #ifdef CLU_STATS_ENABLED
                         , {UNDEF_VIRTUAL_ADDRESS, UNDEF_MA_SIZE, MAUndefined, triggerReq.CLUStatsAttrs.replacedLineAddr, triggerReq.CLUStatsAttrs.replacedLineAccessMask}
 #endif
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
                         , {UNDEF_TAG, UNDEF_OFFSET, UNDEF_VIRTUAL_ADDRESS}
 #endif
                     };
@@ -107,7 +107,7 @@ uint64_t MESIBottomCC::processEviction(Address wbLineAddr, uint32_t lineId, bool
 #ifdef CLU_STATS_ENABLED
                         , {UNDEF_VIRTUAL_ADDRESS, UNDEF_MA_SIZE, MAUndefined, triggerReq.CLUStatsAttrs.replacedLineAddr, triggerReq.CLUStatsAttrs.replacedLineAccessMask}
 #endif
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
                         , {UNDEF_TAG, UNDEF_OFFSET, UNDEF_VIRTUAL_ADDRESS}
 #endif
                     };
@@ -128,7 +128,7 @@ uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessTy
 #ifdef CLU_STATS_ENABLED
                                      , Address virtualAddr, MASize_t memoryAccessSize, MemReqStatType_t memReqStatType
 #endif
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
                                      , PointerTag_t tag, MAOffset_t offset, Address bblIP
 #endif
                                      ) {
@@ -155,7 +155,7 @@ uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessTy
 #ifdef CLU_STATS_ENABLED
                         , {virtualAddr, memoryAccessSize, memReqStatType, UNDEF_CACHE_LINE_ADDRESS, CLU_STATS_ZERO_MASK}
 #endif
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
                         , {tag, offset, bblIP}
 #endif
                     };
@@ -164,9 +164,9 @@ uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessTy
                 profGETNextLevelLat.inc(nextLevelLat);
                 profGETNetLat.inc(netLat);
                 respCycle += nextLevelLat + netLat;
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
 #   ifdef MAXSIM_ENABLED
-                MaxSimStatsDB::getInst().addCacheMiss(tag, offset, bblIP, false, MAStatsCacheGroupId, 1);
+                MaxSimStatsDB::getInst().addCacheMiss(tag, offset, bblIP, false, MAProfCacheGroupId, 1);
 #   else
                 UNUSED_VAR(tag); UNUSED_VAR(offset); UNUSED_VAR(bblIP);
 #   endif
@@ -179,9 +179,9 @@ uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessTy
             break;
         case GETX:
             if (*state == I || *state == S) {
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
 #   ifdef MAXSIM_ENABLED
-                MaxSimStatsDB::getInst().addCacheMiss(tag, offset, bblIP, true, MAStatsCacheGroupId, 1);
+                MaxSimStatsDB::getInst().addCacheMiss(tag, offset, bblIP, true, MAProfCacheGroupId, 1);
 #   else
                 UNUSED_VAR(tag); UNUSED_VAR(offset); UNUSED_VAR(bblIP);
 #   endif
@@ -194,7 +194,7 @@ uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessTy
 #ifdef CLU_STATS_ENABLED
                         , {virtualAddr, memoryAccessSize, memReqStatType, UNDEF_CACHE_LINE_ADDRESS, CLU_STATS_ZERO_MASK}
 #endif
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
                         , {tag, offset, bblIP}
 #endif
                     };
@@ -269,7 +269,7 @@ uint64_t MESIBottomCC::processNonInclusiveWriteback(Address lineAddr, AccessType
 #ifdef CLU_STATS_ENABLED
             , {UNDEF_VIRTUAL_ADDRESS, UNDEF_MA_SIZE, MAUndefined, UNDEF_CACHE_LINE_ADDRESS, CLU_STATS_ZERO_MASK}
 #endif
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
             , {UNDEF_TAG, UNDEF_OFFSET, UNDEF_VIRTUAL_ADDRESS}
 #endif
         };

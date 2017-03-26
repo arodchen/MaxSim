@@ -35,53 +35,53 @@
 using std::string;
 using std::vector;
 
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
 
-// Memory request attributes necessary for memory access statistics collection.
-typedef struct MemReqMAStatsAttrs_t {
+// Memory request attributes necessary for profiling of memory access.
+typedef struct MemReqMAProfAttrs_t {
     PointerTag_t tag; // memory access pointer tag
     MAOffset_t offset; // memory access offset in [base + offset] addressing mode
     Address bblIP; // basic block ip address of memory access operation
-} MemReqMAStatsAttrs_t;
+} MemReqMAProfAttrs_t;
 
 // Undefined cache id.
 #define UNDEF_CACHE_ID ((uint32_t) -1)
 
 // Cache id type
-typedef uint32_t MAStatsCacheGroupId_t;
+typedef uint32_t MAProfCacheGroupId_t;
 
 // CacheRW id type
-typedef MAStatsCacheGroupId_t MAStatsCacheRWGroupId_t;
+typedef MAProfCacheGroupId_t MAProfCacheRWGroupId_t;
 
-// Memory Access (MA) cache group names for statistics collection.
-extern vector<string> MAStatsCacheGroupNames;
+// Memory Access (MA) cache group names for profiling collection.
+extern vector<string> MAProfCacheGroupNames;
 
-inline MAStatsCacheGroupId_t getMAStatsCacheGroupNum() {
-    return MAStatsCacheGroupNames.size();
+inline MAProfCacheGroupId_t getMAProfCacheGroupNum() {
+    return MAProfCacheGroupNames.size();
 }
 
-inline MAStatsCacheGroupId_t getMAStatsCacheRWGroupNum() {
-    return getMAStatsCacheGroupNum() << 1;
+inline MAProfCacheGroupId_t getMAProfCacheRWGroupNum() {
+    return getMAProfCacheGroupNum() << 1;
 }
 
-inline MAStatsCacheRWGroupId_t getMAStatsCacheRWGroupIdForCacheGroupIdAndRW(MAStatsCacheGroupId_t cacheGroupId, bool isWrite) {
+inline MAProfCacheRWGroupId_t getMAProfCacheRWGroupIdForCacheGroupIdAndRW(MAProfCacheGroupId_t cacheGroupId, bool isWrite) {
     return (cacheGroupId << 1) | isWrite;
 }
 
-inline MAStatsCacheGroupId_t getMAStatsCacheGroupIdForCacheRWGroupId(MAStatsCacheRWGroupId_t cacheRWId) {
+inline MAProfCacheGroupId_t getMAProfCacheGroupIdForCacheRWGroupId(MAProfCacheRWGroupId_t cacheRWId) {
     return cacheRWId >> 1;
 }
 
-inline bool isMAStatsCacheRWGroupIdWrite(MAStatsCacheRWGroupId_t cacheRWGroupId) {
+inline bool isMAProfCacheRWGroupIdWrite(MAProfCacheRWGroupId_t cacheRWGroupId) {
     return cacheRWGroupId & 0x1;
 }
 
-inline char const * getMAStatsCacheGroupName(MAStatsCacheGroupId_t cacheGroupId) {
-    return MAStatsCacheGroupNames[cacheGroupId].c_str();
+inline char const * getMAProfCacheGroupName(MAProfCacheGroupId_t cacheGroupId) {
+    return MAProfCacheGroupNames[cacheGroupId].c_str();
 }
 
-inline char const * getMAStatsCacheRWGroupName(MAStatsCacheRWGroupId_t cacheRWGroupId) {
-    return getMAStatsCacheGroupName(getMAStatsCacheGroupIdForCacheRWGroupId(cacheRWGroupId));
+inline char const * getMAProfCacheRWGroupName(MAProfCacheRWGroupId_t cacheRWGroupId) {
+    return getMAProfCacheGroupName(getMAProfCacheGroupIdForCacheRWGroupId(cacheRWGroupId));
 }
 
 #endif

@@ -50,7 +50,7 @@ class TimingCore : public Core {
         bool isCondBrunch;
         bool doSimulateBbl;
 
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
         Address curBblAddr;
 #endif
 

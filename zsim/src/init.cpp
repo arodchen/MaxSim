@@ -85,8 +85,8 @@ extern void EndOfPhaseActions(); //in zsim.cpp
  */
 
 BaseCache* BuildCacheBank(Config& config, const string& prefix, g_string& name, uint32_t bankSize, bool isTerminal, uint32_t domain
-#ifdef MA_STATS_ENABLED
-                          , MAStatsCacheGroupId_t MAStatsCacheGroupId
+#ifdef MA_PROF_ENABLED
+                          , MAProfCacheGroupId_t MAProfCacheGroupId
 #endif
                           ) {
     string type = config.get<const char*>(prefix + "type", "Simple");
@@ -270,14 +270,14 @@ BaseCache* BuildCacheBank(Config& config, const string& prefix, g_string& name, 
     CC* cc;
     if (isTerminal) {
         cc = new MESITerminalCC(numLines, name
-#ifdef MA_STATS_ENABLED
-                                , MAStatsCacheGroupId
+#ifdef MA_PROF_ENABLED
+                                , MAProfCacheGroupId
 #endif
                                 );
     } else {
         cc = new MESICC(numLines, nonInclusiveHack, name
-#ifdef MA_STATS_ENABLED
-                        , MAStatsCacheGroupId
+#ifdef MA_PROF_ENABLED
+                        , MAProfCacheGroupId
 #endif
                         );
     }
@@ -409,11 +409,11 @@ CacheGroup* BuildCacheGroup(Config& config, const string& name, bool isTerminal)
     uint32_t banks = config.get<uint32_t>(prefix + "banks", 1);
     uint32_t caches = config.get<uint32_t>(prefix + "caches", 1);
 
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
     // indicates cache group id for Memory Access (MA) statistics collection
-    MAStatsCacheGroupId_t MAStatsCacheGroupId = config.get<uint32_t>(prefix + "MAStatsCacheGroupId", UNDEF_CACHE_ID);
-    if ((MAStatsCacheGroupId != UNDEF_CACHE_ID) && (MAStatsCacheGroupId >= getMAStatsCacheGroupNum())) {
-        panic("MAStatsCacheGroupId (%d) >= number of MAStatsCacheGroupNames (%d)", MAStatsCacheGroupId, getMAStatsCacheGroupNum());
+    MAProfCacheGroupId_t MAProfCacheGroupId = config.get<uint32_t>(prefix + "MAProfCacheGroupId", UNDEF_CACHE_ID);
+    if ((MAProfCacheGroupId != UNDEF_CACHE_ID) && (MAProfCacheGroupId >= getMAProfCacheGroupNum())) {
+        panic("MAProfCacheGroupId (%d) >= number of MAProfCacheGroupNames (%d)", MAProfCacheGroupId, getMAProfCacheGroupNum());
     }
 #endif
 
@@ -435,8 +435,8 @@ CacheGroup* BuildCacheGroup(Config& config, const string& name, bool isTerminal)
             g_string bankName(ss.str().c_str());
             uint32_t domain = (i*banks + j)*zinfo->numDomains/(caches*banks); //(banks > 1)? nextDomain() : (i*banks + j)*zinfo->numDomains/(caches*banks);
             cg[i][j] = BuildCacheBank(config, prefix, bankName, bankSize, isTerminal, domain
-#ifdef MA_STATS_ENABLED
-                                      , MAStatsCacheGroupId
+#ifdef MA_PROF_ENABLED
+                                      , MAProfCacheGroupId
 #endif
                                       );
         }
@@ -920,8 +920,8 @@ void SimInit(const char* configFile, const char* outputDir, uint32_t shmid) {
         }
     }
 #endif
-#ifdef MA_STATS_ENABLED
-    MAStatsCacheGroupNames = ParseList<string>(config.get<const char *>("sys.caches.MAStatsCacheGroupNames", ""), "|");
+#ifdef MA_PROF_ENABLED
+    MAProfCacheGroupNames = ParseList<string>(config.get<const char *>("sys.caches.MAProfCacheGroupNames", ""), "|");
 #endif
 
     if (zinfo->traceDriven) {

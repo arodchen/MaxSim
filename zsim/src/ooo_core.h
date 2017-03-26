@@ -370,7 +370,7 @@ class OOOCore : public Core {
         uint64_t regScoreboard[MAX_REGISTERS]; //contains timestamp of next issue cycles where each reg can be sourced
 
         BblInfo* prevBbl;
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
         Address prevBblAddr;
 #endif
 
@@ -387,7 +387,7 @@ class OOOCore : public Core {
         PointerTag_t loadTag[256];
         PointerTag_t storeTag[256];
 #endif
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
         int32_t loadOffset[256];
         int32_t storeOffset[256];
 #endif

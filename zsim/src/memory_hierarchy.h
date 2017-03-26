@@ -103,8 +103,8 @@ struct MemReq {
 #ifdef CLU_STATS_ENABLED
     MemReqCLUStatsAttrs_t CLUStatsAttrs;
 #endif
-#ifdef MA_STATS_ENABLED
-    MemReqMAStatsAttrs_t MAStatsAttrs;
+#ifdef MA_PROF_ENABLED
+    MemReqMAProfAttrs_t MAProfAttrs;
 #endif
 
     inline void set(Flag f) {flags |= f;}

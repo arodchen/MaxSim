@@ -29,7 +29,7 @@
 #include "zsim.h"
 #include "ma_stats.h"
 
-#if defined(MA_STATS_ENABLED) && defined(MAXSIM_ENABLED)
+#if defined(MA_PROF_ENABLED) && defined(MAXSIM_ENABLED)
 
 class MaxSimStatsDB {
     public:
@@ -38,7 +38,7 @@ class MaxSimStatsDB {
         }
 
         // Add cache miss
-        void addCacheMiss(PointerTag_t tag, MAOffset_t offset, Address bblIP, bool isWrite, MAStatsCacheGroupId_t cacheGroupId, int missCount) {
+        void addCacheMiss(PointerTag_t tag, MAOffset_t offset, Address bblIP, bool isWrite, MAProfCacheGroupId_t cacheGroupId, int missCount) {
         }
 
     // Singleton part
@@ -62,6 +62,6 @@ class MaxSimStatsDB {
         ~MaxSimStatsDB() {}
 };
 
-#endif // MA_STATS_ENABLED && MAXSIM_ENABLED
+#endif // MA_PROF_ENABLED && MAXSIM_ENABLED
 
 #endif // MAXINE_STATISTICS_H_

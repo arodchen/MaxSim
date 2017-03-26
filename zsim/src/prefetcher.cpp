@@ -144,7 +144,7 @@ uint64_t StreamPrefetcher::access(MemReq& req) {
 #ifdef CLU_STATS_ENABLED
                             , {UNDEF_VIRTUAL_ADDRESS, UNDEF_MA_SIZE, MAUndefined, UNDEF_CACHE_LINE_ADDRESS, CLU_STATS_ZERO_MASK}
 #endif
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
                             , {UNDEF_TAG, UNDEF_OFFSET, UNDEF_VIRTUAL_ADDRESS}
 #endif
                     };

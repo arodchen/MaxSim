@@ -34,7 +34,7 @@
 #endif // MAXSIM_ENABLED
 
 SimpleCore::SimpleCore(FilterCache* _l1i, FilterCache* _l1d, g_string& _name) : Core(_name), l1i(_l1i), l1d(_l1d), instrs(0), curCycle(0), haltedCycles(0), isCondBrunch(false), doSimulateBbl(true) {
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
     curBblAddr = UNDEF_VIRTUAL_ADDRESS;
 #endif
 }
@@ -57,7 +57,7 @@ uint64_t SimpleCore::getPhaseCycles() const {
 }
 
 void SimpleCore::load(Address addr, MASize_t size, Address base) {
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
 #   ifdef POINTER_TAGGING_ENABLED
     PointerTag_t tag = getPointerTag(base);
 #   else
@@ -77,19 +77,19 @@ void SimpleCore::load(Address addr, MASize_t size, Address base) {
 #   else
     UNUSED_VAR(tag); UNUSED_VAR(offset); UNUSED_VAR(curBblAddr);
 #   endif
-#endif // MA_STATS_ENABLED
+#endif // MA_PROF_ENABLED
     curCycle = l1d->load(addr, curCycle
 #ifdef CLU_STATS_ENABLED
                          , size, LoadData
 #endif
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
                          , tag, offset, curBblAddr
 #endif
                          );
 }
 
 void SimpleCore::store(Address addr, MASize_t size, Address base) {
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
 #   ifdef POINTER_TAGGING_ENABLED
     PointerTag_t tag = getPointerTag(base);
 #   else
@@ -109,12 +109,12 @@ void SimpleCore::store(Address addr, MASize_t size, Address base) {
 #   else
     UNUSED_VAR(tag); UNUSED_VAR(offset); UNUSED_VAR(curBblAddr);
 #   endif
-#endif // MA_STATS_ENABLED
+#endif // MA_PROF_ENABLED
     curCycle = l1d->store(addr, curCycle
 #ifdef CLU_STATS_ENABLED
                           , size
 #endif
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
                           , tag, offset, curBblAddr
 #endif
                           );
@@ -133,7 +133,7 @@ void SimpleCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
     //info("%d %d", bblInfo->instrs, bblInfo->bytes);
     instrs += bblInfo->instrs;
     curCycle += bblInfo->instrs;
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
     curBblAddr = bblAddr;
 #endif
     isCondBrunch = false;
@@ -147,7 +147,7 @@ void SimpleCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
 #ifdef CLU_STATS_ENABLED
                              , (1 << lineBits), FetchRightPath
 #endif
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
                              , FETCH_TAG, UNDEF_OFFSET, curBblAddr
 #endif
                              );
@@ -156,7 +156,7 @@ void SimpleCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
 
 void SimpleCore::contextSwitch(int32_t gid) {
     if (gid == -1) {
-#ifdef MA_STATS_ENABLED
+#ifdef MA_PROF_ENABLED
         curBblAddr = UNDEF_VIRTUAL_ADDRESS;
 #endif
         l1i->contextSwitch();
