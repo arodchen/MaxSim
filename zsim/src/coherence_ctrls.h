@@ -34,7 +34,7 @@
 #include "memory_hierarchy.h"
 #include "pad.h"
 #include "stats.h"
-#include "ma_stats.h"
+#include "ma_prof.h"
 
 //TODO: Now that we have a pure CC interface, the MESI controllers should go on different files.
 

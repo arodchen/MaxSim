@@ -27,7 +27,7 @@
 #define MAXINE_STATISTICS_H_
 
 #include "zsim.h"
-#include "ma_stats.h"
+#include "ma_prof.h"
 
 #if defined(MA_PROF_ENABLED) && defined(MAXSIM_ENABLED)
 

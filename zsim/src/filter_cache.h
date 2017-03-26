@@ -31,7 +31,7 @@
 #include "galloc.h"
 #include "zsim.h"
 #include "clu_stats.h"
-#include "ma_stats.h"
+#include "ma_prof.h"
 
 /* Extends Cache with an L0 direct-mapped cache, optimized to hell for hits
  *

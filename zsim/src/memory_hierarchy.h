@@ -34,7 +34,7 @@
 #include "galloc.h"
 #include "locks.h"
 #include "clu_stats.h"
-#include "ma_stats.h"
+#include "ma_prof.h"
 
 /** TYPES **/
 

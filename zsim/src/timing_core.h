@@ -31,7 +31,7 @@
 #include "event_recorder.h"
 #include "memory_hierarchy.h"
 #include "pad.h"
-#include "ma_stats.h"
+#include "ma_prof.h"
 
 class FilterCache;
 
