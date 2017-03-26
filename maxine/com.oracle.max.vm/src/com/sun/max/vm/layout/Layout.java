@@ -866,6 +866,14 @@ public final class Layout {
     }
 
     /**
+     * Offset to a cell's hub from its origin..
+     */
+    @FOLD
+    public static int hubOffset() {
+        return generalLayout().getOffsetFromOrigin(HeaderField.HUB).toInt();
+    }
+
+    /**
      * Word index to the first element of a reference array from its origin.
      */
     @FOLD

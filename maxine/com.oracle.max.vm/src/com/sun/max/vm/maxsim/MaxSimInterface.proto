@@ -55,35 +55,35 @@ enum MaxSimMagicOpcodes {
   //
   MAXSIM_M_OPC_GET_AVAILABLE_PROCESSORS_NUM              = 1101;
 
+  // Registers an offset of the hub inside an object.
+  //
+  // Receives an offset in the rbx register.
+  //
+  MAXSIM_M_OPC_REPORT_HUB_OFFSET                         = 1102;
+
   // Registers an offset inside a hub where a HubType value is stored.
   //
   // Receives an offset in the rbx register.
   //
-  MAXSIM_M_OPC_REPORT_HUB_TYPE_OFFSET                    = 1102;
+  MAXSIM_M_OPC_REPORT_HUB_TYPE_OFFSET                    = 1103;
 
   // Registers an offset of the first element inside an array.
   //
   // Receives an offset in the rbx register.
   //
-  MAXSIM_M_OPC_REPORT_ARRAY_FIRST_ELEM_OFFSET            = 1103;
+  MAXSIM_M_OPC_REPORT_ARRAY_FIRST_ELEM_OFFSET            = 1104;
 
   // Registers an address range.
   //
   // Receives an AddressRange_t variable address in the rbx register.
   //
-  MAXSIM_M_OPC_REGISTER_ADDRESS_RANGE                    = 1104;
+  MAXSIM_M_OPC_REGISTER_ADDRESS_RANGE                    = 1105;
 
   // Deregisters an address range.
   //
   // Receives an AddressRange_t variable address in the rbx register.
   //
-  MAXSIM_M_OPC_DEREGISTER_ADDRESS_RANGE                  = 1105;
-
-  // Registers an object allocation.
-  //
-  // Receives a size, a tag and a tagType in the rbx register packed as described by MaxSimMagicOpPackedArgsOffsets.
-  //
-  MAXSIM_M_OPC_REGISTER_OBJECT_ALLOCATION                = 1106;
+  MAXSIM_M_OPC_DEREGISTER_ADDRESS_RANGE                  = 1106;
 
   // Gets an allocations site estimation id.
   //
@@ -91,35 +91,37 @@ enum MaxSimMagicOpcodes {
   //
   MAXSIM_M_OPC_GET_ALLOCATION_SITE_ESTIMATION_ID         = 1107;
 
+  // Profiles an object allocation.
+  //
+  // Receives a size, a tag and a tagType in the rbx register packed as described by MaxSimMagicOpPackedArgsOffsets.
+  //
+  MAXSIM_M_OPC_PROFILE_OBJECT_ALLOCATION                 = 1108;
+
   // Enables MaxSim profile collection.
   //
   // Receives MaxineVMOperationMode after enabling profile collection.
   //
-  MAXSIM_M_OPC_ENABLE_PROFILE_COLLECTION                 = 1108;
+  MAXSIM_M_OPC_ENABLE_PROFILE_COLLECTION                 = 1109;
 
   // Disables MaxSim profile collection.
   //
   // Receives MaxineVMOperationMode after disabling profile collection.
   //
-  MAXSIM_M_OPC_DISABLE_PROFILE_COLLECTION                = 1109;
+  MAXSIM_M_OPC_DISABLE_PROFILE_COLLECTION                = 1110;
 
   // Resets MaxSim profile collection.
   //
-  MAXSIM_M_OPC_RESET_PROFILE_COLLECTION                  = 1110;
+  MAXSIM_M_OPC_RESET_PROFILE_COLLECTION                  = 1111;
 
   // Prints MaxSim profile to a file.
   //
-  MAXSIM_M_OPC_PRINT_PROFILE_TO_FILE                     = 1111;
-
-  // Sets MaxSim profile file prefix.
-  //
   // Receives an address of a null terminated string in the rbx register.
   //
-  MAXSIM_M_OPC_SET_PROFILE_FILE_PREFIX                   = 1112;
+  MAXSIM_M_OPC_PRINT_PROFILE_TO_FILE                     = 1112;
 
   // Dumps eventual statistics.
   //
-  // Receives MaxineVMOperationMode after dumping evnetual statistics.
+  // Receives MaxineVMOperationMode after dumping eventual statistics.
   //
   MAXSIM_M_OPC_DUMP_EVENTUAL_STATS                       = 1113;
 
@@ -141,9 +143,10 @@ enum MaxSimMagicOpcodes {
 enum MaxSimMagicOpPackedArgsOffsets {
   option allow_alias = true;
 
-  MAXSIM_M_OP_REGISTER_OBJECT_ALLOCATION_P_ARG_SIZE_OFF      = 0;
-  MAXSIM_M_OP_REGISTER_OBJECT_ALLOCATION_P_ARG_TAG_OFF      = 32;
-  MAXSIM_M_OP_REGISTER_OBJECT_ALLOCATION_P_ARG_TAG_TYPE_OFF = 48;
+  MAXSIM_M_OP_PROFILE_OBJECT_ALLOCATION_P_ARG_SIZE_OFF      = 0;
+  MAXSIM_M_OP_PROFILE_OBJECT_ALLOCATION_P_ARG_TAG_TYPE_OFF = 32;
+  MAXSIM_M_OP_PROFILE_OBJECT_ALLOCATION_P_ARG_TAG_OFF      = 48;
+
 }
 
 // Address range type.

@@ -32,10 +32,7 @@ import com.sun.max.unsafe.*;
 import com.sun.max.vm.*;
 import com.sun.max.vm.heap.*;
 import com.sun.max.vm.layout.*;
-import com.sun.max.vm.maxsim.MaxSimInterface;
-import com.sun.max.vm.maxsim.MaxSimPlatform;
 import com.sun.max.vm.maxsim.MaxSimTaggingScheme;
-import com.sun.max.vm.runtime.FatalError;
 import com.sun.max.vm.type.*;
 
 /**
@@ -207,7 +204,7 @@ public final class TargetBundleLayout {
      * @throws IllegalArgumentException if no cell has been allocated for {@code field} in this target bundle
      */
     public Pointer cell(Address start, ArrayField field) {
-        return MaxSimTaggingScheme.setTagDuringCodeCellVisit(start.plus(cellOffset(field)).asPointer(), field);
+        return MaxSimTaggingScheme.setTagDuringCodeCellVisit(start.plus(cellOffset(field)).asPointer());
     }
 
     /**
@@ -219,7 +216,7 @@ public final class TargetBundleLayout {
      * @throws IllegalArgumentException if no cell has been allocated for {@code field} in this target bundle
      */
     public Pointer cellEnd(Address start, ArrayField field) {
-        return start.plus(cellEndOffset(field)).asPointer();
+        return MaxSimTaggingScheme.setTagDuringCodeCellVisit(start.plus(cellEndOffset(field)).asPointer());
     }
 
     /**

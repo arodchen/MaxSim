@@ -74,6 +74,7 @@ public class MaxSimPlatform {
      */
     public static synchronized void exitMaxSimFastForwardingMode() {
         // report Maxine parameters
+        MaxSimMediator.reportHubOffsetToZSim();
         MaxSimMediator.reportHubTypeOffsetToZSim();
         MaxSimMediator.reportArrayFirstElemOffsetToZSim();
         MaxSimMediator.reportAllocationFrontierAddressRanges();
@@ -86,11 +87,18 @@ public class MaxSimPlatform {
             // do pointer tagging of all object pointers
             isPointerTaggingGenerative = true;
             MaxSimTaggingScheme.doTagging();
+            // enable profiling collection
+            if (isMaxSimProfiling()) {
+                MaxSimMediator.enableProfileCollection(
+                    MaxSimInterface.MaxineVMOperationMode.MAXINE_VM_OPERATION_MODE_RUNNING_NON_GC_VALUE);
+            }
         }
 
         // dump ZSim eventual stats
-        MaxSimMediator.dumpEventualStats(
-            MaxSimInterface.MaxineVMOperationMode.MAXINE_VM_OPERATION_MODE_RUNNING_NON_GC_VALUE);
+        if (!isMaxSimProfiling()) {
+            MaxSimMediator.dumpEventualStats(
+                MaxSimInterface.MaxineVMOperationMode.MAXINE_VM_OPERATION_MODE_RUNNING_NON_GC_VALUE);
+        }
     }
 
     /**
@@ -98,10 +106,18 @@ public class MaxSimPlatform {
      */
     public static synchronized void enterMaxSimFastForwardingMode() {
         // dump ZSim eventual stats
-        MaxSimMediator.dumpEventualStats(
-            MaxSimInterface.MaxineVMOperationMode.MAXINE_VM_OPERATION_MODE_UNKNOWN_VALUE);
+        if (!isMaxSimProfiling()) {
+            MaxSimMediator.dumpEventualStats(
+                MaxSimInterface.MaxineVMOperationMode.MAXINE_VM_OPERATION_MODE_UNKNOWN_VALUE);
+        }
 
         if (isPointerTaggingActive()) {
+            // disable profiling collection
+            if (isMaxSimProfiling()) {
+                MaxSimMediator.disableProfileCollection(
+                    MaxSimInterface.MaxineVMOperationMode.MAXINE_VM_OPERATION_MODE_UNKNOWN_VALUE);
+            }
+
             // do pointer untagging of all object pointers
             isPointerTaggingGenerative = false;
             MaxSimTaggingScheme.doUntagging();
@@ -141,16 +157,29 @@ public class MaxSimPlatform {
         if (MaxSimEnterFFOnVMExit && !isMaxSimFastForwarding) {
             enterMaxSimFastForwardingMode();
         }
-        if (MaxSimProfiling && MaxSimPrintProfileOnVMExit) {
-            MaxSimMediator.printProfileToFile();
+        if (MaxSimPrintProfileOnVMExit) {
+            MaxSimMediator.printProfileToFile(null);
         }
+    }
+
+    /**
+     * Indicates whether MaxSim profiling information should be collected.
+     */
+    public static boolean isMaxSimProfiling() {
+        return MaxSimInterfaceHelpers.isMaxSimEnabled() && MaxSimProfiling;
     }
 
     public static boolean MaxSimPrintProfileOnVMExit;
     static {
         VMOptions.addFieldOption("-XX:", "MaxSimPrintProfileOnVMExit", MaxSimPlatform.class,
-            "Prints MaxSim profiling information on VM exit (default: false).", MaxineVM.Phase.PRISTINE);
+            "Makes MaxSim to print profiling information on VM exit (default: false).", MaxineVM.Phase.PRISTINE);
     }
+
+    public static VMStringOption MaxSimMaxineInfoFileName = VMOptions.register(new VMStringOption("-XX:MaxSimMaxineInfoFileName=", false, "maxine-info.db",
+        "MaxSim Maxine information file name"), MaxineVM.Phase.PRISTINE);
+
+    public static VMStringOption MaxSimZSimProfileFileName = VMOptions.register(new VMStringOption("-XX:MaxSimZSimProfileFileName=", false, "zsim-prof.db",
+        "MaxSim ZSim profile file name"), MaxineVM.Phase.PRISTINE);
 
     public static boolean MaxSimProfiling;
     static {
@@ -161,7 +190,7 @@ public class MaxSimPlatform {
     public static boolean MaxSimExitFFOnVMEnter;
     static {
         VMOptions.addFieldOption("-XX:", "MaxSimExitFFOnVMEnter", MaxSimPlatform.class,
-            "Make MaxSim exit fast forwarding mode on VM enter (default: false).", MaxineVM.Phase.PRISTINE);
+            "Makes MaxSim exit fast forwarding mode on VM enter (default: false).", MaxineVM.Phase.PRISTINE);
     }
 
     public static boolean MaxSimEnterFFOnVMExit;

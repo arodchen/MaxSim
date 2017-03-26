@@ -28,7 +28,6 @@ import com.sun.max.vm.VMConfiguration;
 import com.sun.max.vm.VMOptions;
 import com.sun.max.vm.actor.holder.*;
 import com.sun.max.vm.code.Code;
-import com.sun.max.vm.compiler.target.TargetBundleLayout;
 import com.sun.max.vm.heap.*;
 import com.sun.max.vm.layout.Layout;
 import com.sun.max.vm.layout.SpecificLayout;
@@ -415,16 +414,22 @@ public class MaxSimTaggingScheme {
      * Sets tag during allocation.
      */
     @INLINE
-    static public Pointer setTagDuringAllocation(Pointer p, short tag) {
+    static public Pointer setTagDuringAllocationAndProfile(Pointer p, short tag, Size size) {
         if (MaxSimPlatform.isPointerTaggingGenerative()) {
+            short allocationTag = tag;
+            short tagType = MaxSimInterface.PointerTaggingType.UNDEFINED_TAGGING_VALUE;
             if (MaxSimInterfaceHelpers.isClassIDTagging()) {
                 p = p.tagSet(tag);
+                tagType = MaxSimInterface.PointerTaggingType.CLASS_ID_TAGGING_VALUE;
             } else if (MaxSimInterfaceHelpers.isAllocationSiteIDTagging()) {
                 short allocationSiteEstimationId = MaxSimMediator.getAllocationSiteEstimationId(tag);
                 p = p.tagSet(allocationSiteEstimationId);
+                allocationTag = allocationSiteEstimationId;
+                tagType = MaxSimInterface.PointerTaggingType.ALLOC_SITE_ID_TAGGING_VALUE;
             } else {
                 FatalError.unimplemented();
             }
+            MaxSimMediator.profileObjectAllocation(allocationTag, tagType, size.toLong());
         }
         return p;
     }
@@ -450,19 +455,9 @@ public class MaxSimTaggingScheme {
      * Sets tag during code cell visit.
      */
     @INLINE
-    static public Pointer setTagDuringCodeCellVisit(Pointer p, TargetBundleLayout.ArrayField field) {
+    static public Pointer setTagDuringCodeCellVisit(Pointer p) {
         if (MaxSimPlatform.isPointerTaggingGenerative()) {
-            switch (field) {
-                case scalarLiterals:
-                case referenceLiterals:
-                case code:
-                    p = p.tagSet((short) MaxSimInterface.PointerTag.TAG_CODE_VALUE);
-                    break;
-                default:
-                    if (MaxineVM.isDebug()) {
-                        FatalError.unexpected("Unexpected ArrayField!");
-                    }
-            }
+            return p.tagSet((short) MaxSimInterface.PointerTag.TAG_CODE_VALUE);
         }
         return p;
     }
