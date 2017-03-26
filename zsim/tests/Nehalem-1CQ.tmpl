@@ -44,7 +44,7 @@ sys = {
       latency = 6;
       children = "l1i|l1d";
       size = 262144;
-      MAStatsCacheGroupId = 0;
+      MAProfCacheGroupId = 0;
     };
 
     l3 = {
@@ -58,10 +58,10 @@ sys = {
       latency = 30;
       children = "l2";
       size = 2097152;
-      MAStatsCacheGroupId = 1;
+      MAProfCacheGroupId = 1;
     };
 
-    MAStatsCacheGroupNames = "l2|l3";
+    MAProfCacheGroupNames = "l2|l3";
   };
 
   cores = {
