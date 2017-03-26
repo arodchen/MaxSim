@@ -31,7 +31,7 @@
 
 #if defined(MA_PROF_ENABLED) && defined(MAXSIM_ENABLED)
 
-class MaxSimStatsDB {
+class MaxSimProfDB {
     public:
         // Add memory access
         void addMemoryAccess(PointerTag_t tag, MAOffset_t offset, Address bblIP, bool isWrite) {
@@ -44,22 +44,22 @@ class MaxSimStatsDB {
     // Singleton part
     public:
         // Get instance
-        static MaxSimStatsDB & getInst() {
-            static MaxSimStatsDB maxsimStatsDB;
+        static MaxSimProfDB & getInst() {
+            static MaxSimProfDB maxsimStatsDB;
 
             return maxsimStatsDB;
         }
 
         // Delete copy and move constructors and assign operators
-        MaxSimStatsDB(MaxSimStatsDB const&) = delete;
-        MaxSimStatsDB(MaxSimStatsDB&&) = delete;
-        MaxSimStatsDB& operator=(MaxSimStatsDB const&) = delete;
-        MaxSimStatsDB& operator=(MaxSimStatsDB &&) = delete;
+        MaxSimProfDB(MaxSimProfDB const&) = delete;
+        MaxSimProfDB(MaxSimProfDB&&) = delete;
+        MaxSimProfDB& operator=(MaxSimProfDB const&) = delete;
+        MaxSimProfDB& operator=(MaxSimProfDB &&) = delete;
 
     private:
         // Privatize constructor and destructor
-        MaxSimStatsDB() {}
-        ~MaxSimStatsDB() {}
+        MaxSimProfDB() {}
+        ~MaxSimProfDB() {}
 };
 
 #endif // MA_PROF_ENABLED && MAXSIM_ENABLED

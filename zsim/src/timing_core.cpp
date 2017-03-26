@@ -108,7 +108,7 @@ void TimingCore::loadAndRecord(Address addr, MASize_t size, Address base) {
         return;
     }
     addr = MaxSimAddressSpaceMorphing::getInst().processMAAddressAndRemap(addr, base, offset, tag);
-    MaxSimStatsDB::getInst().addMemoryAccess(tag, offset, curBblAddr, false);
+    MaxSimProfDB::getInst().addMemoryAccess(tag, offset, curBblAddr, false);
 #   else
     UNUSED_VAR(tag); UNUSED_VAR(offset); UNUSED_VAR(curBblAddr);
 #   endif
@@ -139,7 +139,7 @@ void TimingCore::storeAndRecord(Address addr, MASize_t size, Address base) {
         return;
     }
     addr = MaxSimAddressSpaceMorphing::getInst().processMAAddressAndRemap(addr, base, offset, tag);
-    MaxSimStatsDB::getInst().addMemoryAccess(tag, offset, curBblAddr, true);
+    MaxSimProfDB::getInst().addMemoryAccess(tag, offset, curBblAddr, true);
 #   else
     UNUSED_VAR(tag); UNUSED_VAR(offset); UNUSED_VAR(curBblAddr);
 #   endif
@@ -176,7 +176,7 @@ void TimingCore::bblAndRecord(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
     for (Address fetchAddr = bblAddr; fetchAddr < endBblAddr; fetchAddr+=(1 << lineBits)) {
         uint64_t startCycle = curCycle;
 #ifdef MAXSIM_ENABLED
-        MaxSimStatsDB::getInst().addMemoryAccess(FETCH_TAG, UNDEF_OFFSET, bblAddr, false);
+        MaxSimProfDB::getInst().addMemoryAccess(FETCH_TAG, UNDEF_OFFSET, bblAddr, false);
 #endif
         curCycle = l1i->load(fetchAddr, curCycle
 #ifdef CLU_STATS_ENABLED

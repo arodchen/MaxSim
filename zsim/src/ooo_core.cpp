@@ -370,7 +370,7 @@ inline void OOOCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
                     if (addr != UNDEF_VIRTUAL_ADDRESS) {
 #ifdef MA_PROF_ENABLED
 #   ifdef MAXSIM_ENABLED
-                        MaxSimStatsDB::getInst().addMemoryAccess(tag, offset, bblIP, false);
+                        MaxSimProfDB::getInst().addMemoryAccess(tag, offset, bblIP, false);
 #   else
                         UNUSED_VAR(tag); UNUSED_VAR(offset); UNUSED_VAR(bblIP);
 #   endif
@@ -435,7 +435,7 @@ inline void OOOCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
                     if (addr != UNDEF_VIRTUAL_ADDRESS) {
 #ifdef MA_PROF_ENABLED
 #   ifdef MAXSIM_ENABLED
-                        MaxSimStatsDB::getInst().addMemoryAccess(tag, offset, bblIP, true);
+                        MaxSimProfDB::getInst().addMemoryAccess(tag, offset, bblIP, true);
 #   else
                         UNUSED_VAR(tag); UNUSED_VAR(offset); UNUSED_VAR(bblIP);
 #   endif
@@ -551,7 +551,7 @@ inline void OOOCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
         for (uint32_t i = 0; i < 5*64/lineSize; i++) {
 #ifdef MA_PROF_ENABLED
 #   ifdef MAXSIM_ENABLED
-            MaxSimStatsDB::getInst().addMemoryAccess(FETCH_TAG, UNDEF_OFFSET, bblIP, false);
+            MaxSimProfDB::getInst().addMemoryAccess(FETCH_TAG, UNDEF_OFFSET, bblIP, false);
 #   endif
 #endif
             uint64_t fetchLat = l1i->load(wrongPathAddr + lineSize*i, curCycle
@@ -586,7 +586,7 @@ inline void OOOCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
         // models (but we could move to a fetch-centric recorder to avoid this)
 #ifdef MA_PROF_ENABLED
 #   ifdef MAXSIM_ENABLED
-        MaxSimStatsDB::getInst().addMemoryAccess(FETCH_TAG, UNDEF_OFFSET, bblIP, false);
+        MaxSimProfDB::getInst().addMemoryAccess(FETCH_TAG, UNDEF_OFFSET, bblIP, false);
 #   endif
 #endif
         uint64_t fetchLat = l1i->load(fetchAddr, curCycle

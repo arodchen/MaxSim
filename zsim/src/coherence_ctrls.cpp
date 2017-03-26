@@ -166,7 +166,7 @@ uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessTy
                 respCycle += nextLevelLat + netLat;
 #ifdef MA_PROF_ENABLED
 #   ifdef MAXSIM_ENABLED
-                MaxSimStatsDB::getInst().addCacheMiss(tag, offset, bblIP, false, MAProfCacheGroupId, 1);
+                MaxSimProfDB::getInst().addCacheMiss(tag, offset, bblIP, false, MAProfCacheGroupId, 1);
 #   else
                 UNUSED_VAR(tag); UNUSED_VAR(offset); UNUSED_VAR(bblIP);
 #   endif
@@ -181,7 +181,7 @@ uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessTy
             if (*state == I || *state == S) {
 #ifdef MA_PROF_ENABLED
 #   ifdef MAXSIM_ENABLED
-                MaxSimStatsDB::getInst().addCacheMiss(tag, offset, bblIP, true, MAProfCacheGroupId, 1);
+                MaxSimProfDB::getInst().addCacheMiss(tag, offset, bblIP, true, MAProfCacheGroupId, 1);
 #   else
                 UNUSED_VAR(tag); UNUSED_VAR(offset); UNUSED_VAR(bblIP);
 #   endif
