@@ -75,7 +75,7 @@
 #include "weave_md1_mem.h" //validation, could be taken out...
 #include "zsim.h"
 #include "pointer_tagging.h"
-#include "ma_stats.h"
+#include "ma_prof.h"
 
 extern void EndOfPhaseActions(); //in zsim.cpp
 

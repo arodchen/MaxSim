@@ -23,9 +23,10 @@
  * this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "maxsim_stats.h"
+#include "ma_prof.h"
 
-#if defined(MA_PROF_ENABLED) && defined(MAXSIM_ENABLED)
+#ifdef MA_PROF_ENABLED
 
-#endif // MA_PROF_ENABLED && MAXSIM_ENABLED
+vector<string> MAProfCacheGroupNames;
 
+#endif

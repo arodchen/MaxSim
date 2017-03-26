@@ -36,7 +36,7 @@
 #include "constants.h"
 
 #ifdef MAXSIM_ENABLED
-#include "maxsim_stats.h"
+#include "maxsim_prof.h"
 #include "maxsim_address_space_morphing.h"
 #endif // MAXSIM_ENABLED
 
