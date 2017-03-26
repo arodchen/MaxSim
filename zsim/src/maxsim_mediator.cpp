@@ -47,10 +47,16 @@ VOID MaxSimMediator::HandleMaxSimMagicOp(THREADID tid, ADDRINT * op, ADDRINT arg
             *(availableProcessorsNumPointer) = cpuenumNumCpus(procIdx);
             return;
         }
-        case MAXSIM_M_OPC_REPORT_HUB_TYPE_OFFSET: {
+        case MAXSIM_M_OPC_REPORT_HUB_OFFSET: {
             MAOffset_t hubOffset = (MAOffset_t) arg;
 
-            MaxSimRuntimeInfo::getInst().setMaxineHubTypeOffset(hubOffset);
+            MaxSimRuntimeInfo::getInst().setMaxineHubOffset(hubOffset);
+            return;
+        }
+        case MAXSIM_M_OPC_REPORT_HUB_TYPE_OFFSET: {
+            MAOffset_t hubTypeOffset = (MAOffset_t) arg;
+
+            MaxSimRuntimeInfo::getInst().setMaxineHubTypeOffset(hubTypeOffset);
             return;
         }
         case MAXSIM_M_OPC_REPORT_ARRAY_FIRST_ELEM_OFFSET: {

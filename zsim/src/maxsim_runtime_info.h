@@ -64,6 +64,15 @@ class MaxSimRuntimeInfo {
         //
         AddressRange_t getRegisteredAddressRange(Address address, MaxSimRuntimeInfo::MaxineAddressSpace_t space);
 
+        // Get Maxine hub offset
+        //
+        MAOffset_t getMaxineHubOffset() {
+            if (!isMaxineHubOffsetSet) {
+                panic("Use of undefined hubOffset");
+            }
+            return MaxineHubOffset;
+        }
+
         // Get Maxine hub type offset
         //
         MAOffset_t getMaxineHubTypeOffset() {
@@ -86,6 +95,13 @@ class MaxSimRuntimeInfo {
         // Vector of address ranges
         typedef std::vector<AddressRange_t> VectorOfAddressRanges_t;
 
+        // Set Maxine hub offset
+        //
+        void setMaxineHubOffset(MAOffset_t offset) {
+            MaxineHubOffset = offset;
+            isMaxineHubOffsetSet = true;
+        }
+
         // Set Maxine hub type offset
         //
         void setMaxineHubTypeOffset(MAOffset_t offset) {
@@ -107,6 +123,9 @@ class MaxSimRuntimeInfo {
         // Deregister address range
         //
         void deregisterAddressRange(AddressRange_t * addressRange);
+
+        MAOffset_t MaxineHubOffset;
+        bool isMaxineHubOffsetSet;
 
         MAOffset_t MaxineHubTypeOffset;
         bool isMaxineHubTypeOffsetSet;
@@ -139,7 +158,7 @@ class MaxSimRuntimeInfo {
 
     private:
         // Privatize constructor and destructor
-        MaxSimRuntimeInfo() : isMaxineHubTypeOffsetSet(false), isMaxineArrayFirstElementOffsetSet(false), registeredAddressRangesLock(0) {}
+        MaxSimRuntimeInfo() : isMaxineHubOffsetSet(false), isMaxineHubTypeOffsetSet(false), isMaxineArrayFirstElementOffsetSet(false), registeredAddressRangesLock(0) {}
         ~MaxSimRuntimeInfo() {}
 };
 
