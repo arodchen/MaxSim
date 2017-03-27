@@ -256,29 +256,33 @@ enum PointerTag {
   //
   TAG_TLS                    = 0x4;
 
+  // Represents native memory accesses.
+  //
+  TAG_NATIVE                 = 0x5;
+
   // Represents static class members accesses.
   //
-  TAG_STATIC                 = 0x5;
+  TAG_STATIC                 = 0x6;
 
   // Represents undefined general purpose tag (out of range [TAG_GP_LO; TAG_GP_HI]).
   //
-  TAG_UNDEFINED_GP           = 0x6;
+  TAG_UNDEFINED_GP           = 0x7;
 
   // Represents highest aggregate tag.
   //
-  TAG_AGGREGATE_HI           = 0x6;
+  TAG_AGGREGATE_HI           = 0x7;
 
   // Represents lowest reserved tag.
   //
-  TAG_RESERVED_LO            = 0x7;
+  TAG_RESERVED_LO            = 0x8;
 
   // Represents highest reserved tag.
   //
-  TAG_RESERVED_HI            = 0x9;
+  TAG_RESERVED_HI            = 0xA;
 
   // Represents lowest transformation tag.
   //
-  TAG_TRANSFORMATION_LO      = 0xA;
+  TAG_TRANSFORMATION_LO      = 0xB;
 
   // Represents highest transformation tag.
   //

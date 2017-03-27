@@ -133,4 +133,41 @@ AddressRange_t MaxSimRuntimeInfo::getRegisteredAddressRange(uint64_t address, Ma
     return addressRange;
 }
 
+void MaxSimRuntimeInfo::adjustTagAndOffset(PointerTag_t & tag, MAOffset_t & offset, Address address) {
+    if (tag == UNDEF_TAG) {
+        AddressRangeType addressRangeType = UNDEFINED_ADDRESS_RANGE;
+        AddressRange_t addressRange = MaxSimRuntimeInfo::getInst().getRegisteredAddressRange(address, MaxSimRuntimeInfo::MaxineAddressSpace_t::Global);
+        addressRangeType = addressRange.type;
+
+        switch (addressRangeType) {
+            default:
+                panic("Cannot adjust tag and offset for address range type %d", addressRangeType);
+            case CODE_ADDRESS_RANGE:
+                tag = MaxSimInterface::TAG_CODE;
+                offset = 0;
+                return;
+            case HEAP_ADDRESS_RANGE:
+                tag = MaxSimInterface::TAG_HEAP;
+                offset = 0;
+                return;
+            case STACK_ADDRESS_RANGE:
+                tag = MaxSimInterface::TAG_STACK;
+                offset = 0;
+                return;
+            case TLS_ADDRESS_RANGE:
+                tag = MaxSimInterface::TAG_TLS;
+                offset = 0;
+                return;
+            case NATIVE_ADDRESS_RANGE:
+            case UNDEFINED_ADDRESS_RANGE:
+                tag = MaxSimInterface::TAG_NATIVE;
+                offset = 0;
+                return;
+        }
+    }
+    if (MaxSimInterfaceHelpers::isAggregateTag(tag)) {
+        offset = 0;
+    }
+}
+
 #endif // MAXSIM_ENABLED

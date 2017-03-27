@@ -30,10 +30,28 @@
 
 #ifdef MAXSIM_ENABLED
 
+#include "MaxSimInterface.pb.h"
+
 class MaxSimInterfaceHelpers {
     public:
         static bool isMaxSimEnabled() {
-            return MaxSimConfig::default_instance().ismaxsimenabled();
+            return MaxSimInterface::MaxSimConfig::default_instance().ismaxsimenabled();
+        }
+
+        static bool isAggregateTag(PointerTag_t tag) {
+            return ((PointerTag_t) MaxSimInterface::TAG_AGGREGATE_LO) == tag || tag <= MaxSimInterface::TAG_AGGREGATE_HI;
+        }
+
+        static bool isGeneralPurposeTag(PointerTag_t tag) {
+            return MaxSimInterface::TAG_GP_LO <= tag && tag <= MaxSimInterface::TAG_GP_HI;
+        }
+
+        static bool isUndefinedGeneralPurposeTag(PointerTag_t tag) {
+            return tag == MaxSimInterface::TAG_UNDEFINED_GP;
+        }
+
+        static bool isUndefinedTag(PointerTag_t tag) {
+            return tag == ((PointerTag_t) MaxSimInterface::TAG_UNDEFINED);
         }
 
     // Singleton part

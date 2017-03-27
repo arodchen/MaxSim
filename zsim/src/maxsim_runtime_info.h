@@ -28,6 +28,7 @@
 
 #include "zsim.h"
 #include "maxsim_interface_c.h"
+#include "maxsim_interface_helpers.h"
 
 #ifdef MAXSIM_ENABLED
 
@@ -63,6 +64,10 @@ class MaxSimRuntimeInfo {
         // Get a registered address range for a given address and an address space
         //
         AddressRange_t getRegisteredAddressRange(Address address, MaxSimRuntimeInfo::MaxineAddressSpace_t space);
+
+        // Adjust tag and offset
+        //
+        void adjustTagAndOffset(PointerTag_t & tag, MAOffset_t & offset, Address address);
 
         // Get Maxine hub offset
         //
