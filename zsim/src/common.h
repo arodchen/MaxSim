@@ -41,4 +41,7 @@ typedef uint16_t MASize_t;
 // Memory Access (MA) offset type.
 typedef int32_t MAOffset_t;
 
+// Thread id type.
+typedef uint16_t ThreadId_t;
+
 #endif //SRC_COMMON_H

@@ -40,19 +40,19 @@ class MaxSimAddressSpaceMorphing {
     //
     // Precondition: passed addresses should be untagged.
     //
-    bool processBBlAndDoSimulate(uint16_t tid, Address addressBbl, bool isCondBranch);
+    bool processBBlAndDoSimulate(ThreadId_t tid, Address addressBbl, bool isCondBranch);
 
     // Processes memory access address and remap; returns re-mapped address.
     //
     // Precondition: passed addresses should be untagged.
     //
-    Address processMAAddressAndRemap(Address addr, Address base, int32_t offset, uint16_t tag);
+    Address processMAAddressAndRemap(Address addr, Address base, MAOffset_t offset, PointerTag_t tag);
 
     // Begin loop filtering.
     //
     // Precondition: passed addresses should be untagged.
     //
-    void beginLoopFiltering(uint16_t tid, Address addr) {
+    void beginLoopFiltering(ThreadId_t tid, Address addr) {
         AddressRange_t addressRange = MaxSimRuntimeInfo::getInst().getRegisteredAddressRange(addr,
             MaxSimRuntimeInfo::MaxineAddressSpace_t::Global);
         if (addressRange.type == HEAP_ADDRESS_RANGE) {
@@ -61,7 +61,7 @@ class MaxSimAddressSpaceMorphing {
     }
 
     // End loop filtering.
-    void endLoopFiltering(uint16_t tid) {
+    void endLoopFiltering(ThreadId_t tid) {
         maxineSimulationState[tid] = MaxineSimulationState_t::Normal;
     }
 

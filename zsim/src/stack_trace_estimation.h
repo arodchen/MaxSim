@@ -33,18 +33,18 @@
 
 class StackTraceEstimation {
     public:
-        void pushReturnAddress(uint16_t tid, uint64_t returnAddress) {
+        void pushReturnAddress(ThreadId_t tid, uint64_t returnAddress) {
             uint16_t csf = ++curStackFrame[tid];
             stackFrameRetAddr[tid][csf & MAX_STACK_FRAMES_MASK] = returnAddress;
         };
 
-        void popReturnAddress(uint16_t tid) {
+        void popReturnAddress(ThreadId_t tid) {
             curStackFrame[tid]--;
         };
 
         // Gets Nth return address from the top of the stack
         //
-        uint64_t topNthReturnAddress(uint16_t tid, uint16_t n) {
+        uint64_t topNthReturnAddress(ThreadId_t tid, uint16_t n) {
             uint16_t csf = curStackFrame[tid];
             return stackFrameRetAddr[tid][(csf - n) & MAX_STACK_FRAMES_MASK];
         }
@@ -52,7 +52,7 @@ class StackTraceEstimation {
         // Finds the first frame no when predicate p returns true
         //
         template<typename P>
-        uint16_t findFrameNoIf(uint16_t tid, P p) {
+        uint16_t findFrameNoIf(ThreadId_t tid, P p) {
             uint16_t i = 0;
             while (i < MAX_STACK_FRAMES) {
                 if (p(topNthReturnAddress(tid, i))) {

@@ -30,7 +30,7 @@
 #include "maxsim_prof.h"
 #include "pointer_tagging.h"
 
-bool MaxSimAddressSpaceMorphing::processBBlAndDoSimulate(uint16_t tid, Address addressBbl, bool isCondBranch) {
+bool MaxSimAddressSpaceMorphing::processBBlAndDoSimulate(ThreadId_t tid, Address addressBbl, bool isCondBranch) {
     switch (maxineSimulationState[tid]) {
         case MaxineSimulationState_t::Normal:
             return true;
@@ -55,7 +55,7 @@ bool MaxSimAddressSpaceMorphing::processBBlAndDoSimulate(uint16_t tid, Address a
     return true;
 }
 
-Address MaxSimAddressSpaceMorphing::processMAAddressAndRemap(Address addr, Address base, int32_t offset, uint16_t tag) {
+Address MaxSimAddressSpaceMorphing::processMAAddressAndRemap(Address addr, Address base, MAOffset_t offset, PointerTag_t tag) {
     if ((addr == UNDEF_VIRTUAL_ADDRESS) || (addr == NOP_VIRTUAL_ADDRESS)) {
         return addr;
     }
