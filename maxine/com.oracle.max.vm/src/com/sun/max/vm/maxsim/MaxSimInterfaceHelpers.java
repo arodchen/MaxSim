@@ -78,4 +78,14 @@ public class MaxSimInterfaceHelpers {
         return ((MaxSimInterface.PointerTag.TAG_GP_LO_VALUE <= tag) ||
             (tag <= MaxSimInterface.PointerTag.TAG_GP_HI_VALUE));
     }
+
+    @INLINE
+    public static boolean isUndefinedGeneralPurposeTag(short tag) {
+        return tag == MaxSimInterface.PointerTag.TAG_UNDEFINED_GP_VALUE;
+    }
+
+    @INLINE
+    public static boolean isUndefinedTag(short tag) {
+        return tag == MaxSimInterface.PointerTag.TAG_UNDEFINED_VALUE;
+    }
 }
