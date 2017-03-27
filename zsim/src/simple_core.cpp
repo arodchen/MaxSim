@@ -29,7 +29,7 @@
 #include "pointer_tagging.h"
 
 #ifdef MAXSIM_ENABLED
-#include "maxsim_prof.h"
+#include "maxsim_profiling.h"
 #include "maxsim_address_space_morphing.h"
 #endif // MAXSIM_ENABLED
 
@@ -73,7 +73,7 @@ void SimpleCore::load(Address addr, MASize_t size, Address base) {
         return;
     }
     addr = MaxSimAddressSpaceMorphing::getInst().processMAAddressAndRemap(addr, base, offset, tag);
-    MaxSimProfDB::getInst().addMemoryAccess(tag, offset, curBblAddr, false);
+    MaxSimProfiling::getInst().addMemoryAccess(tag, offset, curBblAddr, false);
 #   else
     UNUSED_VAR(tag); UNUSED_VAR(offset); UNUSED_VAR(curBblAddr);
 #   endif
@@ -105,7 +105,7 @@ void SimpleCore::store(Address addr, MASize_t size, Address base) {
         return;
     }
     addr = MaxSimAddressSpaceMorphing::getInst().processMAAddressAndRemap(addr, base, offset, tag);
-    MaxSimProfDB::getInst().addMemoryAccess(tag, offset, curBblAddr, true);
+    MaxSimProfiling::getInst().addMemoryAccess(tag, offset, curBblAddr, true);
 #   else
     UNUSED_VAR(tag); UNUSED_VAR(offset); UNUSED_VAR(curBblAddr);
 #   endif
@@ -141,7 +141,7 @@ void SimpleCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
     Address endBblAddr = bblAddr + bblInfo->bytes;
     for (Address fetchAddr = bblAddr; fetchAddr < endBblAddr; fetchAddr+=(1 << lineBits)) {
 #ifdef MAXSIM_ENABLED
-        MaxSimProfDB::getInst().addMemoryAccess(FETCH_TAG, UNDEF_OFFSET, bblAddr, false);
+        MaxSimProfiling::getInst().addMemoryAccess(FETCH_TAG, UNDEF_OFFSET, bblAddr, false);
 #endif
         curCycle = l1i->load(fetchAddr, curCycle
 #ifdef CLU_STATS_ENABLED

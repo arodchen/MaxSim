@@ -23,45 +23,9 @@
  * this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef MAXINE_STATISTICS_H_
-#define MAXINE_STATISTICS_H_
-
-#include "zsim.h"
-#include "ma_prof.h"
+#include "maxsim_profiling.h"
 
 #if defined(MA_PROF_ENABLED) && defined(MAXSIM_ENABLED)
 
-class MaxSimProfDB {
-    public:
-        // Add memory access
-        void addMemoryAccess(PointerTag_t tag, MAOffset_t offset, Address bblIP, bool isWrite) {
-        }
-
-        // Add cache miss
-        void addCacheMiss(PointerTag_t tag, MAOffset_t offset, Address bblIP, bool isWrite, MAProfCacheGroupId_t cacheGroupId, int missCount) {
-        }
-
-    // Singleton part
-    public:
-        // Get instance
-        static MaxSimProfDB & getInst() {
-            static MaxSimProfDB maxsimStatsDB;
-
-            return maxsimStatsDB;
-        }
-
-        // Delete copy and move constructors and assign operators
-        MaxSimProfDB(MaxSimProfDB const&) = delete;
-        MaxSimProfDB(MaxSimProfDB&&) = delete;
-        MaxSimProfDB& operator=(MaxSimProfDB const&) = delete;
-        MaxSimProfDB& operator=(MaxSimProfDB &&) = delete;
-
-    private:
-        // Privatize constructor and destructor
-        MaxSimProfDB() {}
-        ~MaxSimProfDB() {}
-};
-
 #endif // MA_PROF_ENABLED && MAXSIM_ENABLED
 
-#endif // MAXINE_STATISTICS_H_

@@ -27,7 +27,7 @@
 
 #ifdef MAXSIM_ENABLED
 
-#include "maxsim_prof.h"
+#include "maxsim_profiling.h"
 #include "pointer_tagging.h"
 
 bool MaxSimAddressSpaceMorphing::processBBlAndDoSimulate(ThreadId_t tid, Address addressBbl, bool isCondBranch) {
