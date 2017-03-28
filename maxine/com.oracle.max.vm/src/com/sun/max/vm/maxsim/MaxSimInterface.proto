@@ -370,7 +370,6 @@ message ClassInfo {
   required Kind kind = 3;
   optional int32 componentId = 4;
   repeated FieldInfo fieldInfo = 5;
-  optional int32 baseVersionId = 6;
 
   enum Kind {
     TUPLE = 0;

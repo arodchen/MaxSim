@@ -200,6 +200,11 @@ public class MaxSimPlatform {
     }
 
     /**
+     * Undefined address.
+     */
+    public static final long UNDEFINED_ADDRESS = -1L;
+
+    /**
      * Layout scale factor equal to one.
      */
     public static final int LSF_ONE = 1;

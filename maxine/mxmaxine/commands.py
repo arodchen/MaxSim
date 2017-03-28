@@ -452,6 +452,15 @@ def maxsiminterfacegen(args):
         os.rename('com.oracle.max.vm/generated/com/sun/max/vm/maxsim/MaxSimInterface.java', 
                   'com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.java')
 
+def maxsimprofprint(args):
+    """print MaxSim profile"""
+
+    cwdArgs = check_cwd_change(args)
+    cwd = cwdArgs[0]
+    args = cwdArgs[1]
+
+    return mx.run_java(['-Xmx2g', '-cp', mx.classpath('com.oracle.max.vm'), 'com.sun.max.vm.maxsim.MaxSimProfilePrinter'] + args)
+
 def jvmtigen(args):
     """(re)generate Java source for JVMTI native function interfaces
 
@@ -786,6 +795,7 @@ def mx_init(suite):
         'loggen': [loggen, ''],
         'makejdk': [makejdk, '[<destination directory>]'],
         'maxsiminterfacegen': [maxsiminterfacegen, ''],
+        'maxsimprofprint' : [maxsimprofprint, ''],
         'methodtree': [methodtree, '[options]'],
         'nm': [nm, '[options] [boot image file]', _vm_image],
         'objecttree': [objecttree, '[options]'],
