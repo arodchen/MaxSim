@@ -102,11 +102,11 @@ void TimingCore::loadAndRecord(Address addr, MASize_t size, Address base) {
 
     addr = getUntaggedPointerSE(addr);
     base = getUntaggedPointerSE(base);
-
 #   ifdef MAXSIM_ENABLED
     if (!doSimulateBbl) {
         return;
     }
+    MaxSimRuntimeInfo::getInst().adjustTagAndOffset(tag, offset, addr);
     addr = MaxSimAddressSpaceMorphing::getInst().processMAAddressAndRemap(addr, base, offset, tag);
     MaxSimProfiling::getInst().addMemoryAccess(tag, offset, curBblAddr, false);
 #   else
@@ -134,10 +134,13 @@ void TimingCore::storeAndRecord(Address addr, MASize_t size, Address base) {
 #   endif
     MAOffset_t offset = addr - base;
 
+    addr = getUntaggedPointerSE(addr);
+    base = getUntaggedPointerSE(base);
 #   ifdef MAXSIM_ENABLED
     if (!doSimulateBbl) {
         return;
     }
+    MaxSimRuntimeInfo::getInst().adjustTagAndOffset(tag, offset, addr);
     addr = MaxSimAddressSpaceMorphing::getInst().processMAAddressAndRemap(addr, base, offset, tag);
     MaxSimProfiling::getInst().addMemoryAccess(tag, offset, curBblAddr, true);
 #   else

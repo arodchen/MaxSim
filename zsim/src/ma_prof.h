@@ -23,8 +23,8 @@
  * this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SRC_MA_STATS_H
-#define SRC_MA_STATS_H
+#ifndef SRC_MA_PROF_H
+#define SRC_MA_PROF_H
 
 #include "zsim.h"
 #include "stats.h"
@@ -86,4 +86,4 @@ inline char const * getMAProfCacheRWGroupName(MAProfCacheRWGroupId_t cacheRWGrou
 
 #endif
 
-#endif //SRC_MA_STATS_H
+#endif //SRC_MA_PROF_H

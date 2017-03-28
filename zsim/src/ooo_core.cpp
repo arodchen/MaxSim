@@ -170,9 +170,14 @@ inline void OOOCore::load(Address addr, uint32_t size, Address base) {
 
     addr = getUntaggedPointerSE(addr);
     base = getUntaggedPointerSE(base);
-
+    if (isTagNative(tag)) {
+        tag = UNDEF_TAG;
+    }
+#   ifdef MAXSIM_ENABLED
+    MaxSimRuntimeInfo::getInst().adjustTagAndOffset(tag, offset, addr);
+#   endif
     loadOffset[loads] = offset;
-#endif
+#endif // MA_PROF_ENABLED
 #ifdef POINTER_TAGGING_ENABLED
     loadTag[loads] = tag;
 #endif
@@ -198,9 +203,14 @@ void OOOCore::store(Address addr, uint32_t size, Address base) {
 
     addr = getUntaggedPointerSE(addr);
     base = getUntaggedPointerSE(base);
-
+    if (isTagNative(tag)) {
+        tag = UNDEF_TAG;
+    }
+#   ifdef MAXSIM_ENABLED
+    MaxSimRuntimeInfo::getInst().adjustTagAndOffset(tag, offset, addr);
+#   endif
     storeOffset[stores] = offset;
-#endif
+#endif // MA_PROF_ENABLED
 #ifdef POINTER_TAGGING_ENABLED
     storeTag[stores] = tag;
 #endif

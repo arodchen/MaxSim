@@ -27,6 +27,8 @@
 
 #ifdef MAXSIM_ENABLED
 
+#include "maxsim_profiling.h"
+
 MaxSimRuntimeInfo::MaxineAddressSpace_t MaxSimRuntimeInfo::getMaxineAddressSpaceByAddressRangeType(AddressRangeType type) {
     switch (type) {
         default:
@@ -134,6 +136,9 @@ AddressRange_t MaxSimRuntimeInfo::getRegisteredAddressRange(uint64_t address, Ma
 }
 
 void MaxSimRuntimeInfo::adjustTagAndOffset(PointerTag_t & tag, MAOffset_t & offset, Address address) {
+    if (!MaxSimProfiling::getInst().isProfileCollectionEnabled()) {
+        return;
+    }
     if (tag == UNDEF_TAG) {
         AddressRangeType addressRangeType = UNDEFINED_ADDRESS_RANGE;
         AddressRange_t addressRange = MaxSimRuntimeInfo::getInst().getRegisteredAddressRange(address, MaxSimRuntimeInfo::MaxineAddressSpace_t::Global);

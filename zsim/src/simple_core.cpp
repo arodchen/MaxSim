@@ -60,6 +60,9 @@ void SimpleCore::load(Address addr, MASize_t size, Address base) {
 #ifdef MA_PROF_ENABLED
 #   ifdef POINTER_TAGGING_ENABLED
     PointerTag_t tag = getPointerTag(base);
+    if (isTagNative(tag)) {
+        tag = UNDEF_TAG;
+    }
 #   else
     PointerTag_t tag = UNDEF_TAG;
 #   endif
@@ -67,11 +70,11 @@ void SimpleCore::load(Address addr, MASize_t size, Address base) {
 
     addr = getUntaggedPointerSE(addr);
     base = getUntaggedPointerSE(base);
-
 #   ifdef MAXSIM_ENABLED
     if (!doSimulateBbl) {
         return;
     }
+    MaxSimRuntimeInfo::getInst().adjustTagAndOffset(tag, offset, addr);
     addr = MaxSimAddressSpaceMorphing::getInst().processMAAddressAndRemap(addr, base, offset, tag);
     MaxSimProfiling::getInst().addMemoryAccess(tag, offset, curBblAddr, false);
 #   else
@@ -92,6 +95,9 @@ void SimpleCore::store(Address addr, MASize_t size, Address base) {
 #ifdef MA_PROF_ENABLED
 #   ifdef POINTER_TAGGING_ENABLED
     PointerTag_t tag = getPointerTag(base);
+    if (isTagNative(tag)) {
+        tag = UNDEF_TAG;
+    }
 #   else
     PointerTag_t tag = UNDEF_TAG;
 #   endif
@@ -99,11 +105,11 @@ void SimpleCore::store(Address addr, MASize_t size, Address base) {
 
     addr = getUntaggedPointerSE(addr);
     base = getUntaggedPointerSE(base);
-
 #   ifdef MAXSIM_ENABLED
     if (!doSimulateBbl) {
         return;
     }
+    MaxSimRuntimeInfo::getInst().adjustTagAndOffset(tag, offset, addr);
     addr = MaxSimAddressSpaceMorphing::getInst().processMAAddressAndRemap(addr, base, offset, tag);
     MaxSimProfiling::getInst().addMemoryAccess(tag, offset, curBblAddr, true);
 #   else

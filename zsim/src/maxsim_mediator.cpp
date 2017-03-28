@@ -34,6 +34,8 @@
 #include "maxsim_runtime_info.h"
 #include "maxsim_interface_helpers.h"
 #include "maxsim_address_space_morphing.h"
+#include "maxsim_profiling.h"
+#include "pointer_tagging.h"
 
 VOID MaxSimMediator::HandleMaxSimMagicOp(THREADID tid, ADDRINT * op, ADDRINT arg) {
     if (!MaxSimInterfaceHelpers::isMaxSimEnabled()) {
@@ -77,13 +79,57 @@ VOID MaxSimMediator::HandleMaxSimMagicOp(THREADID tid, ADDRINT * op, ADDRINT arg
             MaxSimRuntimeInfo::getInst().deregisterAddressRange(addressRange);
             return;
         }
+        case MAXSIM_M_OPC_GET_ALLOCATION_SITE_ESTIMATION_ID: {
+            PointerTag_t tag = *((PointerTag_t *) arg);
+            PointerTag_t allocationIDEstimation = MaxSimProfiling::getInst().getAllocationSiteEstimationID(tag, tid);
+
+            *((PointerTag_t *) op) = allocationIDEstimation;
+            return;
+        }
+        case MAXSIM_M_OPC_PROFILE_OBJECT_ALLOCATION: {
+            short tag = arg >> MAXSIM_M_OP_PROFILE_OBJECT_ALLOCATION_P_ARG_TAG_OFF;
+            short tagType = arg >> MAXSIM_M_OP_PROFILE_OBJECT_ALLOCATION_P_ARG_TAG_TYPE_OFF;
+            int size = arg >> MAXSIM_M_OP_PROFILE_OBJECT_ALLOCATION_P_ARG_SIZE_OFF;
+
+            MaxSimProfiling::getInst().profileObjectAllocation(tag, tagType, size, tid);
+            return;
+        }
+        case MAXSIM_M_OPC_ENABLE_PROFILE_COLLECTION: {
+            MaxineVMOperationMode maxineVMOperationMode = (MaxineVMOperationMode) arg;
+
+            MaxSimProfiling::getInst().enableProfileCollection();
+            DumpEventualStats(procIdx, "Request from Maxine VM to enable profile collection", maxineVMOperationMode);
+            return;
+        }
+        case MAXSIM_M_OPC_DISABLE_PROFILE_COLLECTION: {
+            MaxineVMOperationMode maxineVMOperationMode = (MaxineVMOperationMode) arg;
+
+            MaxSimProfiling::getInst().disableProfileCollection();
+            DumpEventualStats(procIdx, "Request from Maxine VM to disable profile collection", maxineVMOperationMode);
+            return;
+        }
+        case MAXSIM_M_OPC_RESET_PROFILE_COLLECTION: {
+            MaxSimProfiling::getInst().resetProfileCollection();
+            return;
+        }
+        case MAXSIM_M_OPC_PRINT_PROFILE_TO_FILE: {
+            char * profFileName = (char *) arg;
+
+            MaxSimProfiling::getInst().setProfilingFileName(profFileName);
+            if (!MaxSimProfiling::getInst().isEmpty()) {
+                MaxSimProfiling::getInst().serializeToFile();
+            }
+            return;
+        }
         case MAXSIM_M_OPC_DUMP_EVENTUAL_STATS: {
             MaxineVMOperationMode maxineVMOperationMode = (MaxineVMOperationMode) arg;
+
             DumpEventualStats(procIdx, "Request from Maxine VM to dump eventual stats", maxineVMOperationMode);
             return;
         }
         case MAXSIM_M_OPC_FILTER_LOOP_BEGIN: {
-            Address addr = (Address) arg;
+            Address addr = getUntaggedPointerSE((Address) arg);
+
             MaxSimAddressSpaceMorphing::getInst().beginLoopFiltering(tid, addr);
             return;
         }

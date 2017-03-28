@@ -58,6 +58,11 @@ inline Address setPointerTag(Address addr, PointerTag_t tag) {
     return (((Address) tag) << POINTER_NON_TAG_MASK_SIZE) | getUntaggedPointerZE(addr);
 }
 
+// Returns true if tag is native
+inline bool isTagNative(PointerTag_t tag) {
+    return  tag == ZERO_TAG || tag == ONES_TAG;
+}
+
 #endif // POINTER_TAGGING_ENABLED
 
 #endif //SRC_POINTER_TAGGING_H
