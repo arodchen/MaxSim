@@ -37,7 +37,7 @@ public class MaxSimProfileRepresentation {
         new String("Location of the file containing ZSim profile data base.");
 
     private static String MaxineInfoDBOptionName =
-        new String("ZSimMaxineInfoDB");
+        new String("MaxineInfoDB");
 
     private static String MaxineInfoDBOptionHelp =
         new String("Location of the file containing Maxine information data base.");
@@ -261,4 +261,3 @@ public class MaxSimProfileRepresentation {
         MaxSimConfig = null;
     }
 }
-

@@ -369,8 +369,8 @@ message ClassInfo {
   required int32 id = 2;
   required Kind kind = 3;
   optional int32 componentId = 4;
+  repeated FieldInfo fieldInfo = 5;
   optional int32 baseVersionId = 6;
-  repeated FieldInfo fieldInfo = 7;
 
   enum Kind {
     TUPLE = 0;
@@ -460,12 +460,10 @@ message ClassProf {
 // ZSim profile data base.
 //
 message ZSimProfDB {
-  optional int64 key = 1;
-  required int64 interval = 2;
-  required int32 maxAllocSiteProfId = 3;
-  repeated CacheRWGroupInfo cacheRWGroupInfo = 4;
-  repeated ClassProf classProf = 5;
-  repeated CacheRWGroupMissProf cacheRWGroupMissProf = 6;
-  repeated AllocSiteProf allocSiteProf = 7;
+  required int32 maxAllocSiteProfId = 1;
+  repeated CacheRWGroupInfo cacheRWGroupInfo = 2;
+  repeated ClassProf classProf = 3;
+  repeated CacheRWGroupMissProf cacheRWGroupMissProf = 4;
+  repeated AllocSiteProf allocSiteProf = 5;
 }
 
