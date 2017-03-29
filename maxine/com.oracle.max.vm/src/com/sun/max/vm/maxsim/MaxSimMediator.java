@@ -135,7 +135,7 @@ public class MaxSimMediator {
 
     @INLINE
     public static void enableProfileCollection(int maxineVMOperationMode) {
-        if (!MaxSimPlatform.isMaxSimProfiling()) {
+        if (!MaxSimInterfaceHelpers.isTaggingEnabled() || !MaxSimPlatform.isMaxSimProfiling()) {
             return;
         }
         maxsimMagicOp(
@@ -145,7 +145,7 @@ public class MaxSimMediator {
 
     @INLINE
     public static void disableProfileCollection(int maxineVMOperationMode) {
-        if (!MaxSimPlatform.isMaxSimProfiling()) {
+        if (!MaxSimInterfaceHelpers.isTaggingEnabled() || !MaxSimPlatform.isMaxSimProfiling()) {
             return;
         }
         maxsimMagicOp(Address.fromLong(MaxSimInterface.MaxSimMagicOpcodes.MAXSIM_M_OPC_DISABLE_PROFILE_COLLECTION_VALUE),
@@ -154,14 +154,14 @@ public class MaxSimMediator {
 
     @INLINE
     public static void resetProfileCollection() {
-        if (!MaxSimPlatform.isMaxSimProfiling()) {
+        if (!MaxSimInterfaceHelpers.isTaggingEnabled() || !MaxSimPlatform.isMaxSimProfiling()) {
             return;
         }
         maxsimMagicOp(Address.fromLong(MaxSimInterface.MaxSimMagicOpcodes.MAXSIM_M_OPC_RESET_PROFILE_COLLECTION_VALUE));
     }
 
     public static void printProfileToFile(String fileName) {
-        if (!MaxSimPlatform.isMaxSimProfiling()) {
+        if (!MaxSimInterfaceHelpers.isTaggingEnabled() || !MaxSimPlatform.isMaxSimProfiling()) {
             return;
         }
         if (fileName == null || fileName.trim().isEmpty()) {

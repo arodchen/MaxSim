@@ -94,6 +94,12 @@ for i in $(seq 0 $LAST_I) ; do
         ZSIM_TEST_OUT_DIR=$OUTPUT_DIR/zsim/DaCapo-9.12-bach_${TESTS[j]}_product_$i/
         executeExitOnFail mkdir -p $ZSIM_TEST_OUT_DIR
         executeExitOnFail mv $SIMULATOR_TEST_CFG out.cfg zsim-cmp.h5 zsim-ev.h5 zsim.h5 zsim.log.0 zsim.out heartbeat $ZSIM_TEST_OUT_DIR
+        if [ -f maxine-info.db ]; then
+            executeExitOnFail mv maxine-info.db $ZSIM_TEST_OUT_DIR 
+        fi
+        if [ -f zsim-prof.db ]; then
+            executeExitOnFail mv zsim-prof.db $ZSIM_TEST_OUT_DIR 
+        fi
     done
 done
 
