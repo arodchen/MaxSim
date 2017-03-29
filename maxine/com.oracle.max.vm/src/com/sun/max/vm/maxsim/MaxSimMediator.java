@@ -167,6 +167,7 @@ public class MaxSimMediator {
         if (fileName == null || fileName.trim().isEmpty()) {
             fileName = MaxSimPlatform.MaxSimZSimProfileFileName.getValue();
         }
+        MaxSimPlatform.getMaxSimMaxineInfoBuilder().printMaxineInfoToFile(null);
         Pointer cstring = CString.utf8FromJava(fileName.trim());
         maxsimMagicOp(
             Address.fromLong(MaxSimInterface.MaxSimMagicOpcodes.MAXSIM_M_OPC_PRINT_PROFILE_TO_FILE_VALUE),

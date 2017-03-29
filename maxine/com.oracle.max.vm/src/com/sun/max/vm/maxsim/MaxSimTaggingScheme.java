@@ -411,7 +411,7 @@ public class MaxSimTaggingScheme {
     }
 
     /**
-     * Sets tag during allocation.
+     * Sets tag during allocation and profile it.
      */
     @INLINE
     static public Pointer setTagDuringAllocationAndProfile(Pointer p, short tag, Size size) {
