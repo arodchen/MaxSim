@@ -65,13 +65,15 @@ class MaxSimProfiling {
 
         // Enables profile collection
         //
-        void enableProfileCollection() {
+        void enableProfileCollection(int b) {
+            zsimProfDB.set_dumpeventualstatsbeg(b);
             isProfileCollectionEnabledIndicator = true;
         }
 
         // Disables profile collection
         //
-        void disableProfileCollection() {
+        void disableProfileCollection(int e) {
+            zsimProfDB.set_dumpeventualstatsend(e);
             isProfileCollectionEnabledIndicator = false;
         }
 

@@ -460,9 +460,11 @@ message ClassProf {
 //
 message ZSimProfDB {
   required int32 maxAllocSiteProfId = 1;
-  repeated CacheRWGroupInfo cacheRWGroupInfo = 2;
-  repeated ClassProf classProf = 3;
-  repeated CacheRWGroupMissProf cacheRWGroupMissProf = 4;
-  repeated AllocSiteProf allocSiteProf = 5;
+  required int32 dumpEventualStatsBeg = 2;
+  required int32 dumpEventualStatsEnd = 3;
+  repeated CacheRWGroupInfo cacheRWGroupInfo = 4;
+  repeated ClassProf classProf = 5;
+  repeated CacheRWGroupMissProf cacheRWGroupMissProf = 6;
+  repeated AllocSiteProf allocSiteProf = 7;
 }
 

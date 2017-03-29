@@ -324,6 +324,16 @@ public class MaxSimProfilePrinter {
     }
 
     /**
+     * Prints dump eventual statistics information.
+     */
+    private void printDumpEventStatInfo(PrintWriter MaxSimProfOut) {
+        MaxSimInterface.ZSimProfDB zsimProfDB = MaxSimProfRep.getZSimProfileDB();
+        MaxSimProfOut.println("DumpEventualStats" + "(" +
+            begShortName + ":" + zsimProfDB.getDumpEventualStatsBeg() + " " +
+            endShortName + ":" + zsimProfDB.getDumpEventualStatsEnd() + ")");
+    }
+
+    /**
      * Initializes printing.
      */
     private void printInit() {
@@ -692,8 +702,9 @@ public class MaxSimProfilePrinter {
             MaxSimInterfaceComparators.getClassProfComparatorBySortingType(classProfSortingType);
 
         Collections.sort(classProfArrayList, classEntryComparator);
-        MaxSimProfOut.println("=== Maxine Info ===");
+        MaxSimProfOut.println("=== MaxSim Info ===");
         printBootCodeRegInfo(MaxSimProfOut);
+        printDumpEventStatInfo(MaxSimProfOut);
         MaxSimProfOut.println("");
         MaxSimProfOut.println("=== Memory Accesses ===");
         printClassProfInfoFromList(MaxSimProfOut, classProfArrayList);

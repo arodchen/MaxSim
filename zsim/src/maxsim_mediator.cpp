@@ -97,15 +97,15 @@ VOID MaxSimMediator::HandleMaxSimMagicOp(THREADID tid, ADDRINT * op, ADDRINT arg
         case MAXSIM_M_OPC_ENABLE_PROFILE_COLLECTION: {
             MaxineVMOperationMode maxineVMOperationMode = (MaxineVMOperationMode) arg;
 
-            MaxSimProfiling::getInst().enableProfileCollection();
             DumpEventualStats(procIdx, "Request from Maxine VM to enable profile collection", maxineVMOperationMode);
+            MaxSimProfiling::getInst().enableProfileCollection(zinfo->procEventualDumps);
             return;
         }
         case MAXSIM_M_OPC_DISABLE_PROFILE_COLLECTION: {
             MaxineVMOperationMode maxineVMOperationMode = (MaxineVMOperationMode) arg;
 
-            MaxSimProfiling::getInst().disableProfileCollection();
             DumpEventualStats(procIdx, "Request from Maxine VM to disable profile collection", maxineVMOperationMode);
+            MaxSimProfiling::getInst().disableProfileCollection(zinfo->procEventualDumps);
             return;
         }
         case MAXSIM_M_OPC_RESET_PROFILE_COLLECTION: {
