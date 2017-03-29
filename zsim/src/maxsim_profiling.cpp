@@ -125,15 +125,22 @@ void MaxSimProfiling::resetProfileCollection() {
     futex_lock(& allocationSiteEntryProfilingLock);
     futex_lock(& cacheMissEntryProfilingLock);
     futex_lock(& zsimProfDBProfilingLock);
-
     classIdOffsetPairToFieldEntryMap.clear();
     classIdOffsetPairToClassEntryMap.clear();
     classIdSizePairToMemoryAllocationEntryMap.clear();
     classIdCacheAccessIPTripletToCacheMissEntryMap.clear();
     allocationSiteIPClassIDPairToAllocationEntryMap.clear();
-    zsimProfDB.set_maxallocsiteprofid(MaxSimInterface::TAG_GP_LO - 1);
     zsimProfDB.Clear();
-
+    profFileName.assign(defaultProfFileName);
+    zsimProfDB.set_maxallocsiteprofid(MaxSimInterface::TAG_GP_LO - 1);
+    for (MAProfCacheRWGroupId_t i = 0; i < getMAProfCacheRWGroupNum(); i++) {
+        CacheRWGroupInfo * cacheMissProfCategory = zsimProfDB.add_cacherwgroupinfo();
+        cacheMissProfCategory->set_cacherwgroupid(i);
+        cacheMissProfCategory->set_cachegroupid(getMAProfCacheGroupIdForCacheRWGroupId(i));
+        cacheMissProfCategory->set_cachegroupname(getMAProfCacheRWGroupName(i));
+        cacheMissProfCategory->set_iswrite(isMAProfCacheRWGroupIdWrite(i));
+        zsimProfDB.add_cacherwgroupmissprof();
+    }
     futex_unlock(& zsimProfDBProfilingLock);
     futex_unlock(& cacheMissEntryProfilingLock);
     futex_unlock(& allocationSiteEntryProfilingLock);
@@ -285,31 +292,7 @@ void MaxSimProfiling::registerCacheMiss(FieldProf * e, ClassIdCacheAccessIPTripl
 MaxSimProfiling::MaxSimProfiling() : classEntryProfilingLock(0), fieldEntryProfilingLock(0),
                                      memoryAllocationEntryProfilingLock(0), allocationSiteEntryProfilingLock(0),
                                      cacheMissEntryProfilingLock(0), zsimProfDBProfilingLock(0) {
-
-    futex_lock(& classEntryProfilingLock);
-    futex_lock(& fieldEntryProfilingLock);
-    futex_lock(& memoryAllocationEntryProfilingLock);
-    futex_lock(& allocationSiteEntryProfilingLock);
-    futex_lock(& cacheMissEntryProfilingLock);
-    futex_lock(& zsimProfDBProfilingLock);
-    profFileName.assign(defaultProfFileName);
-    zsimProfDB.set_maxallocsiteprofid(MaxSimInterface::TAG_GP_LO - 1);
-    for (MAProfCacheRWGroupId_t i = 0; i < getMAProfCacheRWGroupNum(); i++) {
-        CacheRWGroupInfo * cacheMissProfCategory = zsimProfDB.add_cacherwgroupinfo();
-        cacheMissProfCategory->set_cacherwgroupid(i);
-        cacheMissProfCategory->set_cachegroupid(getMAProfCacheGroupIdForCacheRWGroupId(i));
-        cacheMissProfCategory->set_cachegroupname(getMAProfCacheRWGroupName(i));
-        cacheMissProfCategory->set_iswrite(isMAProfCacheRWGroupIdWrite(i));
-        zsimProfDB.add_cacherwgroupmissprof();
-    }
-    futex_unlock(& zsimProfDBProfilingLock);
-    futex_unlock(& cacheMissEntryProfilingLock);
-    futex_unlock(& allocationSiteEntryProfilingLock);
-    futex_unlock(& memoryAllocationEntryProfilingLock);
-    futex_unlock(& fieldEntryProfilingLock);
-    futex_unlock(& classEntryProfilingLock);
-
+    resetProfileCollection();
 }
 
 #endif // MA_PROF_ENABLED && MAXSIM_ENABLED
-
