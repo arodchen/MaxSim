@@ -169,6 +169,18 @@ public class MaxSimPlatform {
         return MaxSimInterfaceHelpers.isMaxSimEnabled() && MaxSimProfiling;
     }
 
+    /**
+     * Get MaxSim Maxine information builder.
+     */
+    public static MaxSimMaxineInfoBuilder getMaxSimMaxineInfoBuilder() {
+        return MaxSimMaxineInfoBuilder;
+    }
+
+    /**
+     * ZSim-Maxine information builder.
+     */
+    private static MaxSimMaxineInfoBuilder MaxSimMaxineInfoBuilder = new MaxSimMaxineInfoBuilder();
+
     public static boolean MaxSimPrintProfileOnVMExit;
     static {
         VMOptions.addFieldOption("-XX:", "MaxSimPrintProfileOnVMExit", MaxSimPlatform.class,
