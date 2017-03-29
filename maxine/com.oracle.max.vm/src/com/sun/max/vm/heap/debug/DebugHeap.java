@@ -503,7 +503,7 @@ public class DebugHeap {
         }
     }
 
-    private static Pointer skipCellPadding(Pointer cell, DetailLogger detailLogger) {
+    public static Pointer skipCellPadding(Pointer cell, DetailLogger detailLogger) {
         if (isPadding()) {
             Pointer cellStart = cell;
             while (cell.getWord().equals(DebugHeap.padWord())) {
