@@ -70,14 +70,22 @@ public class MaxSimPlatform {
     }
 
     /**
+     * Indicates that Maxine parameters have been already reported.
+     */
+    private static boolean isMaxineParamReported;
+
+    /**
      * Instructs MaxSim to exit fast forwarding mode.
      */
     public static synchronized void exitMaxSimFastForwardingMode() {
         // report Maxine parameters
-        MaxSimMediator.reportHubOffsetToZSim();
-        MaxSimMediator.reportHubTypeOffsetToZSim();
-        MaxSimMediator.reportArrayFirstElemOffsetToZSim();
-        MaxSimMediator.reportAllocationFrontierAddressRanges();
+        if (!isMaxineParamReported) {
+            MaxSimMediator.reportHubOffsetToZSim();
+            MaxSimMediator.reportHubTypeOffsetToZSim();
+            MaxSimMediator.reportArrayFirstElemOffsetToZSim();
+            MaxSimMediator.reportAllocationFrontierAddressRanges();
+            isMaxineParamReported = true;
+        }
 
         // exit ZSim fast forwarding mode
         MaxSimMediator.exitZSimFastForwardingMode();

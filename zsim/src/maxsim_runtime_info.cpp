@@ -106,7 +106,7 @@ void  MaxSimRuntimeInfo::deregisterAddressRange(AddressRange_t * addressRange) {
         futex_unlock(& registeredAddressRangesLock);
 #ifndef NPRINT_REGDEREG_GLOB_MEM_RANGES
         if (space == MaxineAddressSpace_t::Global) {
-            info("Deregistering range l:0x%lx h:0x%lx", addressRange->lo, addressRange->hi);
+            info("Deregistering range l:0x%lx h:0x%lx t:%d", addressRange->lo, addressRange->hi, addressRange->type);
         }
 #endif
         return;
