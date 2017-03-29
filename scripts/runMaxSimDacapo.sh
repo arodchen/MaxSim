@@ -74,7 +74,7 @@ LAST_I=$((EXECS_NUM-1))
 for i in $(seq 0 $LAST_I) ; do
     for j in $(seq 0 $LAST_J) ; do
 
-        executeExitOnFail rm -rf heartbeat out.cfg zsim-cmp.h5 zsim-ev.h5 zsim.h5 zsim.log.0 zsim.out
+        executeExitOnFail rm -rf heartbeat out.cfg zsim-cmp.h5 zsim-ev.h5 zsim.h5 zsim.log.0 zsim.out maxine-info.db zsim-prof.db
 
         ZSIM_COMMAND="../maxine/com.oracle.max.vm.native/generated/linux/maxvm $EXTRA_MAXINE_FLAGS -Xss1M -Xms2G -Xmx2G -XX:ReservedBaselineCodeCacheSize=384M $CP_JAR_FLAGS ${TESTS[j]} -n${ITERS[j]}"
         SIMULATOR_TEST_CFG="${SIMULATOR_TMPL_CFG_BASENAME/.tmpl/_${TESTS[j]}.cfg}"
