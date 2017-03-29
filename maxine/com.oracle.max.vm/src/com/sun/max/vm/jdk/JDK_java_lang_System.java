@@ -839,6 +839,11 @@ public final class JDK_java_lang_System {
                     MaxSimPlatform.exitMaxSimFastForwardingMode();
                 } else if (value.equals("ROI_END()")) {
                     MaxSimPlatform.enterMaxSimFastForwardingMode();
+                } else if (value.startsWith("PRINT_PROFILE_TO_FILE(") && value.endsWith(")")) {
+                    String fileName = value.substring("PRINT_PROFILE_TO_FILE(".length(), value.length() - ")".length());
+                    MaxSimMediator.printProfileToFile(fileName);
+                } else if (value.equals("RESET_PROFILE_COLLECTION()")) {
+                    MaxSimMediator.resetProfileCollection();
                 } else {
                     FatalError.unexpected("Unexpected MaxSim.Command value!");
                 }
