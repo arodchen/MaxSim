@@ -16,3 +16,8 @@ DOME EP/J016330/1, and EU Horizon 2020 ACTiCLOUD 732366 grant.
 A. Rodchenko is funded by a Microsoft Research PhD Scholarship,
 A. Pop is funded by a Royal Academy of Engineering Research Fellowship,
 and M. Lujan is funded by a Royal Society University Research Fellowship.
+
+
+Dependencies
+-----
+`Maxine VM dependencies, ZSim dependencies, McPAT dependencies, protobuf-2.6.1, timelimit`
