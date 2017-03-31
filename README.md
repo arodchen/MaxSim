@@ -50,3 +50,11 @@ Usage
 `./scripts/cleanZSim.sh `                          - cleans ZSim
 
 `./scripts/cleanMaxSim.sh `                        - cleans Maxine VM and ZSim
+
+##### Running DaCapo-9.12-bach Benchmarks
+```
+scripts/runMaxSimDacapo.sh <output directory> <ZSim template configuration> <number of executions>
+    <output directory> - existing output directory where results are stored
+    <ZSim template configuration> - ZSim template configuration in which COMMAND_TEMPLATE is replaced by actual command
+                                    to be executed by ZSim (e.g. ./zsim/tests/Nehalem-1CQ.tmpl)
+```
