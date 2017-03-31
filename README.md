@@ -81,6 +81,31 @@ Default values of `message MaxSimConfig` define a build-time MaxSim configuratio
 
 `layoutScaleFactor` and `layoutScaleRefFactor` are paremeters of two bijections of the address space morphing scheme described in the paper. `layoutScaleRefFactor` is the second parameter of f<sub>e</sub> and the first paramter of f<sub>c</sub> bijection. `layoutScaleRefFactor` is the first parameter of f<sub>e</sub> bijection.
 
+##### ZSim MaxSim-Related Configuration Parameters
+`pointerTagging` simulation parameter indicates whether pointer tagging simulation is enabled in ZSim. 
+
+`MAProfCacheGroupId` compact ID can be assigned to a cache. When MaxSim profiling is active, the event related to a specific cache will be aggregated in the corresponding MAProfCacheGroup. `MAProfCacheGroupNames` parameter is associated with caches and it defines names of MAProfCacheGroups delimited by `|` symbol (e.g. ./zsim/tests/*.tmpl).
+
+NOTE: When working in tandem with Maxine VM `startFastForwarded` Maxine VM process parameter should be set to true. Exiting fast forwarding should be performed explicitly in Maxine VM.
+
+##### MaxineVM MaxSim-Related Flags
+`-XX:-MaxSimEnterFFOnVMExit`            Makes MaxSim enter fast forwarding mode on VM exit (default: false).
+
+`-XX:-MaxSimExitFFOnVMEnter`            Makes MaxSim exit fast forwarding mode on VM enter (default: false).
+
+`-XX:MaxSimMaxineInfoFileName=<value>`  MaxSim Maxine information file name (default: maxine-info.db).
+
+`-XX:-MaxSimPrintProfileOnVMExit`       Makes MaxSim to print profiling information on VM exit (default: false).
+
+`-XX:-MaxSimProfiling`                  Enables MaxSim profiling (default: false).
+
+`-XX:MaxSimZSimProfileFileName=<value>` MaxSim ZSim profile file name (default: zsim-prof.db).
+
+`-XX:-TraceMaxSimTagging`               Traces MaxSim tagging.
+
+NOTE: All flags related to profiling have effect only when `pointerTaggingType [default = CLASS_ID_TAGGING]` or
+`pointerTaggingType [default = ALLOC_SITE_ID_TAGGING]`.
+
 Recipes
 -------
 MaxSim DaCapo characterization using 1CQ ZSim configuration (the configuration description is in the paper):
