@@ -264,7 +264,7 @@ public class MaxSimTaggingScheme {
      */
     private static boolean TraceMaxSimTagging;
     static {
-        VMOptions.addFieldOption("-XX:", "TraceMaxSimTagging", MaxSimTaggingScheme.class, "Trace MaxSim tagging.");
+        VMOptions.addFieldOption("-XX:", "TraceMaxSimTagging", MaxSimTaggingScheme.class, "Traces MaxSim tagging.");
     }
 
     /**

@@ -216,7 +216,7 @@ public class MaxSimPlatform {
     public static boolean MaxSimEnterFFOnVMExit;
     static {
         VMOptions.addFieldOption("-XX:", "MaxSimEnterFFOnVMExit", MaxSimPlatform.class,
-            "Make MaxSim enter fast forwarding mode on VM exit (default: false).", MaxineVM.Phase.PRISTINE);
+            "Makes MaxSim enter fast forwarding mode on VM exit (default: false).", MaxineVM.Phase.PRISTINE);
     }
 
     /**
