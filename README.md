@@ -68,22 +68,22 @@ Arguments:
 ```
 
 ##### MaxSim Interface and Configuration
-MaxSim interface is defined using Protocol Buffers 2.6.1 in the following file: `./maxine/com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto`.
+MaxSim interface is defined using Protocol Buffers 2.6.1 in the following file: `./maxine/com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto`
 
-Default values of `message MaxSimConfig` define build-time MaxSim configuration.
+Default values of `message MaxSimConfig` define a build-time MaxSim configuration.
 
 `isMaxSimEnabled` indicates whether Maxine and ZSim are configured to work in tandem (`true`) or separately (`false`).
 
-`pointerTaggingType` indicates type of active pointer tagging. Three types of pointer tagging are available:
+`pointerTaggingType` indicates a type of active pointer tagging. Three types of pointer tagging are available:
 `NO_TAGGING` - native x86-64 tagging (sign-extention of the 47th bit),
 `CLASS_ID_TAGGING` - objects tagging by IDs of their classes,
 `ALLOC_SITE_ID_TAGGING` - objects tagging by IDs of allocation sites.
 
-`layoutScaleFactor` and `layoutScaleRefFactor` are paremeters of the address space morphing scheme bijections described in the paper. `layoutScaleRefFactor` is the second parameter of f<sub>e</sub> and the first paramter of f<sub>c</sub> bijection. `layoutScaleRefFactor` is the first parameter of f<sub>e</sub> bijection.
+`layoutScaleFactor` and `layoutScaleRefFactor` are paremeters of two bijections of the address space morphing scheme described in the paper. `layoutScaleRefFactor` is the second parameter of f<sub>e</sub> and the first paramter of f<sub>c</sub> bijection. `layoutScaleRefFactor` is the first parameter of f<sub>e</sub> bijection.
 
 Recipes
 -------
-MaxSim DaCapo characterization using 1CQ ZSim configuration (description is in the paper):
+MaxSim DaCapo characterization using 1CQ ZSim configuration (the configuration description is in the paper):
 ```
 mkdir dacapo_char_res
 ./scripts/runMaxSimDacapo.sh dacapo_char_res Nehalem-1CQ.tmpl 1
