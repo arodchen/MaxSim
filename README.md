@@ -120,6 +120,24 @@ MaxSim simulation can be controlled by managed applications by setting `MaxSim.C
 NOTE: All commands related to profiling have effect only when `pointerTaggingType [default = CLASS_ID_TAGGING]` or
 `pointerTaggingType [default = ALLOC_SITE_ID_TAGGING]` and `-XX:+MaxSimProfiling` flag is passed to Maxine VM.
 
+##### Printing Profiling Information in the Textual Format
+Command:
+```
+cd maxine
+../graal/mxtool/mx maxsimprofprint <flags>
+```
+Flags:
+```
+    -MaxineInfoDB=<arg>
+        Location of the file containing Maxine information data base.
+    -ZSimProfileDB=<arg>
+        Location of the file containing ZSim profile data base.
+    -help[=true|false, t|f, y|n] (default: false)
+        Show help message and exit.
+    -o=<arg> (default: maxsim-prof.txt)
+        Output file name.
+```
+
 Recipes
 -------
 MaxSim DaCapo characterization using 1CQ ZSim configuration (the configuration description is in the paper):
