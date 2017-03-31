@@ -53,7 +53,7 @@ Usage
 
 ##### Running DaCapo-9.12-bach Benchmarks
 Command:
-```
+```shell
 ./scripts/runMaxSimDacapo.sh <output directory> <ZSim template configuration> <number of runs>
 ```
 Arguments:
@@ -122,7 +122,7 @@ NOTE: All commands related to profiling have effect only when `pointerTaggingTyp
 
 ##### Printing Profiling Information in the Textual Format
 Command:
-```
+```shell
 cd maxine
 ../graal/mxtool/mx maxsimprofprint <flags>
 ```
@@ -167,7 +167,7 @@ sed -i 's/default = NO_TAGGING/default = CLASS_ID_TAGGING/' ./maxine/com.oracle.
 sed -i 's/default = CLASS_ID_TAGGING/default = NO_TAGGING/' ./maxine/com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto
 ```
 Characterizes `DaCapo-9.12-bach` using `1CQ` ZSim configuration (the configuration description is in the paper):
-```
+```shell
 mkdir dacapo_characterization
 ./scripts/runMaxSimDacapo.sh dacapo_characterization ./zsim/tests/Nehalem-1CQ.tmpl 3
 ```
