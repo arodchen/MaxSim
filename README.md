@@ -53,8 +53,14 @@ Usage
 
 ##### Running DaCapo-9.12-bach Benchmarks
 ```
-scripts/runMaxSimDacapo.sh <output directory> <ZSim template configuration> <number of executions>
+./scripts/runMaxSimDacapo.sh <output directory> <ZSim template configuration> <number of runs>
+```
+
+```
     <output directory> - existing output directory where results are stored
-    <ZSim template configuration> - ZSim template configuration in which COMMAND_TEMPLATE is replaced by actual command
-                                    to be executed by ZSim (e.g. ./zsim/tests/Nehalem-1CQ.tmpl)
+                         (overwrites existing results in the directory)
+    <ZSim template configuration> - ZSim template configuration in which COMMAND_TEMPLATE is
+                                    replaced by actual command to be executed by ZSim 
+                                    (e.g. ./zsim/tests/*.tmpl)
+    <number of runs> - number of runs of each benchmark
 ```
