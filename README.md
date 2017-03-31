@@ -22,7 +22,7 @@ Dependencies
 ------------
 `Maxine VM dependencies, ZSim dependencies, McPAT dependencies, protobuf-2.6.1, timelimit`
 
-Environment variables
+Environment Variables
 ---------------------
 `Maxine VM, ZSim, McPAT enviroment variables`
 
@@ -52,10 +52,11 @@ Usage
 `./scripts/cleanMaxSim.sh `                        - cleans Maxine VM and ZSim
 
 ##### Running DaCapo-9.12-bach Benchmarks
+Command:
 ```
 ./scripts/runMaxSimDacapo.sh <output directory> <ZSim template configuration> <number of runs>
 ```
-
+Arguments:
 ```
     <output directory> - existing output directory where results are stored
                          (overwrites existing results in the directory)
@@ -63,4 +64,5 @@ Usage
                                     replaced by actual command to be executed by ZSim 
                                     (e.g. ./zsim/tests/*.tmpl)
     <number of runs> - number of runs of each benchmark
+    EXTRA_MAXINE_FLAGS - environment variable used to pass extra flags to Maxine VM
 ```
