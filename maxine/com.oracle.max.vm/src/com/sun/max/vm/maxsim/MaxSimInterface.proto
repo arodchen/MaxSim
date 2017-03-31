@@ -23,6 +23,35 @@ package MaxSimInterface;
 option java_package = "com.sun.max.vm.maxsim";
 option java_outer_classname = "MaxSimInterface";
 
+// Pointer tagging type.
+//
+enum PointerTaggingType {
+  NO_TAGGING              = 0;
+  CLASS_ID_TAGGING        = 1;
+  ALLOC_SITE_ID_TAGGING   = 2;
+  UNDEFINED_TAGGING       = 3;
+}
+
+// MaxSim configuration.
+//
+message MaxSimConfig {
+
+  // Indicates whether MaxSim is enabled (Maxine and ZSim are working in tandem).
+  //
+  optional bool isMaxSimEnabled = 1 [default = true];
+
+  // Type of pointer tagging active in MaxSim.
+  //
+  optional PointerTaggingType pointerTaggingType = 2 [default = NO_TAGGING];
+
+  // Scaling factor for primitives in Maxine VM and contraction factor in ZSim used in address space morphing.
+  //
+  optional int32 layoutScaleFactor = 3 [default = 1];
+
+  // Scaling factor for references in Maxine VM used in address space morphing.
+  //
+  optional int32 layoutScaleRefFactor = 4 [default = 1];
+}
 
 // ZSim magic opcodes.
 //
@@ -205,15 +234,6 @@ enum MaxineVMOperationMode {
   MAXINE_VM_OPERATION_MODE_SAME           = 3;
 }
 
-// Pointer tagging type.
-//
-enum PointerTaggingType {
-  NO_TAGGING              = 0;
-  CLASS_ID_TAGGING        = 1;
-  ALLOC_SITE_ID_TAGGING   = 2;
-  UNDEFINED_TAGGING       = 3;
-}
-
 // Hub type.
 //
 enum HubType {
@@ -299,28 +319,6 @@ enum PointerTag {
   // Number of defined tags.
   //
   DEFINED_TAGS_NUM           = 0xFFFF;
-}
-
-
-// MaxSim configuration.
-//
-message MaxSimConfig {
-
-  // Indicates whether MaxSim is enabled (Maxine and ZSim are working in tandem).
-  //
-  optional bool isMaxSimEnabled = 1 [default = true];
-
-  // Type of pointer tagging acrive in MaxSim.
-  //
-  optional PointerTaggingType pointerTaggingType = 2 [default = NO_TAGGING];
-
-  // Scaling factor for primitives in Maxine VM and contraction factor in ZSim used in address space morphing.
-  //
-  optional int32 layoutScaleFactor = 3 [default = 1];
-
-  // Scaling factor for references in Maxine VM used in address space morphing.
-  //
-  optional int32 layoutScaleRefFactor = 4 [default = 1];
 }
 
 // Offset-BCI pair.

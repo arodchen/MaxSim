@@ -22,7 +22,7 @@ if [ ! -d "$1" ]; then
     exit 1 
 fi
 if [ -z "$2" ] ; then
-    echo Simulator template configuration is not specified! Pass simulator template configuration as the second argument.
+    echo "Simulator template configuration is not specified! Pass simulator template configuration (e.g. ./zsim/tests/*.tmpl) as the second argument".
     exit 1 
 fi
 if [ ! -f "$2" ]; then
