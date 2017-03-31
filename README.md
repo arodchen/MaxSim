@@ -40,7 +40,7 @@ Usage
 
 `./scripts/buildZSim<Debug|Product>.sh`            - builds ZSim (and re-generates MaxSim interface)
 
-`./scripts/buildMaxSim<Debug|Product>.sh`          - does all mentioned above
+`./scripts/buildMaxSim<Debug|Product>.sh`          - builds MaxSim (does all mentioned above)
 
 `./scripts/cleanMaxine.sh `                        - cleans Maxine VM
 
