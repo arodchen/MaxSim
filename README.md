@@ -32,7 +32,7 @@ Environment variables
 
 Usage
 -----
-##### Building and Cleaning
+##### Building, Cleaning and Setting Kernel Parameters
 `./scripts/generateMaxSimInterface.sh`             - generates MaxSim interface
 
 `./scripts/setZSimKernelParameters.sh`             - sets ZSim kernel parameters (requires sudo)
