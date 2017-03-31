@@ -168,6 +168,6 @@ sed -i 's/default = CLASS_ID_TAGGING/default = NO_TAGGING/' ./maxine/com.oracle.
 ```
 Characterizes `DaCapo-9.12-bach` using 1CQ ZSim configuration (the configuration description is in the paper):
 ```
-mkdir dacapo_char_res
-./scripts/runMaxSimDacapo.sh dacapo_char_res Nehalem-1CQ.tmpl 1
+mkdir dacapo_characterization
+./scripts/runMaxSimDacapo.sh dacapo_characterization Nehalem-1CQ.tmpl 1
 ```
