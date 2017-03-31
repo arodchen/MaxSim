@@ -25,11 +25,14 @@ Dependencies
 Environment variables
 ---------------------
 `Maxine VM, ZSim, McPAT enviroment variables`
+
 `PROTOBUFPATH=<protobuf-2.6.1 install path>`
+
 `MCPATPATH=<McPAT 1.0 bin path>`
 
 Usage
 -----
+##### Building and Cleaning
 `./scripts/generateMaxSimInterface.sh`             - generates MaxSim interface
 
 `./scripts/setZSimKernelParameters.sh`             - sets ZSim kernel parameters (requires sudo)
