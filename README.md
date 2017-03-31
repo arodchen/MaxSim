@@ -140,7 +140,33 @@ Flags:
 
 Recipes
 -------
-MaxSim DaCapo characterization using 1CQ ZSim configuration (the configuration description is in the paper):
+Profiling simple `./maxine/com.oracle.max.tests/src/test/output/HelloWorld.java` application using `4C` ZSim configuration (the configuration description is in the paper):
+```shell
+# Changes pointerTaggingType default type to CLASS_ID_TAGGING
+sed -i 's/default = NO_TAGGING/default = CLASS_ID_TAGGING/' ./maxine/com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto
+# Builds MaxSim
+./scripts/buildMaxSimProduct.sh
+# Simulates HelloWorld application
+./zsim/build/release/zsim ./zsim/tests/Nehalem-4C_MaxineHelloWorld.cfg
+# Prints profile to maxsim-prof.txt
+pushd maxine
+../graal/mxtool/mx maxsimprofprint -MaxineInfoDB=../maxine-info.db -ZSimProfileDB=../zsim-prof.db -o=../maxsim-prof.txt
+popd
+# Changes back pointerTaggingType to NO_TAGGING
+sed -i 's/default = CLASS_ID_TAGGING/default = NO_TAGGING/' ./maxine/com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto
+```
+Profiling simple `./maxine/com.oracle.max.tests/src/test/output/MaxSimSingleLinkedList.java` application using `1CQ` ZSim configuration (the configuration description is in the paper):
+```shell
+# Changes pointerTaggingType default type to CLASS_ID_TAGGING
+sed -i 's/default = NO_TAGGING/default = CLASS_ID_TAGGING/' ./maxine/com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto
+# Builds MaxSim
+./scripts/buildMaxSimProduct.sh
+# Simulates MaxSimSingleLinkedList application
+./zsim/build/release/zsim ./zsim/tests/Nehalem-1CQ_MaxSimSingleLinkedList.cfg
+# Change back pointerTaggingType to NO_TAGGING
+sed -i 's/default = CLASS_ID_TAGGING/default = NO_TAGGING/' ./maxine/com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto
+```
+MaxSim `DaCapo-9.12-bach` characterization using 1CQ ZSim configuration (the configuration description is in the paper):
 ```
 mkdir dacapo_char_res
 ./scripts/runMaxSimDacapo.sh dacapo_char_res Nehalem-1CQ.tmpl 1
