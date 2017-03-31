@@ -19,5 +19,31 @@ and M. Lujan is funded by a Royal Society University Research Fellowship.
 
 
 Dependencies
------
+------------
 `Maxine VM dependencies, ZSim dependencies, McPAT dependencies, protobuf-2.6.1, timelimit`
+
+Environment variables
+---------------------
+`Maxine VM, ZSim, McPAT enviroment variables`
+`PROTOBUFPATH=<protobuf-2.6.1 install path>`
+`MCPATPATH=<McPAT 1.0 bin path>`
+
+Usage
+-----
+`./scripts/generateMaxSimInterface.sh`             - generates MaxSim interface
+
+`./scripts/setZSimKernelParameters.sh`             - sets ZSim kernel parameters (requires sudo)
+
+`./scripts/buildMaxine<Debug|Product>.sh`          - builds Maxine VM (and re-generates MaxSim interface)
+
+`./scripts/buildImageC1X<Debug|Product>.sh`        - builds Maxine VM image
+
+`./scripts/buildZSim<Debug|Product>.sh`            - builds ZSim (and re-generates MaxSim interface)
+
+`./scripts/buildMaxSim<Debug|Product>.sh`          - does all mentioned above
+
+`./scripts/cleanMaxine.sh `                        - cleans Maxine VM
+
+`./scripts/cleanZSim.sh `                          - cleans ZSim
+
+`./scripts/cleanMaxSim.sh `                        - cleans Maxine VM amd ZSim
