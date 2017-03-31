@@ -49,4 +49,4 @@ Usage
 
 `./scripts/cleanZSim.sh `                          - cleans ZSim
 
-`./scripts/cleanMaxSim.sh `                        - cleans Maxine VM amd ZSim
+`./scripts/cleanMaxSim.sh `                        - cleans Maxine VM and ZSim
