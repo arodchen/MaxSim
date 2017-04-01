@@ -80,7 +80,7 @@ VOID MaxSimMediator::HandleMaxSimMagicOp(THREADID tid, ADDRINT * op, ADDRINT arg
             return;
         }
         case MAXSIM_M_OPC_GET_ALLOCATION_SITE_ESTIMATION_ID: {
-            PointerTag_t tag = *((PointerTag_t *) arg);
+            PointerTag_t tag = (PointerTag_t) arg;
             PointerTag_t allocationIDEstimation = MaxSimProfiling::getInst().getAllocationSiteEstimationID(tag, tid);
 
             *((PointerTag_t *) op) = allocationIDEstimation;
