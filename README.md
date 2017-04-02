@@ -32,7 +32,7 @@ Environment Variables
 
 Usage
 -----
-##### Building, Cleaning and Setting Kernel Parameters
+##### Building, Cleaning, Style Checking, and Setting Kernel Parameters
 `./scripts/generateMaxSimInterface.sh`             - generates MaxSim interface
 
 `./scripts/setZSimKernelParameters.sh`             - sets ZSim kernel parameters (requires sudo)
@@ -45,11 +45,13 @@ Usage
 
 `./scripts/buildMaxSim<Debug|Product>.sh`          - builds MaxSim (does all mentioned above)
 
-`./scripts/cleanMaxine.sh `                        - cleans Maxine VM
+`./scripts/cleanMaxine.sh`                         - cleans Maxine VM
 
-`./scripts/cleanZSim.sh `                          - cleans ZSim
+`./scripts/cleanZSim.sh`                           - cleans ZSim
 
-`./scripts/cleanMaxSim.sh `                        - cleans Maxine VM and ZSim
+`./scripts/cleanMaxSim.sh`                         - cleans Maxine VM and ZSim
+
+`./scripts/checkStyle.sh`                          - checks style in Maxine VM
 
 ##### Running DaCapo-9.12-bach Benchmarks
 Command:
@@ -169,5 +171,5 @@ sed -i 's/default = CLASS_ID_TAGGING/default = NO_TAGGING/' ./maxine/com.oracle.
 Characterizes `DaCapo-9.12-bach` using `1CQ` ZSim configuration (the configuration description is in the paper):
 ```shell
 mkdir dacapo_characterization
-./scripts/runMaxSimDacapo.sh dacapo_characterization ./zsim/tests/Nehalem-1CQ.tmpl 3
+./scripts/runMaxSimDacapo.sh dacapo_characterization ./zsim/tests/Nehalem-1CQ.tmpl 1
 ```
