@@ -26,7 +26,7 @@
 #ifndef __ZSIM_HOOKS_CONSTS_H__
 #define __ZSIM_HOOKS_CONSTS_H__
 
-#include "maxsim/MaxSimInterface.pb.h"
+#include "MaxSimInterface.pb.h"
 
 // 64-bit argument
 //
