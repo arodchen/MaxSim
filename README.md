@@ -220,3 +220,15 @@ Characterizes `DaCapo-9.12-bach` using `1CQ` ZSim configuration (the configurati
 mkdir dacapo_characterization
 ./scripts/runMaxSimDacapo.sh dacapo_characterization ./zsim/tests/Nehalem-1CQ.tmpl 1
 ```
+Retrieves L3 Cache Missed per Kilo Instruction:
+```shell
+./scripts/retrieveZSimStat.py ./dacapo_characterization/zsim/DaCapo-9.12-bach_eclipse_product_0 1,2 CMLDPKI l3
+```
+Models energy spent in the Garbage Collection (GC) part of the workload:
+```shell
+./scripts/runMcPAT.py -z ./dacapo_characterization/zsim/DaCapo-9.12-bach_eclipse_product_0 -e 2
+```
+Models energy spent in the non-GC part of the workload:
+```shell
+./scripts/runMcPAT.py -z ./dacapo_characterization/zsim/DaCapo-9.12-bach_eclipse_product_0 -e 1
+```
