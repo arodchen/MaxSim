@@ -27,8 +27,8 @@
 #define SRC_MAXSIM_RUNTIME_INFO_H
 
 #include "zsim.h"
-#include "maxsim_interface_c.h"
-#include "maxsim_interface_helpers.h"
+#include "maxsim/maxsim_interface_c.h"
+#include "maxsim/maxsim_interface_helpers.h"
 
 #ifdef MAXSIM_ENABLED
 

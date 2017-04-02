@@ -30,7 +30,7 @@
 
 #ifdef MAXSIM_ENABLED
 
-#include "MaxSimInterface.pb.h"
+#include "maxsim/MaxSimInterface.pb.h"
 
 class MaxSimInterfaceHelpers {
     public:

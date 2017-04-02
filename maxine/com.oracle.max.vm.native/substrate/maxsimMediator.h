@@ -27,7 +27,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
-#include "zsim/src/maxsim_interface_c.h"
+#include "zsim/src/maxsim/maxsim_interface_c.h"
 
 //Avoid optimizing compilers moving code around this barrier
 #define COMPILER_BARRIER() { __asm__ __volatile__("" ::: "memory");}

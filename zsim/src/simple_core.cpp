@@ -29,8 +29,8 @@
 #include "pointer_tagging.h"
 
 #ifdef MAXSIM_ENABLED
-#include "maxsim_profiling.h"
-#include "maxsim_address_space_morphing.h"
+#include "maxsim/maxsim_profiling.h"
+#include "maxsim/maxsim_address_space_morphing.h"
 #endif // MAXSIM_ENABLED
 
 SimpleCore::SimpleCore(FilterCache* _l1i, FilterCache* _l1d, g_string& _name) : Core(_name), l1i(_l1i), l1d(_l1d), instrs(0), curCycle(0), haltedCycles(0), isCondBrunch(false), doSimulateBbl(true) {

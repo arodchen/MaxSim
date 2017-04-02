@@ -31,9 +31,9 @@
 
 #if defined(MA_PROF_ENABLED) && defined(MAXSIM_ENABLED)
 
-#include "maxsim_runtime_info.h"
-#include "maxsim_interface_helpers.h"
-#include "maxsim_interface_c.h"
+#include "maxsim/maxsim_runtime_info.h"
+#include "maxsim/maxsim_interface_helpers.h"
+#include "maxsim/maxsim_interface_c.h"
 #include "pad.h"
 #include "locks.h"
 

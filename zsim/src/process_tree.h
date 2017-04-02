@@ -33,7 +33,7 @@
 #include "zsim.h"
 
 #ifdef MAXSIM_ENABLED
-#include "maxsim_interface_c.h"
+#include "maxsim/maxsim_interface_c.h"
 #endif
 
 class Config;

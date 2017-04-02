@@ -31,7 +31,7 @@
 #include "zsim.h"
 
 #ifdef MAXSIM_ENABLED
-#include "maxsim_profiling.h"
+#include "maxsim/maxsim_profiling.h"
 #endif // MAXSIM_ENABLED
 
 /* Do a simple XOR block hash on address to determine its bank. Hacky for now,

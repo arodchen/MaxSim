@@ -36,8 +36,8 @@
 #include "constants.h"
 
 #ifdef MAXSIM_ENABLED
-#include "maxsim_profiling.h"
-#include "maxsim_address_space_morphing.h"
+#include "maxsim/maxsim_profiling.h"
+#include "maxsim/maxsim_address_space_morphing.h"
 #endif // MAXSIM_ENABLED
 
 /* Uncomment to induce backpressure to the IW when the load/store buffers fill up. In theory, more detailed,

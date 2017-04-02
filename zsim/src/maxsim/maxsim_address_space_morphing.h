@@ -31,8 +31,8 @@
 #ifdef MAXSIM_ENABLED
 
 #include "constants.h"
-#include "maxsim_interface_c.h"
-#include "maxsim_runtime_info.h"
+#include "maxsim/maxsim_interface_c.h"
+#include "maxsim/maxsim_runtime_info.h"
 
 class MaxSimAddressSpaceMorphing {
   public:

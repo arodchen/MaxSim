@@ -28,13 +28,13 @@
 
 #ifdef MAXSIM_ENABLED
 
-#include "maxsim_mediator.h"
-#include "maxsim_interface_c.h"
+#include "maxsim/maxsim_mediator.h"
+#include "maxsim/maxsim_interface_c.h"
 #include "cpuenum.h"
-#include "maxsim_runtime_info.h"
-#include "maxsim_interface_helpers.h"
-#include "maxsim_address_space_morphing.h"
-#include "maxsim_profiling.h"
+#include "maxsim/maxsim_runtime_info.h"
+#include "maxsim/maxsim_interface_helpers.h"
+#include "maxsim/maxsim_address_space_morphing.h"
+#include "maxsim/maxsim_profiling.h"
 #include "pointer_tagging.h"
 
 VOID MaxSimMediator::HandleMaxSimMagicOp(THREADID tid, ADDRINT * op, ADDRINT arg) {

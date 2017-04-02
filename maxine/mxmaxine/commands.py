@@ -395,9 +395,9 @@ def maxsiminterfacegen(args):
     os.rename('../scripts/MaxSimInterface_pb2.py', '../scripts/MaxSimInterface_pb.py')
 
     # Generate MaxSimInterface.pb.cpp and Generate MaxSimInterface.pb.h
-    mx.run([join(PROTOBUFPATH,'bin/protoc'), '--cpp_out=../zsim/src', '--proto_path=com.oracle.max.vm/src/com/sun/max/vm/maxsim',
+    mx.run([join(PROTOBUFPATH,'bin/protoc'), '--cpp_out=../zsim/src/maxsim', '--proto_path=com.oracle.max.vm/src/com/sun/max/vm/maxsim',
             'com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto'])
-    os.rename('../zsim/src/MaxSimInterface.pb.cc', '../zsim/src/MaxSimInterface.pb.cpp')
+    os.rename('../zsim/src/maxsim/MaxSimInterface.pb.cc', '../zsim/src/maxsim/MaxSimInterface.pb.cpp')
 
     # Place non enum parts of the MaxSimInterface.pb.h file under __cplusplus define.
     # This way enums in the header file are accessible from C files.
@@ -411,10 +411,10 @@ def maxsiminterfacegen(args):
     # ...
     # #endif  // PROTOBUF_.*__INCLUDED
     # ..
-    with open('../zsim/src/MaxSimInterface.pb.h', 'r') as h_file:
+    with open('../zsim/src/maxsim/MaxSimInterface.pb.h', 'r') as h_file:
         h_buffer = h_file.readlines()
 
-    with open('../zsim/src/MaxSimInterface.pb.h', 'w') as h_file:
+    with open('../zsim/src/maxsim/MaxSimInterface.pb.h', 'w') as h_file:
         h_enum_parsing = False
 
         for h_line in h_buffer:

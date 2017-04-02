@@ -23,11 +23,11 @@
  * this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "maxsim_address_space_morphing.h"
+#include "maxsim/maxsim_address_space_morphing.h"
 
 #ifdef MAXSIM_ENABLED
 
-#include "maxsim_profiling.h"
+#include "maxsim/maxsim_profiling.h"
 #include "pointer_tagging.h"
 
 bool MaxSimAddressSpaceMorphing::processBBlAndDoSimulate(ThreadId_t tid, Address addressBbl, bool isCondBranch) {

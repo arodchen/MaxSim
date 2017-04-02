@@ -23,7 +23,7 @@
  * this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "maxsim_profiling.h"
+#include "maxsim/maxsim_profiling.h"
 
 #if defined(MA_PROF_ENABLED) && defined(MAXSIM_ENABLED)
 

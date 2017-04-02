@@ -23,11 +23,11 @@
  * this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "maxsim_runtime_info.h"
+#include "maxsim/maxsim_runtime_info.h"
 
 #ifdef MAXSIM_ENABLED
 
-#include "maxsim_profiling.h"
+#include "maxsim/maxsim_profiling.h"
 
 MaxSimRuntimeInfo::MaxineAddressSpace_t MaxSimRuntimeInfo::getMaxineAddressSpaceByAddressRangeType(AddressRangeType type) {
     switch (type) {

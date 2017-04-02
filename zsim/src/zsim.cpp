@@ -63,8 +63,8 @@
 #include "stack_trace_estimation.h"
 
 #ifdef MAXSIM_ENABLED
-#include "maxsim_mediator.h"
-#include "maxsim_interface_c.h"
+#include "maxsim/maxsim_mediator.h"
+#include "maxsim/maxsim_interface_c.h"
 #endif // MAXSIM_ENABLED
 
 //#include <signal.h> //can't include this, conflicts with PIN's
