@@ -140,7 +140,7 @@ Flags:
         Output file name.
 ```
 
-##### Retrieveing Statistics Collected by ZSim
+##### Retrieving Statistics Collected by ZSim
 Command:
 ```shell
 ./scripts/retrieveZSimStat.py <ZSim stat dir> <Maxine VM oper modes> <characteristic> (<cahe name>)
