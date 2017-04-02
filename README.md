@@ -140,6 +140,53 @@ Flags:
         Output file name.
 ```
 
+##### Retrieveing Statistics Collected by ZSim
+Command:
+```shell
+./scripts/retrieveZSimStat.py <ZSim stat dir> <Maxine VM oper modes> <characteristic> (<cahe name>)
+```
+Arguments:
+```
+    <ZSim stat dir> - directory containing ZSim stat files (zsim-ev.h5)
+    <Maxine VM oper modes> - comma-separated numerical list of Maxine VM operation modes
+                             for which statistics is retrieved. Operation modes are
+                             listed in MaxineVMOperationMode in MaxSimInterface.proto
+    <characteristic> - retrieved characteristic. Supported characteristics are:
+                       C - cycles
+                       I - intructions
+                       IPC - intructions per clock
+                       C[H|M|A][LD|ST|LDST](PKI) - cache characteristics
+                           [..|..] - required alternatives
+                           (..|..) - optional alternatives
+                           H       - hits
+                           M       - misses
+                           A       - accesses
+                           LD      - loads
+                           ST      - stores
+                           LDST    - loads and stores
+                           PKI     - per kilo instruction
+    <cahe name> - cache name required only for cache characteristics listed avove
+```
+NOTE: The parts of this script were obtained from [the ZSim-NVMain simulator](https://github.com/AXLEproject/axle-zsim-nvmain).
+
+##### Modeling Power and Energy Using McPAT
+Command:
+```shell
+./scripts/runMcPAT.py
+```
+Flags:
+```
+    [-h (help)]
+    [-z <zsim-stat-dir>] - directory containing ZSim stat files (zsim-ev.h5)
+    [-e <maxine-op-modes>] - comma-separated numerical list of Maxine VM operation modes
+                             for which statistics is retrieved. Operation modes are
+                             listed in MaxineVMOperationMode in MaxSimInterface.proto
+    [-d <resultsdir (default: .)>]
+    [-t <type: total|dynamic|static|peak|peakdynamic|area>]
+    [-o <output-file (power{.png,.txt,.py})>]
+```
+NOTE: The parts of this script were obtained from [the Sniper simulator](http://snipersim.org/w/The_Sniper_Multi-Core_Simulator) under [MIT License](http://snipersim.org/w/License).
+
 Recipes
 -------
 Profiles simple `./maxine/com.oracle.max.tests/src/test/output/HelloWorld.java` application using `4C` ZSim configuration (the configuration description is in the paper):
