@@ -215,10 +215,12 @@ sed -i 's/default = NO_TAGGING/default = CLASS_ID_TAGGING/' ./maxine/com.oracle.
 # Change back pointerTaggingType to NO_TAGGING
 sed -i 's/default = CLASS_ID_TAGGING/default = NO_TAGGING/' ./maxine/com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto
 ```
-Characterizes `DaCapo-9.12-bach` using `1CQ` ZSim configuration (the configuration description is in the paper):
+Characterizes and profiles `DaCapo-9.12-bach` using `1CQ` ZSim configuration (the configuration description is in the paper):
 ```shell
+sed -i 's/default = NO_TAGGING/default = ALLOC_SITE_ID_TAGGING/' ./maxine/com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto
 mkdir dacapo_characterization
-./scripts/runMaxSimDacapo.sh dacapo_characterization ./zsim/tests/Nehalem-1CQ.tmpl 1
+EXTRA_MAXINE_FLAGS="-XX:+MaxSimProfiling -XX:+MaxSimPrintProfileOnVMExit" ./scripts/runMaxSimDacapo.sh dacapo_characterization ./zsim/tests/Nehalem-1CQ.tmpl 1
+sed -i 's/default = ALLOC_SITE_ID_TAGGING/default = NO_TAGGING/' ./maxine/com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto
 ```
 Retrieves L3 Cache Missed per Kilo Instruction:
 ```shell
