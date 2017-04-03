@@ -108,7 +108,8 @@ NOTE: When working in tandem with Maxine VM `startFastForwarded` Maxine VM proce
 `-XX:MaxSimDataTransDB=<value>`         MaxSim data transformation data base for address space morphing.
 
 NOTE: All flags related to profiling have effect only when `pointerTaggingType [default = CLASS_ID_TAGGING]` or
-`pointerTaggingType [default = ALLOC_SITE_ID_TAGGING]`. `-XX:MaxSimDataTransDB=` accepts `DataTransDB` message with `DataTransInfo`s having `FieldOffsetRemapPair`s representing m<sub>e</sub> reordering map described in the paper. `-XX:MaxSimDataTransDB=` has effect only when `pointerTaggingType [default = CLASS_ID_TAGGING]`.
+`pointerTaggingType [default = ALLOC_SITE_ID_TAGGING]`. `-XX:MaxSimDataTransDB=` accepts `DataTransDB` message with `DataTransInfo`s having `FieldOffsetRemapPair`s representing m<sub>e</sub> reordering map described in the paper.
+`-XX:MaxSimDataTransDB=` has effect only when `pointerTaggingType [default = CLASS_ID_TAGGING]`.
 
 ##### Controlling Simulation by Managed Applications
 MaxSim simulation can be controlled by managed applications by setting `MaxSim.Command` property (via a call to `System.setProperty("MaxSim.Command", <value>)`) the following values:
@@ -235,4 +236,22 @@ Models energy spent in the Garbage Collection (GC) part of the workload:
 Models energy spent in the non-GC part of the workload:
 ```shell
 ./scripts/runMcPAT.py -z ./dacapo_characterization/zsim/DaCapo-9.12-bach_eclipse_product_0 -e 1
+```
+Profiles simple `./maxine/com.oracle.max.tests/src/test/output/HelloWorld.java` application using `1CQ` ZSim configuration, modeling compressed object pointers and `String` objects' fields reoredring using `./misc/DataTrans/HelloWorldCompPointDataTrans.db` as described in the example shown in Figure 7 in the paper:
+```shell
+# Changes pointerTaggingType default type to CLASS_ID_TAGGING and layoutScaleFactor to 2
+sed -i 's/pointerTaggingType = 2 \[default = NO_TAGGING/pointerTaggingType = 2 \[default = CLASS_ID_TAGGING/
+./maxine/com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto
+sed -i 's/layoutScaleFactor = 3 \[default = 1/layoutScaleFactor = 3 \[default = 2/' maxine/com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto
+# Builds MaxSim
+./scripts/buildMaxSimProduct.sh
+# Simulates HelloWorld application and produces ZSim profile and Maxine information files (zsim-prof.db and maxine-info.db).
+./zsim/build/release/zsim ./zsim/tests/Nehalem-1CQ_MaxineHelloWorldCompPointDataTrans.cfg
+# Prints profile to maxsim-prof.txt
+pushd maxine
+../graal/mxtool/mx maxsimprofprint -MaxineInfoDB=../maxine-info.db -ZSimProfileDB=../zsim-prof.db -o=../maxsim-prof.txt
+popd
+# Change back pointerTaggingType to NO_TAGGING and layoutScaleFactor to 1
+sed -i 's/pointerTaggingType = 2 \[default = CLASS_ID_TAGGING/pointerTaggingType = 2 \[default = NO_TAGGING/ ./maxine/com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto
+sed -i 's/layoutScaleFactor = 3 \[default = 2/layoutScaleFactor = 3 \[default = 1/' maxine/com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto
 ```
