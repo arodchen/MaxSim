@@ -334,7 +334,7 @@ public class MaxSimTaggingScheme {
         pointerTaggingOperation.doTagging(ActionMode.MaxSimPointerUntaggingVerification);
     }
 
-    static final MaxSimHubTagUpdater maximHubTagUpdater = new MaxSimHubTagUpdater();
+    static final MaxSimHubTagUpdater maxsimHubTagUpdater = new MaxSimHubTagUpdater();
 
     /**
      * MaxSim hub tag updater.
