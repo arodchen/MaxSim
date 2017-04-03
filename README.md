@@ -105,8 +105,10 @@ NOTE: When working in tandem with Maxine VM `startFastForwarded` Maxine VM proce
 
 `-XX:-TraceMaxSimTagging`               Traces MaxSim tagging.
 
+`-XX:MaxSimDataTransDB=<value>`         MaxSim data transformation data base for address space morphing.
+
 NOTE: All flags related to profiling have effect only when `pointerTaggingType [default = CLASS_ID_TAGGING]` or
-`pointerTaggingType [default = ALLOC_SITE_ID_TAGGING]`.
+`pointerTaggingType [default = ALLOC_SITE_ID_TAGGING]`. `-XX:MaxSimDataTransDB=` accepts `DataTransDB` message with `DataTransInfo`s having `FieldOffsetRemapPair`s representing m<sub>e</sub> reordering map described in the paper. `-XX:MaxSimDataTransDB=` has effect only when `pointerTaggingType [default = CLASS_ID_TAGGING]`.
 
 ##### Controlling Simulation by Managed Applications
 MaxSim simulation can be controlled by managed applications by setting `MaxSim.Command` property (via a call to `System.setProperty("MaxSim.Command", <value>)`) the following values:
