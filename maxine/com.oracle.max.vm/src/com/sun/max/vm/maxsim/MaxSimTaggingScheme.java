@@ -72,9 +72,9 @@ public class MaxSimTaggingScheme {
                     Reference ref = pointer.getReference(wordIndex);
                     Pointer refPointer = ref.toOrigin();
 
-                    if (refPointer.isZero())
+                    if (refPointer.isZero()) {
                         return;
-
+                    }
                     switch (actionMode) {
                         case MaxSimPointerTaggingVerification:
                             if (refPointer.isUntagged()) {
@@ -166,7 +166,7 @@ public class MaxSimTaggingScheme {
             /**
              * Sets pointer tagging (true) or untagging (false) operation mode.
              */
-            void SetOperationMode(ActionMode actionMode) {
+            void setOperationMode(ActionMode actionMode) {
                 pointerIndexTagger.actionMode = actionMode;
             }
         }
@@ -185,7 +185,9 @@ public class MaxSimTaggingScheme {
         /**
          * Pointer (un)tagging operation constructor.
          */
-        protected PointerTaggingOperation() { super("PointerTaggingOperation", null, Mode.Safepoint);}
+        protected PointerTaggingOperation() {
+            super("PointerTaggingOperation", null, Mode.Safepoint);
+        }
 
         @Override
         protected void doAfterFrozen(VmThread vmThread) {
@@ -207,7 +209,7 @@ public class MaxSimTaggingScheme {
 
         @Override
         protected void doIt() {
-            cellPointerTagger.SetOperationMode(cellPointerTagger.pointerIndexTagger.actionMode);
+            cellPointerTagger.setOperationMode(cellPointerTagger.pointerIndexTagger.actionMode);
             VmThreadLocal.prepareCurrentStackReferenceMap();
             Heap.invokeGCCallbacks(Heap.GCCallbackPhase.BEFORE);
             if (TraceMaxSimTagging) {
@@ -229,7 +231,7 @@ public class MaxSimTaggingScheme {
          * Do pointer (un)tagging.
          */
         protected void doTagging(ActionMode actionMode) {
-            cellPointerTagger.SetOperationMode(actionMode);
+            cellPointerTagger.setOperationMode(actionMode);
             submit();
         }
     }
@@ -240,7 +242,7 @@ public class MaxSimTaggingScheme {
     private static final PointerTaggingOperation pointerTaggingOperation = new PointerTaggingOperation();
 
     /**
-     * Indicator that pointer (un)tagging is in progress
+     * Indicator that pointer (un)tagging is in progress.
      */
     private static boolean isPointerTaggingInProgress = false;
 
@@ -359,7 +361,7 @@ public class MaxSimTaggingScheme {
             FatalError.unexpected("Class ID passed to classIDToTag should not be negative!");
         }
         int tag = classId + MaxSimInterface.PointerTag.TAG_GP_LO_VALUE;
-        if ((tag >= MaxSimInterface.PointerTag.DEFINED_TAGS_NUM_VALUE)) {
+        if (tag >= MaxSimInterface.PointerTag.DEFINED_TAGS_NUM_VALUE) {
             return MaxSimInterface.PointerTag.TAG_UNDEFINED_GP_VALUE;
         }
         return (short) tag;

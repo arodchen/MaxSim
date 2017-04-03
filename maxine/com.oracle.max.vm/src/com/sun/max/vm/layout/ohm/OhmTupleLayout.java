@@ -139,7 +139,7 @@ public final class OhmTupleLayout extends OhmGeneralLayout implements TupleLayou
                     int fieldScaleFactor = (fieldActor.kind == Kind.REFERENCE) ?
                         scaleRefFactor : scaleFactor;
                     fieldActor.setOffset(offset);
-                    offset += (fieldScaleFactor * scale);
+                    offset += fieldScaleFactor * scale;
                 }
             }
         }

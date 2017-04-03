@@ -47,36 +47,36 @@ public class MaxSimInterfaceHelpers {
 
     @FOLD
     static public boolean isClassIDTagging() {
-        return (MaxSimInterface.MaxSimConfig.getDefaultInstance().getPointerTaggingType() ==
-            MaxSimInterface.PointerTaggingType.CLASS_ID_TAGGING);
+        return MaxSimInterface.MaxSimConfig.getDefaultInstance().getPointerTaggingType() ==
+            MaxSimInterface.PointerTaggingType.CLASS_ID_TAGGING;
     }
 
     @INLINE
     static public boolean isClassIDTagging(MaxSimInterface.PointerTaggingType pointerTaggingType) {
-        return (pointerTaggingType == MaxSimInterface.PointerTaggingType.CLASS_ID_TAGGING);
+        return pointerTaggingType == MaxSimInterface.PointerTaggingType.CLASS_ID_TAGGING;
     }
 
     @FOLD
     static public boolean isAllocationSiteIDTagging() {
-        return (MaxSimInterface.MaxSimConfig.getDefaultInstance().getPointerTaggingType() ==
-            MaxSimInterface.PointerTaggingType.ALLOC_SITE_ID_TAGGING);
+        return MaxSimInterface.MaxSimConfig.getDefaultInstance().getPointerTaggingType() ==
+            MaxSimInterface.PointerTaggingType.ALLOC_SITE_ID_TAGGING;
     }
 
     @INLINE
     static public boolean isAllocationSiteIDTagging(MaxSimInterface.PointerTaggingType pointerTaggingType) {
-        return (pointerTaggingType == MaxSimInterface.PointerTaggingType.ALLOC_SITE_ID_TAGGING);
+        return pointerTaggingType == MaxSimInterface.PointerTaggingType.ALLOC_SITE_ID_TAGGING;
     }
 
     @INLINE
     public static boolean isAggregateTag(short tag) {
-        return ((MaxSimInterface.PointerTag.TAG_AGGREGATE_LO_VALUE <= tag) &&
-            (tag <= MaxSimInterface.PointerTag.TAG_AGGREGATE_HI_VALUE));
+        return (MaxSimInterface.PointerTag.TAG_AGGREGATE_LO_VALUE <= tag) &&
+            (tag <= MaxSimInterface.PointerTag.TAG_AGGREGATE_HI_VALUE);
     }
 
     @INLINE
     public static boolean isGeneralPurposeTag(short tag) {
-        return ((MaxSimInterface.PointerTag.TAG_GP_LO_VALUE <= tag) ||
-            (tag <= MaxSimInterface.PointerTag.TAG_GP_HI_VALUE));
+        return (MaxSimInterface.PointerTag.TAG_GP_LO_VALUE <= tag) ||
+            (tag <= MaxSimInterface.PointerTag.TAG_GP_HI_VALUE);
     }
 
     @INLINE

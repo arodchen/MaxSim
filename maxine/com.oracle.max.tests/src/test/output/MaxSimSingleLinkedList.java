@@ -26,7 +26,7 @@ import java.util.Random;
 public class MaxSimSingleLinkedList {
 
     private static final int linksNum = 4096;
-    private static Random randNumGen = new Random( );
+    private static Random randNumGen = new Random();
     private static SingleLink [ ] array = new SingleLink [ linksNum ];
 
     private static SingleLink first = null;
@@ -42,9 +42,9 @@ public class MaxSimSingleLinkedList {
     }
 
     private static Comparator < SingleLink > SingleLinkDescendingCmp =
-    new Comparator < SingleLink > ( ) {
+        new Comparator < SingleLink >() {
             @Override
-            public int compare( SingleLink l1, SingleLink l2) {
+            public int compare(SingleLink l1, SingleLink l2) {
                 long l1Data = l1.longData;
                 long l2Data = l2.longData;
                 if (l1Data != l2Data) {
@@ -56,7 +56,7 @@ public class MaxSimSingleLinkedList {
 
     public static void addLink(SingleLink link, int index) {
         assert link.next == null;
-        if ( first == null ) {
+        if (first == null) {
             assert last == null;
             first = link;
             last = link;
@@ -67,9 +67,9 @@ public class MaxSimSingleLinkedList {
         array [ index ] = link;
     }
 
-    public static void reLink( ) {
+    public static void reLink() {
         first = array [ 0 ];
-        for ( int i = 0; i < linksNum - 1; i ++ ) {
+        for (int i = 0; i < linksNum - 1; i++) {
             array [ i ].next = array [ i + 1 ];
         }
         array [ linksNum - 1 ].next = null;
@@ -84,9 +84,9 @@ public class MaxSimSingleLinkedList {
 
         // 1. Create list with random data.
         System.out.print("1. Create list ... ");
-        for ( int i = 0; i < linksNum; i ++ ) {
-            SingleLink l = new SingleLink( randNumGen.nextLong());
-            addLink( l, i);
+        for (int i = 0; i < linksNum; i++) {
+            SingleLink l = new SingleLink(randNumGen.nextLong());
+            addLink(l, i);
         }
         System.out.println("done!");
 
@@ -96,7 +96,7 @@ public class MaxSimSingleLinkedList {
         lastLink = last;
         link = first;
         System.setProperty("MaxSim.Command", "ROI_BEGIN()");
-        while ( link.longData != lastData && link != lastLink ) {
+        while (link.longData != lastData && link != lastLink) {
             link = link.next;
         }
         System.setProperty("MaxSim.Command", "ROI_END()");
@@ -107,7 +107,7 @@ public class MaxSimSingleLinkedList {
         // 3. Sort elements.
         System.out.print("3. Sort elements ... ");
         System.setProperty("MaxSim.Command", "ROI_BEGIN()");
-        Arrays.sort( array, SingleLinkDescendingCmp);
+        Arrays.sort(array, SingleLinkDescendingCmp);
         System.setProperty("MaxSim.Command", "ROI_END()");
         System.setProperty("MaxSim.Command", "PRINT_PROFILE_TO_FILE(SingleLinkedList.3.zsim-prof.db)");
         System.setProperty("MaxSim.Command", "RESET_PROFILE_COLLECTION()");
@@ -115,7 +115,7 @@ public class MaxSimSingleLinkedList {
 
         // 4. Relink elements.
         System.out.print("4. Relink ... ");
-        reLink( );
+        reLink();
         System.out.println("done!");
 
         // 5. Find end element.
@@ -124,7 +124,7 @@ public class MaxSimSingleLinkedList {
         lastLink = last;
         link = first;
         System.setProperty("MaxSim.Command", "ROI_BEGIN()");
-        while ( link.longData != lastData && link != lastLink ) {
+        while (link.longData != lastData && link != lastLink) {
             link = link.next;
         }
         System.setProperty("MaxSim.Command", "ROI_END()");

@@ -421,7 +421,8 @@ public abstract class CodeManager {
 
     void visitAllIn(CellVisitor v, CodeRegion cr) {
         Pointer firstCell = cr.gcstart().asPointer();
-        Pointer nextCell, cell = firstCell;
+        Pointer cell = firstCell;
+        Pointer nextCell;
         while (cell.lessThan(cr.getAllocationMark())) {
             cell = DebugHeap.checkDebugCellTag(firstCell, cell);
             nextCell = v.visitCell(cell);

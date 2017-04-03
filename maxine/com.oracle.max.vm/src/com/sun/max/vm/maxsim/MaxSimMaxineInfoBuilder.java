@@ -170,8 +170,9 @@ public class MaxSimMaxineInfoBuilder {
                 do {
                     for (FieldActor fieldActor : currentClassActor.localInstanceFieldActors()) {
                         if (!(fieldActor.descriptor().isResolvableWithoutClassLoading(fieldActor.holder().classLoader)) &&
-                            !(fieldActor instanceof InjectedFieldActor))
+                            !(fieldActor instanceof InjectedFieldActor)) {
                             continue;
+                        }
                         fieldInfo.clear();
                         fieldInfo.setName(fieldActor.name());
                         fieldInfo.setOffset(fieldActor.offset());
@@ -237,12 +238,12 @@ public class MaxSimMaxineInfoBuilder {
     }
 
     private void buildMaxSimConfig(MaxSimInterface.MaxineInfoDB.Builder maxineInfoDB) {
-        MaxSimInterface.MaxSimConfig.Builder MaxSimConfig = MaxSimInterface.MaxSimConfig.newBuilder();
-        MaxSimConfig.setLayoutScaleFactor(
+        MaxSimInterface.MaxSimConfig.Builder maxsimConfig = MaxSimInterface.MaxSimConfig.newBuilder();
+        maxsimConfig.setLayoutScaleFactor(
             MaxSimInterface.MaxSimConfig.getDefaultInstance().getLayoutScaleFactor());
-        MaxSimConfig.setLayoutScaleRefFactor(
+        maxsimConfig.setLayoutScaleRefFactor(
             MaxSimInterface.MaxSimConfig.getDefaultInstance().getLayoutScaleRefFactor());
-        MaxSimConfig.setPointerTaggingType(MaxSimInterface.MaxSimConfig.getDefaultInstance().getPointerTaggingType());
-        maxineInfoDB.setMaxSimConfig(MaxSimConfig);
+        maxsimConfig.setPointerTaggingType(MaxSimInterface.MaxSimConfig.getDefaultInstance().getPointerTaggingType());
+        maxineInfoDB.setMaxSimConfig(maxsimConfig);
     }
 }

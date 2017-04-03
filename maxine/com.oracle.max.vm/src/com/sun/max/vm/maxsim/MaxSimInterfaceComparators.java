@@ -228,12 +228,13 @@ public class MaxSimInterfaceComparators {
      */
     public static Comparator<MaxSimInterface.ClassProf> getClassProfComparatorBySortingType(ClassProfSortingType t) {
         switch (t) {
-            default:
-                assert false;
             case MemFootprintDescendingOrder:
                 return ClassProfMemFootprintDescendingCmp;
             case MemAccCountDescendingOrder:
                 return ClassProfMemAccCountDescendingCmp;
+            default:
+                assert false;
+                return null;
         }
     }
 
@@ -242,12 +243,13 @@ public class MaxSimInterfaceComparators {
      */
     public static Comparator<MaxSimInterface.FieldProf> getFieldProfComparatorBySortingType(FieldProfSortingType t) {
         switch (t) {
-            default:
-                assert false;
             case MemAccCountDescendingOrder:
                 return MaxSimInterfaceComparators.FieldProfMemAccCountDescendingCmp;
             case OffsetAscendingOrder:
                 return MaxSimInterfaceComparators.FieldProfOffsetAscendingCmp;
+            default:
+                assert false;
+                return null;
         }
     }
 
@@ -256,10 +258,11 @@ public class MaxSimInterfaceComparators {
      */
     public static Comparator<MaxSimInterface.AllocProf> getAllocProfComparatorBySortingType(AllocProfSortingType t) {
         switch (t) {
-            default:
-                assert false;
             case MemFootprintDescendingOrder:
                 return AllocProfMemFootprintDescendingCmp;
+            default:
+                assert false;
+                return null;
         }
     }
 
@@ -269,10 +272,11 @@ public class MaxSimInterfaceComparators {
     public static Comparator<MaxSimInterface.AllocSiteProf> getAllocSiteProfComparatorBySortingType(
         AllocSiteProfSortingType t) {
         switch (t) {
-            default:
-                assert false;
             case CountDescendingOrder:
                 return MaxSimInterfaceComparators.AllocSiteProfCountDescendingCmp;
+            default:
+                assert false;
+                return null;
         }
     }
 
@@ -282,10 +286,11 @@ public class MaxSimInterfaceComparators {
     public static Comparator<MaxSimInterface.CacheMissProf> getCacheMissProfComparatorBySortingType(
         CacheMissProfSortingType t) {
         switch (t) {
-            default:
-                assert false;
             case CountDescendingOrder:
                 return MaxSimInterfaceComparators.CacheMissProfCountDescendingCmp;
+            default:
+                assert false;
+                return null;
         }
     }
 }

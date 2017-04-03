@@ -85,7 +85,7 @@ public final class JDK_java_lang_Runtime {
     static native void runFinalization();
 
     @C_FUNCTION
-    private static native int Runtime_availableProcessors();
+    private static native int runtime_availableProcessors();
 
     /**
      * Returns the number of processors available to the Java virtual machine.
@@ -99,7 +99,7 @@ public final class JDK_java_lang_Runtime {
         if (MaxSimInterfaceHelpers.isMaxSimEnabled()) {
             return MaxSimMediator.getAvailableProcessors();
         } else {
-            return Runtime_availableProcessors();
+            return runtime_availableProcessors();
         }
     }
 

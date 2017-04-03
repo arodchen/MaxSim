@@ -260,8 +260,8 @@ public final class Platform {
         this.pageSize = pageSize;
         this.nsig = nsig;
         // Set null check offset at one reference word plus half primitive word to be able to differentiate it from hub access.
-        this.nullCheckOffset = ((MaxSimInterfaceHelpers.getLayoutScaleRefFactor() * dataModel.wordWidth.numberOfBytes) +
-            (MaxSimInterfaceHelpers.getLayoutScaleFactor()  * dataModel.wordWidth.numberOfBytes / 2));
+        this.nullCheckOffset = (MaxSimInterfaceHelpers.getLayoutScaleRefFactor() * dataModel.wordWidth.numberOfBytes) +
+            (MaxSimInterfaceHelpers.getLayoutScaleFactor()  * dataModel.wordWidth.numberOfBytes / 2);
         if (cpu == CPU.SPARCV9 && os == OS.SOLARIS) {
             this.stackBias = 2047;
         } else {

@@ -28,7 +28,7 @@ import java.util.Collections;
 
 public class MaxSimProfileRepresentation {
 
-    private static final int MAX_PROF_DB_SIZE = (1 << 28);
+    private static final int MAX_PROF_DB_SIZE = 1 << 28;
 
     private static String ZSimProfileDBOptionName =
         new String("ZSimProfileDB");
@@ -169,8 +169,9 @@ public class MaxSimProfileRepresentation {
     }
 
     public MaxSimInterface.FieldInfo getFieldInfoByOffset(MaxSimInterface.ClassInfo classInfo, int offset) {
-        if (classInfo == null)
+        if (classInfo == null) {
             return null;
+        }
         for (MaxSimInterface.FieldInfo fieldInfo : classInfo.getFieldInfoList()) {
             if (fieldInfo.getOffset() == offset) {
                 return fieldInfo;
@@ -183,17 +184,17 @@ public class MaxSimProfileRepresentation {
         return profileLoaded;
     }
 
-    public void loadZSimProfileAndMaxineInfoDBs(String ZSimProfileDBFileName, String ZSimMaxineInfoDBFileName) {
-        if (ZSimProfileDBFileName == null || ZSimMaxineInfoDBFileName == null || profileLoaded) {
+    public void loadZSimProfileAndMaxineInfoDBs(String zsimProfileDBFileName, String zsimMaxineInfoDBFileName) {
+        if (zsimProfileDBFileName == null || zsimMaxineInfoDBFileName == null || profileLoaded) {
             return;
         }
         try {
-            CodedInputStream ZSimProfileDBInputStream = CodedInputStream.newInstance(
-                new FileInputStream(ZSimProfileDBFileName));
+            CodedInputStream zsimProfileDBInputStream = CodedInputStream.newInstance(
+                new FileInputStream(zsimProfileDBFileName));
 
-            ZSimProfileDBInputStream.setSizeLimit(MAX_PROF_DB_SIZE);
-            ZSimProfileDB = MaxSimInterface.ZSimProfDB.parseFrom(ZSimProfileDBInputStream);
-            MaxineInfoDB = MaxSimInterface.MaxineInfoDB.parseFrom(new FileInputStream(ZSimMaxineInfoDBFileName));
+            zsimProfileDBInputStream.setSizeLimit(MAX_PROF_DB_SIZE);
+            ZSimProfileDB = MaxSimInterface.ZSimProfDB.parseFrom(zsimProfileDBInputStream);
+            MaxineInfoDB = MaxSimInterface.MaxineInfoDB.parseFrom(new FileInputStream(zsimMaxineInfoDBFileName));
 
             IdToClassInfoMap = new MaxSimInterface.ClassInfo [MaxineInfoDB.getMaxClassInfoId() + 1];
             for (MaxSimInterface.ClassInfo ci : MaxineInfoDB.getClassInfoList()) {
@@ -243,7 +244,7 @@ public class MaxSimProfileRepresentation {
             profileLoaded = true;
         } catch (Exception e) {
             unloadZSimProfileAndMaxineInfoDBs();
-            System.out.println("WARNING: Could not parse files: " + ZSimProfileDBFileName + ", " + ZSimMaxineInfoDBFileName);
+            System.out.println("WARNING: Could not parse files: " + zsimProfileDBFileName + ", " + zsimMaxineInfoDBFileName);
             System.out.println(e);
         }
     }

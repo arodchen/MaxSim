@@ -38,8 +38,9 @@ public class MaxSimDataTransformationScheme {
      * Activates MaxSim data transformation.
      */
     public static void activate() {
-        if (!MaxSimInterfaceHelpers.isClassIDTagging() || !MaxSimDataTransDB.isPresent())
+        if (!MaxSimInterfaceHelpers.isClassIDTagging() || !MaxSimDataTransDB.isPresent()) {
             return;
+        }
         String dataTransDBFileName = MaxSimDataTransDB.getValue();
         try {
             MaxSimInterface.DataTransDB dataTransDB =
@@ -61,8 +62,9 @@ public class MaxSimDataTransformationScheme {
      */
     @INLINE
     public static void register(Hub hub) {
-        if (!MaxSimInterfaceHelpers.isClassIDTagging() || !MaxSimDataTransDB.isPresent())
+        if (!MaxSimInterfaceHelpers.isClassIDTagging() || !MaxSimDataTransDB.isPresent()) {
             return;
+        }
         MaxSimInterface.DataTransInfo.Builder dataTransInfo =
             typeDescriptorToDataTransInfoMap.get(hub.classActor.typeDescriptor);
         if (dataTransInfo != null && !dataTransInfo.hasTransTag()) {

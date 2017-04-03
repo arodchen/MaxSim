@@ -147,8 +147,8 @@ public class MaxSimProfilePrinter {
             return;
         }
 
-        MaxSimProfilePrinter MaxSimProfilePrinter = new MaxSimProfilePrinter();
-        MaxSimProfilePrinter.loadAndPrint(ZSimProfileDBOption.getValue(), MaxineInfoDBOption.getValue());
+        MaxSimProfilePrinter maxsimProfilePrinter = new MaxSimProfilePrinter();
+        maxsimProfilePrinter.loadAndPrint(ZSimProfileDBOption.getValue(), MaxineInfoDBOption.getValue());
 
         return;
     }
@@ -156,13 +156,13 @@ public class MaxSimProfilePrinter {
     /**
      * Loads and prints profiling information.
      */
-    public void loadAndPrint(String ZSimProfileDBFileName, String MaxineInfoDBFileName) {
-        MaxSimProfRep.loadZSimProfileAndMaxineInfoDBs(ZSimProfileDBFileName, MaxineInfoDBFileName);
+    public void loadAndPrint(String zsimProfileDBFileName, String maxineInfoDBFileName) {
+        MaxSimProfRep.loadZSimProfileAndMaxineInfoDBs(zsimProfileDBFileName, maxineInfoDBFileName);
         if (MaxSimProfRep.isProfileLoaded()) {
             try {
-                PrintWriter MaxSimProfOut = new PrintWriter(OutputFileNameOption.getValue());
-                print(MaxSimProfOut);
-                MaxSimProfOut.close();
+                PrintWriter maxsimProfOut = new PrintWriter(OutputFileNameOption.getValue());
+                print(maxsimProfOut);
+                maxsimProfOut.close();
             } catch (Exception e) {
                 System.out.println("Could not print profiling information. Exception thrown: " + e.toString());
             }
@@ -176,7 +176,7 @@ public class MaxSimProfilePrinter {
     /**
      * Prints allocation site profiling information.
      */
-    private void printAllocSiteProfs(PrintWriter MaxSimProfOut) {
+    private void printAllocSiteProfs(PrintWriter maxsimProfOut) {
         ArrayList<MaxSimInterface.AllocSiteProf> allocSiteProfs =
             new ArrayList<MaxSimInterface.AllocSiteProf>(MaxSimProfRep.getZSimProfileDB().getAllocSiteProfList());
 
@@ -185,37 +185,37 @@ public class MaxSimProfilePrinter {
 
         Collections.sort(allocSiteProfs, allocationSiteProfComparator);
 
-        MaxSimProfOut.println("=== Allocation Sites ===");
+        maxsimProfOut.println("=== Allocation Sites ===");
         for (MaxSimInterface.AllocSiteProf allocationSiteEntry : allocSiteProfs) {
             int id = allocationSiteEntry.getId();
-            long IP = allocationSiteEntry.getIP();
+            long ip = allocationSiteEntry.getIP();
             int classId = allocationSiteEntry.getClassId();
 
-            MaxSimInterface.MethodInfo methodInfo = MaxSimProfRep.getMethodInfoByIP(IP);
+            MaxSimInterface.MethodInfo methodInfo = MaxSimProfRep.getMethodInfoByIP(ip);
             MaxSimInterface.ClassInfo classInfo = MaxSimProfRep.getClassInfoByProfId(classId);
 
-            printIPInfo(MaxSimProfOut, methodInfo, IP);
-            MaxSimProfOut.print("(");
-            MaxSimProfOut.print(allocationSiteIdShortName + ":" + id);
-            MaxSimProfOut.print(" ");
-            MaxSimProfOut.print(classIdShortName + ":" + classId);
-            MaxSimProfOut.print(" ");
-            MaxSimProfOut.print(countShortName + ":" + allocationSiteEntry.getCount());
-            MaxSimProfOut.println(")");
+            printIPInfo(maxsimProfOut, methodInfo, ip);
+            maxsimProfOut.print("(");
+            maxsimProfOut.print(allocationSiteIdShortName + ":" + id);
+            maxsimProfOut.print(" ");
+            maxsimProfOut.print(classIdShortName + ":" + classId);
+            maxsimProfOut.print(" ");
+            maxsimProfOut.print(countShortName + ":" + allocationSiteEntry.getCount());
+            maxsimProfOut.println(")");
         }
-        MaxSimProfOut.println("");
+        maxsimProfOut.println("");
     }
 
     /**
      * Prints class name before method name.
      */
-    private void printClassNameBeforeMethodName(PrintWriter MaxSimProfOut, MaxSimInterface.MethodInfo methodInfo) {
+    private void printClassNameBeforeMethodName(PrintWriter maxsimProfOut, MaxSimInterface.MethodInfo methodInfo) {
         if (methodInfo.hasClassId()) {
             int classId = methodInfo.getClassId();
             MaxSimInterface.ClassInfo classInfo = MaxSimProfRep.getClassInfoByClassId(classId);
             if (classInfo != null) {
-                MaxSimProfOut.print(DescriptorPrinter.typeDescriptorToName(classInfo.getDesc(), true, true));
-                MaxSimProfOut.print(".");
+                maxsimProfOut.print(DescriptorPrinter.typeDescriptorToName(classInfo.getDesc(), true, true));
+                maxsimProfOut.print(".");
             }
         }
     }
@@ -223,102 +223,102 @@ public class MaxSimProfilePrinter {
     /**
      * Prints instruction pointer information.
      */
-    private void printIPInfo(PrintWriter MaxSimProfOut, MaxSimInterface.MethodInfo methodInfo, long ip) {
-        MaxSimProfOut.print("[");
+    private void printIPInfo(PrintWriter maxsimProfOut, MaxSimInterface.MethodInfo methodInfo, long ip) {
+        maxsimProfOut.print("[");
         if (methodInfo != null) {
-            printClassNameBeforeMethodName(MaxSimProfOut, methodInfo);
-            MaxSimProfOut.print(methodInfo.getName());
+            printClassNameBeforeMethodName(maxsimProfOut, methodInfo);
+            maxsimProfOut.print(methodInfo.getName());
             if (!methodInfo.getDesc().isEmpty()) {
-                MaxSimProfOut.print(DescriptorPrinter.methodDescriptorToName(methodInfo.getDesc(), false));
+                maxsimProfOut.print(DescriptorPrinter.methodDescriptorToName(methodInfo.getDesc(), false));
             }
-            MaxSimProfOut.print("+" + (ip - methodInfo.getBeginIP()));
-            MaxSimProfOut.print("(" + methodKindShortName + ":");
+            maxsimProfOut.print("+" + (ip - methodInfo.getBeginIP()));
+            maxsimProfOut.print("(" + methodKindShortName + ":");
             switch (methodInfo.getKind()) {
+                case OPTIMIZED:
+                    maxsimProfOut.print(methodKindOptimizedName);
+                    break;
+                case BOOT:
+                    maxsimProfOut.print(methodKindBootName);
+                    break;
+                case BASELINE:
+                    maxsimProfOut.print(methodKindBaselineName);
+                    break;
+                case NATIVE:
+                    maxsimProfOut.print(methodKindNativeName);
+                    break;
                 default:
                     assert false : "invalid method kind:" + methodInfo.getKind();
                     break;
-                case OPTIMIZED:
-                    MaxSimProfOut.print(methodKindOptimizedName);
-                    break;
-                case BOOT:
-                    MaxSimProfOut.print(methodKindBootName);
-                    break;
-                case BASELINE:
-                    MaxSimProfOut.print(methodKindBaselineName);
-                    break;
-                case NATIVE:
-                    MaxSimProfOut.print(methodKindNativeName);
-                    break;
             }
-            MaxSimProfOut.print(" " + byteCodeIndexShortName + ":" + MaxSimProfRep.getBCIByIP(ip));
-            MaxSimProfOut.print(")");
+            maxsimProfOut.print(" " + byteCodeIndexShortName + ":" + MaxSimProfRep.getBCIByIP(ip));
+            maxsimProfOut.print(")");
         } else if (ip == MaxSimPlatform.UNDEFINED_ADDRESS) {
-            MaxSimProfOut.print(undefinedFunctionName);
+            maxsimProfOut.print(undefinedFunctionName);
         } else {
-            MaxSimProfOut.print(hexPrefixName + Long.toHexString(ip));
-            MaxSimProfOut.print("(" + methodKindShortName + ":" + methodKindNativeName + ")");
+            maxsimProfOut.print(hexPrefixName + Long.toHexString(ip));
+            maxsimProfOut.print("(" + methodKindShortName + ":" + methodKindNativeName + ")");
         }
-        MaxSimProfOut.print("]");
+        maxsimProfOut.print("]");
     }
 
     /**
      * Prints cache miss information from a list.
      */
-    private void printCacheMissInfoFromList(PrintWriter MaxSimProfOut,
+    private void printCacheMissInfoFromList(PrintWriter maxsimProfOut,
                                             ArrayList<MaxSimInterface.CacheMissProf> cacheMissProfList) {
         for (MaxSimInterface.CacheMissProf cacheMissEntry : cacheMissProfList) {
-            long IP = cacheMissEntry.getIP();
+            long ip = cacheMissEntry.getIP();
             int classId = cacheMissEntry.getClassId();
             long missCount = cacheMissEntry.getCount();
-            MaxSimInterface.MethodInfo methodInfo = MaxSimProfRep.getMethodInfoByIP(IP);
+            MaxSimInterface.MethodInfo methodInfo = MaxSimProfRep.getMethodInfoByIP(ip);
             MaxSimInterface.ClassInfo classInfo = MaxSimProfRep.getClassInfoByProfId(classId);
 
-            printIPInfo(MaxSimProfOut, methodInfo, IP);
-            MaxSimProfOut.print("(");
-            MaxSimProfOut.print(missCountShortName +":" + missCount);
-            MaxSimProfOut.print(" ");
-            MaxSimProfOut.print(idShortName + ":" + classId);
-            MaxSimProfOut.print(" ");
-            MaxSimProfOut.print(offsetLoShortName + ":" + cacheMissEntry.getOffsetLo());
-            MaxSimProfOut.print(" ");
-            MaxSimProfOut.print(offsetHiShortName + ":" + cacheMissEntry.getOffsetHi());
-            MaxSimProfOut.println(")");
+            printIPInfo(maxsimProfOut, methodInfo, ip);
+            maxsimProfOut.print("(");
+            maxsimProfOut.print(missCountShortName + ":" + missCount);
+            maxsimProfOut.print(" ");
+            maxsimProfOut.print(idShortName + ":" + classId);
+            maxsimProfOut.print(" ");
+            maxsimProfOut.print(offsetLoShortName + ":" + cacheMissEntry.getOffsetLo());
+            maxsimProfOut.print(" ");
+            maxsimProfOut.print(offsetHiShortName + ":" + cacheMissEntry.getOffsetHi());
+            maxsimProfOut.println(")");
         }
     }
 
     /**
      * Prints cache misses information.
      */
-    private void printCacheMisses(PrintWriter MaxSimProfOut) {
+    private void printCacheMisses(PrintWriter maxsimProfOut) {
         for (int i = 0; i < MaxSimProfRep.getZSimProfileDB().getCacheRWGroupMissProfCount(); i++) {
             MaxSimInterface.CacheRWGroupInfo cacheRWGroupInfo = MaxSimProfRep.getCacheRWGroupInfoById(i);
 
-            MaxSimInterface.CacheRWGroupMissProf CacheRWGroupMissProfEntry =
+            MaxSimInterface.CacheRWGroupMissProf cacheRWGroupMissProfEntry =
                 MaxSimProfRep.getZSimProfileDB().getCacheRWGroupMissProf(i);
 
             ArrayList<MaxSimInterface.CacheMissProf> cacheMissProfList =
-                new ArrayList<MaxSimInterface.CacheMissProf>(CacheRWGroupMissProfEntry.getCacheMissProfList());
+                new ArrayList<MaxSimInterface.CacheMissProf>(cacheRWGroupMissProfEntry.getCacheMissProfList());
 
             Comparator<MaxSimInterface.CacheMissProf> cacheMissEntryComparator =
                 MaxSimInterfaceComparators.getCacheMissProfComparatorBySortingType(cacheMissProfSortingType);
 
             Collections.sort(cacheMissProfList, cacheMissEntryComparator);
 
-            MaxSimProfOut.println("=== " + cacheRWGroupInfo.getCacheGroupName() +
+            maxsimProfOut.println("=== " + cacheRWGroupInfo.getCacheGroupName() +
                 (cacheRWGroupInfo.getIsWrite() ? writeShortName : readShortName) + " Cache Misses ===");
-            printCacheMissInfoFromList(MaxSimProfOut, cacheMissProfList);
-            MaxSimProfOut.println("");
+            printCacheMissInfoFromList(maxsimProfOut, cacheMissProfList);
+            maxsimProfOut.println("");
         }
     }
 
     /**
      * Prints boot code region information.
      */
-    private void printBootCodeRegInfo(PrintWriter MaxSimProfOut) {
+    private void printBootCodeRegInfo(PrintWriter maxsimProfOut) {
         MaxSimInterface.MethodInfo bootCodeRegion = MaxSimProfRep.getMaxineInfoDB().getBootCodeRegInfo();
         long begIP = bootCodeRegion.getBeginIP();
         long endIP = bootCodeRegion.getBeginIP() + bootCodeRegion.getSize();
-        MaxSimProfOut.println(bootCodeRegion.getName() + "(" +
+        maxsimProfOut.println(bootCodeRegion.getName() + "(" +
             begShortName + ":" + hexPrefixName + Long.toHexString(begIP) + " " +
             endShortName + ":" + hexPrefixName + Long.toHexString(endIP) + ")");
     }
@@ -326,9 +326,9 @@ public class MaxSimProfilePrinter {
     /**
      * Prints dump eventual statistics information.
      */
-    private void printDumpEventStatInfo(PrintWriter MaxSimProfOut) {
+    private void printDumpEventStatInfo(PrintWriter maxsimProfOut) {
         MaxSimInterface.ZSimProfDB zsimProfDB = MaxSimProfRep.getZSimProfileDB();
-        MaxSimProfOut.println("DumpEventualStats" + "(" +
+        maxsimProfOut.println("DumpEventualStats" + "(" +
             begShortName + ":" + zsimProfDB.getDumpEventualStatsBeg() + " " +
             endShortName + ":" + zsimProfDB.getDumpEventualStatsEnd() + ")");
     }
@@ -336,14 +336,14 @@ public class MaxSimProfilePrinter {
     /**
      * Prints data transformation information.
      */
-    private void printMaxSimDataTransInfo(PrintWriter MaxSimProfOut) {
-        for(MaxSimInterface.DataTransInfo dataTransInfo : MaxSimProfRep.getMaxineInfoDB().getDataTransInfoList()) {
-            MaxSimProfOut.print("DataTansInfo(" + classIdShortName + ":" + dataTransInfo.getTransTag());
+    private void printMaxSimDataTransInfo(PrintWriter maxsimProfOut) {
+        for (MaxSimInterface.DataTransInfo dataTransInfo : MaxSimProfRep.getMaxineInfoDB().getDataTransInfoList()) {
+            maxsimProfOut.print("DataTansInfo(" + classIdShortName + ":" + dataTransInfo.getTransTag());
             for (MaxSimInterface.FieldOffsetRemapPair fieldOffRemPair : dataTransInfo.getFieldOffsetRemapPairsList()) {
-                MaxSimProfOut.print(" " + offsetShortName + ":" + fieldOffRemPair.getFromOffset() + "->" +
+                maxsimProfOut.print(" " + offsetShortName + ":" + fieldOffRemPair.getFromOffset() + "->" +
                     offsetShortName + ":" + fieldOffRemPair.getToOffset());
             }
-            MaxSimProfOut.println(")");
+            maxsimProfOut.println(")");
         }
     }
 
@@ -364,19 +364,19 @@ public class MaxSimProfilePrinter {
     /**
      * Prints profiling information.
      */
-    private void print(PrintWriter MaxSimProfOut) {
+    private void print(PrintWriter maxsimProfOut) {
         printInit();
-        printClassProfInfo(MaxSimProfOut);
-        printAllocSiteProfs(MaxSimProfOut);
-        printCacheMisses(MaxSimProfOut);
+        printClassProfInfo(maxsimProfOut);
+        printAllocSiteProfs(maxsimProfOut);
+        printCacheMisses(maxsimProfOut);
         printFini();
     }
 
     /**
      * Prints tagged GP object summary information.
      */
-    private void printTaggedGPObjSummaryInfo(PrintWriter MaxSimProfOut) {
-        MaxSimProfOut.print("TaggedGPMemoryAccesses.Overall" + "(" +
+    private void printTaggedGPObjSummaryInfo(PrintWriter maxsimProfOut) {
+        maxsimProfOut.print("TaggedGPMemoryAccesses.Overall" + "(" +
             memFootprintShortName + ":" + taggedGPObjMemFootprint + " " +
             memAllCountShortName + ":" + taggedGPObjMemAllCount + " " +
             memAccCountShortName + ":" + taggedGPObjMemAccCount + " " +
@@ -385,18 +385,18 @@ public class MaxSimProfilePrinter {
             readShortName + ":" + taggedGPObjReadCount + " " +
             writeShortName + ":" + taggedGPObjWriteCount);
 
-            for (int i = 0; i < MaxSimProfRep.getCacheRWGroupsNum(); i++) {
-                MaxSimInterface.CacheRWGroupInfo info = MaxSimProfRep.getCacheRWGroupInfoById(i);
-                MaxSimProfOut.print(" " + info.getCacheGroupName() + (info.getIsWrite() ? writeShortName : readShortName) +
-                    missCountShortName + ":" + taggedGPObjCacheRWGroupMissCount[i]);
-            }
-        MaxSimProfOut.println(")");
+        for (int i = 0; i < MaxSimProfRep.getCacheRWGroupsNum(); i++) {
+            MaxSimInterface.CacheRWGroupInfo info = MaxSimProfRep.getCacheRWGroupInfoById(i);
+            maxsimProfOut.print(" " + info.getCacheGroupName() + (info.getIsWrite() ? writeShortName : readShortName) +
+                missCountShortName + ":" + taggedGPObjCacheRWGroupMissCount[i]);
+        }
+        maxsimProfOut.println(")");
     }
 
     /**
      * Prints class profiling information cache miss summary for field profiling information list.
      */
-    private void printCacheMissSummaryForFieldProfList(PrintWriter MaxSimProfOut,
+    private void printCacheMissSummaryForFieldProfList(PrintWriter maxsimProfOut,
                                                        ArrayList<MaxSimInterface.FieldProf> fieldProfArrayList) {
         long [] classCacheRWGroupMissCount = new long [MaxSimProfRep.getCacheRWGroupsNum()];
 
@@ -407,7 +407,7 @@ public class MaxSimProfilePrinter {
         }
         for (int i = 0; i < MaxSimProfRep.getCacheRWGroupsNum(); i++) {
             MaxSimInterface.CacheRWGroupInfo info = MaxSimProfRep.getCacheRWGroupInfoById(i);
-            MaxSimProfOut.print(((i == 0) ? "" : " ") + info.getCacheGroupName() +
+            maxsimProfOut.print(((i == 0) ? "" : " ") + info.getCacheGroupName() +
                 (info.getIsWrite() ? writeShortName : readShortName) + missCountShortName + ":" +
                 classCacheRWGroupMissCount[i]);
         }
@@ -416,15 +416,15 @@ public class MaxSimProfilePrinter {
     /**
      * Prints field profiling information name.
      */
-    private void printFieldProfName(PrintWriter MaxSimProfOut,
+    private void printFieldProfName(PrintWriter maxsimProfOut,
                                     MaxSimInterface.FieldProf fieldProf,
                                     MaxSimInterface.ClassInfo classInfo) {
         if (classInfo != null) {
             MaxSimInterface.FieldInfo fieldInfo = MaxSimProfRep.getFieldInfoByOffset(classInfo, fieldProf.getOffset());
             if (fieldInfo != null) {
-                MaxSimProfOut.print(fieldInfo.getName());
+                maxsimProfOut.print(fieldInfo.getName());
             } else if (fieldProf.getOffset() == MaxSimProfRep.getMaxineInfoDB().getNullCheckOffset()) {
-                MaxSimProfOut.print(nullCheckFieldName);
+                maxsimProfOut.print(nullCheckFieldName);
             }
         }
     }
@@ -432,7 +432,7 @@ public class MaxSimProfilePrinter {
     /**
      * Prints field info properties.
      */
-    private void printFieldPropertiesAndClassId(PrintWriter MaxSimProfOut,
+    private void printFieldPropertiesAndClassId(PrintWriter maxsimProfOut,
                                                 MaxSimInterface.FieldInfo fieldInfo) {
         if (fieldInfo != null) {
             int fieldClassId = fieldInfo.getClassId();
@@ -440,27 +440,27 @@ public class MaxSimProfilePrinter {
             if (fieldClassInfo != null) {
                 if (fieldInfo.getPropertyList().contains(MaxSimInterface.FieldInfo.Property.FINAL)) {
                     if (fieldClassInfo.getKind() == MaxSimInterface.ClassInfo.Kind.PRIMITIVE) {
-                        MaxSimProfOut.print(" " + fieldPropertyShortName + ":" + finalPropShortName);
-                        MaxSimProfOut.print(java.lang.Character.toLowerCase(fieldClassInfo.getDesc().charAt(0)));
+                        maxsimProfOut.print(" " + fieldPropertyShortName + ":" + finalPropShortName);
+                        maxsimProfOut.print(java.lang.Character.toLowerCase(fieldClassInfo.getDesc().charAt(0)));
                     } else if (fieldClassInfo.getKind() != MaxSimInterface.ClassInfo.Kind.OTHER) {
-                        MaxSimProfOut.print(
+                        maxsimProfOut.print(
                             " " + fieldPropertyShortName + ":" + finalPropShortName + objRefPropShortName);
                     }
                 } else {
                     if ((fieldClassInfo.getKind() != MaxSimInterface.ClassInfo.Kind.PRIMITIVE) &&
                         (fieldClassInfo.getKind() != MaxSimInterface.ClassInfo.Kind.OTHER)) {
-                        MaxSimProfOut.print(" " + fieldPropertyShortName + ":" + objRefPropShortName);
+                        maxsimProfOut.print(" " + fieldPropertyShortName + ":" + objRefPropShortName);
                     }
                 }
             }
-            MaxSimProfOut.print(" " + classIdShortName + ":" + fieldClassId);
+            maxsimProfOut.print(" " + classIdShortName + ":" + fieldClassId);
         }
     }
 
     /**
      * Prints field profiling information list.
      */
-    private void printFieldProfList(PrintWriter MaxSimProfOut,
+    private void printFieldProfList(PrintWriter maxsimProfOut,
                                     MaxSimInterface.ClassProf classProf,
                                     ArrayList<MaxSimInterface.FieldProf> fieldProfArrayList) {
         int classEntryId = classProf.getId();
@@ -488,31 +488,31 @@ public class MaxSimProfilePrinter {
                 }
             }
 
-            MaxSimProfOut.print(" ");
-            printFieldProfName(MaxSimProfOut, fieldEntry, classInfo);
+            maxsimProfOut.print(" ");
+            printFieldProfName(maxsimProfOut, fieldEntry, classInfo);
 
-            MaxSimProfOut.print("(" +
+            maxsimProfOut.print("(" +
                 offsetShortName + ":" + fieldEntry.getOffset());
-            printFieldPropertiesAndClassId(MaxSimProfOut, fieldInfo);
-            MaxSimProfOut.print(" " +
+            printFieldPropertiesAndClassId(maxsimProfOut, fieldInfo);
+            maxsimProfOut.print(" " +
                 readShortName + ":" + readCount + " " +
                 writeShortName + ":" + writeCount);
-                for (int i = 0; i < MaxSimProfRep.getCacheRWGroupsNum(); i++) {
-                    MaxSimInterface.CacheRWGroupInfo info = MaxSimProfRep.getCacheRWGroupInfoById(i);
-                    MaxSimProfOut.print(" " + info.getCacheGroupName() +
-                        (info.getIsWrite() ? writeShortName : readShortName) + missCountShortName + ":" +
-                        fieldCacheRWGroupMissCount[i]);
-                }
-            MaxSimProfOut.print(" " + frequencyShortName + ":" +
+            for (int i = 0; i < MaxSimProfRep.getCacheRWGroupsNum(); i++) {
+                MaxSimInterface.CacheRWGroupInfo info = MaxSimProfRep.getCacheRWGroupInfoById(i);
+                maxsimProfOut.print(" " + info.getCacheGroupName() +
+                    (info.getIsWrite() ? writeShortName : readShortName) + missCountShortName + ":" +
+                    fieldCacheRWGroupMissCount[i]);
+            }
+            maxsimProfOut.print(" " + frequencyShortName + ":" +
                 decimalFormat.format((double) readAndWriteCount / (double) memAccCount));
-            MaxSimProfOut.print(")");
+            maxsimProfOut.print(")");
         }
     }
 
     /**
      * Prints tagged aggregate class profiling information.
      */
-    private void printTaggedAggregateClassProf(PrintWriter MaxSimProfOut, MaxSimInterface.ClassProf classProf) {
+    private void printTaggedAggregateClassProf(PrintWriter maxsimProfOut, MaxSimInterface.ClassProf classProf) {
         int classEntryId = classProf.getId();
         short tag = (short) classEntryId;
         long memoryFootprint = classProf.getMemAllSize();
@@ -543,45 +543,45 @@ public class MaxSimProfilePrinter {
 
         Collections.sort(fieldProfArrayList, fieldProfComparator);
 
-        printUntypedTagName(MaxSimProfOut, tag);
-        MaxSimProfOut.print("(" +
+        printUntypedTagName(maxsimProfOut, tag);
+        maxsimProfOut.print("(" +
             classIdShortName + ":" + classEntryId + " ");
         if (memoryFootprint != 0) {
-            MaxSimProfOut.print(memFootprintShortName + ":" + memoryFootprint);
-            printAllocProfList(MaxSimProfOut, memAllocProfArrayList);
-            MaxSimProfOut.print(" " + memAccCountShortName + ":" + memAccCount);
-            MaxSimProfOut.print(" " + memAccCountShortName + "/" + memFootprintShortName + ":" +
+            maxsimProfOut.print(memFootprintShortName + ":" + memoryFootprint);
+            printAllocProfList(maxsimProfOut, memAllocProfArrayList);
+            maxsimProfOut.print(" " + memAccCountShortName + ":" + memAccCount);
+            maxsimProfOut.print(" " + memAccCountShortName + "/" + memFootprintShortName + ":" +
                 decimalFormat.format((double) memAccCount / (double) memoryFootprint) + " ");
         } else {
-            MaxSimProfOut.print(memAccCountShortName + ":" + memAccCount + " ");
+            maxsimProfOut.print(memAccCountShortName + ":" + memAccCount + " ");
         }
-        printCacheMissSummaryForFieldProfList(MaxSimProfOut, fieldProfArrayList);
-        MaxSimProfOut.print(")" + ":");
-        printFieldProfList(MaxSimProfOut, classProf, fieldProfArrayList);
+        printCacheMissSummaryForFieldProfList(maxsimProfOut, fieldProfArrayList);
+        maxsimProfOut.print(")" + ":");
+        printFieldProfList(maxsimProfOut, classProf, fieldProfArrayList);
     }
 
     /**
      * Prints tagged GP class profiling information name.
      */
-    private void printTaggedGPClassProfName(PrintWriter MaxSimProfOut, MaxSimInterface.ClassProf classProf) {
+    private void printTaggedGPClassProfName(PrintWriter maxsimProfOut, MaxSimInterface.ClassProf classProf) {
         int classId = classProf.getId();
 
         if (MaxSimInterfaceHelpers.isClassIDTagging(MaxSimProfRep.getPointerTaggingType()) ||
             !MaxSimInterfaceHelpers.isGeneralPurposeTag((short) classId)) {
 
             MaxSimInterface.ClassInfo classInfo = MaxSimProfRep.getClassInfoByClassId(classId);
-            MaxSimProfOut.print(DescriptorPrinter.typeDescriptorToName(classInfo.getDesc(), true, true));
-            MaxSimProfOut.print("(" + classInfo.getDesc() + ")");
+            maxsimProfOut.print(DescriptorPrinter.typeDescriptorToName(classInfo.getDesc(), true, true));
+            maxsimProfOut.print("(" + classInfo.getDesc() + ")");
 
         } else if (MaxSimInterfaceHelpers.isAllocationSiteIDTagging(MaxSimProfRep.getPointerTaggingType())) {
 
             MaxSimInterface.AllocSiteProf allocSiteProf = MaxSimProfRep.getAllocationSiteEntryById(classId);
             MaxSimInterface.MethodInfo methodInfo = MaxSimProfRep.getMethodInfoByIP(allocSiteProf.getIP());
             MaxSimInterface.ClassInfo classInfo = MaxSimProfRep.getClassInfoByClassId(allocSiteProf.getClassId());
-            MaxSimProfOut.print(DescriptorPrinter.typeDescriptorToName(classInfo.getDesc(), true, true));
-            MaxSimProfOut.print("(" + classInfo.getDesc() + ")");
-            MaxSimProfOut.print("@");
-            printIPInfo(MaxSimProfOut, methodInfo, allocSiteProf.getIP());
+            maxsimProfOut.print(DescriptorPrinter.typeDescriptorToName(classInfo.getDesc(), true, true));
+            maxsimProfOut.print("(" + classInfo.getDesc() + ")");
+            maxsimProfOut.print("@");
+            printIPInfo(maxsimProfOut, methodInfo, allocSiteProf.getIP());
 
         } else {
             assert false : "Unsupported tagging type.";
@@ -591,28 +591,28 @@ public class MaxSimProfilePrinter {
     /**
      * Prints tagged GP class profiling information properties and class id information.
      */
-    private void printTaggedGPClassProfPropertiesAndClassId(PrintWriter MaxSimProfOut,
+    private void printTaggedGPClassProfPropertiesAndClassId(PrintWriter maxsimProfOut,
                                                             MaxSimInterface.ClassProf classProf) {
         MaxSimInterface.ClassInfo classInfo = null;
         int classId = classProf.getId();
 
         if (MaxSimInterfaceHelpers.isAllocationSiteIDTagging(MaxSimProfRep.getPointerTaggingType()) &&
             MaxSimInterfaceHelpers.isGeneralPurposeTag((short) classId)) {
-            MaxSimProfOut.print(allocationSiteIdShortName + ":" + classId + " ");
+            maxsimProfOut.print(allocationSiteIdShortName + ":" + classId + " ");
             classId = MaxSimProfRep.getAllocationSiteEntryById(classId).getClassId();
         }
 
-        MaxSimProfOut.print(classIdShortName + ":" + classId);
+        maxsimProfOut.print(classIdShortName + ":" + classId);
         classInfo = MaxSimProfRep.getClassInfoByClassId(classId);
         if (classInfo != null) {
             if (classInfo.hasComponentId()) {
                 int componentClassId = classInfo.getComponentId();
                 MaxSimInterface.ClassInfo componentClassInfo = MaxSimProfRep.getClassInfoByClassId(componentClassId);
-                MaxSimProfOut.print(" " + classComponentIndexShortName + ":" + componentClassId);
+                maxsimProfOut.print(" " + classComponentIndexShortName + ":" + componentClassId);
                 if ((componentClassInfo != null) &&
                     (componentClassInfo.getKind() != MaxSimInterface.ClassInfo.Kind.PRIMITIVE) &&
                     (componentClassInfo.getKind() != MaxSimInterface.ClassInfo.Kind.OTHER)) {
-                    MaxSimProfOut.print(" " + classPropertyShortName + ":" + objRefPropShortName);
+                    maxsimProfOut.print(" " + classPropertyShortName + ":" + objRefPropShortName);
                 }
             }
         }
@@ -621,27 +621,27 @@ public class MaxSimProfilePrinter {
     /**
      * Prints allocation profile information list.
      */
-    private void printAllocProfList(PrintWriter MaxSimProfOut,
+    private void printAllocProfList(PrintWriter maxsimProfOut,
                                     ArrayList<MaxSimInterface.AllocProf> memAllocProfArrayList) {
         boolean firstEntry = true;
-        MaxSimProfOut.print("(");
+        maxsimProfOut.print("(");
         for (MaxSimInterface.AllocProf memoryAllocationEntry : memAllocProfArrayList) {
             int size = memoryAllocationEntry.getSize();
             long allocationCount = memoryAllocationEntry.getCount();
             if (firstEntry) {
                 firstEntry = false;
             } else {
-                MaxSimProfOut.print(" ");
+                maxsimProfOut.print(" ");
             }
-            MaxSimProfOut.print("s:" + size + "(" + allocationCount + ")");
+            maxsimProfOut.print("s:" + size + "(" + allocationCount + ")");
         }
-        MaxSimProfOut.print(")");
+        maxsimProfOut.print(")");
     }
 
     /**
      * Prints tagged GP class profiling information.
      */
-    private void printTaggedGPClassProf(PrintWriter MaxSimProfOut, MaxSimInterface.ClassProf classProf) {
+    private void printTaggedGPClassProf(PrintWriter maxsimProfOut, MaxSimInterface.ClassProf classProf) {
         long memoryFootprint = classProf.getMemAllSize();
         long memAccCount = classProf.getMemAccCount();
         long memAllCount = classProf.getMemAllCount();
@@ -666,23 +666,23 @@ public class MaxSimProfilePrinter {
 
         Collections.sort(fieldProfArrayList, fieldEntryComparator);
 
-        printTaggedGPClassProfName(MaxSimProfOut, classProf);
-        MaxSimProfOut.print("(");
-        printTaggedGPClassProfPropertiesAndClassId(MaxSimProfOut, classProf);
-        MaxSimProfOut.print(" " + memFootprintShortName + ":" + memoryFootprint);
-        printAllocProfList(MaxSimProfOut, memAllocProfArrayList);
-        MaxSimProfOut.print(" " + memAccCountShortName + ":" + memAccCount);
-        MaxSimProfOut.print(" " + memAccCountShortName + "/" + memFootprintShortName + ":" +
+        printTaggedGPClassProfName(maxsimProfOut, classProf);
+        maxsimProfOut.print("(");
+        printTaggedGPClassProfPropertiesAndClassId(maxsimProfOut, classProf);
+        maxsimProfOut.print(" " + memFootprintShortName + ":" + memoryFootprint);
+        printAllocProfList(maxsimProfOut, memAllocProfArrayList);
+        maxsimProfOut.print(" " + memAccCountShortName + ":" + memAccCount);
+        maxsimProfOut.print(" " + memAccCountShortName + "/" + memFootprintShortName + ":" +
             decimalFormat.format((double) memAccCount / (double) memoryFootprint) + " ");
-        printCacheMissSummaryForFieldProfList(MaxSimProfOut, fieldProfArrayList);;
-        MaxSimProfOut.print("):");
-        printFieldProfList(MaxSimProfOut, classProf, fieldProfArrayList);
+        printCacheMissSummaryForFieldProfList(maxsimProfOut, fieldProfArrayList);
+        maxsimProfOut.print("):");
+        printFieldProfList(maxsimProfOut, classProf, fieldProfArrayList);
     }
 
     /**
      * Prints class profiling information from a list.
      */
-    private void printClassProfInfoFromList(PrintWriter MaxSimProfOut,
+    private void printClassProfInfoFromList(PrintWriter maxsimProfOut,
                                             ArrayList<MaxSimInterface.ClassProf> classProfArrayList) {
         for (MaxSimInterface.ClassProf classProf : classProfArrayList) {
             MaxSimInterface.ClassInfo classInfo = null;
@@ -691,22 +691,22 @@ public class MaxSimProfilePrinter {
             long memAllCount = classProf.getMemAllCount();
             short tag = (short) classEntryId;
 
-            if (memAccCount == 0 && memAllCount == 0)
+            if (memAccCount == 0 && memAllCount == 0) {
                 continue;
-
-            if (MaxSimInterfaceHelpers.isAggregateTag(tag)) {
-                printTaggedAggregateClassProf(MaxSimProfOut, classProf);
-            } else {
-                printTaggedGPClassProf(MaxSimProfOut, classProf);
             }
-            MaxSimProfOut.println();
+            if (MaxSimInterfaceHelpers.isAggregateTag(tag)) {
+                printTaggedAggregateClassProf(maxsimProfOut, classProf);
+            } else {
+                printTaggedGPClassProf(maxsimProfOut, classProf);
+            }
+            maxsimProfOut.println();
         }
     }
 
     /**
      * Prints class profiling information.
      */
-    private void printClassProfInfo(PrintWriter MaxSimProfOut) {
+    private void printClassProfInfo(PrintWriter maxsimProfOut) {
         List<MaxSimInterface.ClassProf> classProfList = MaxSimProfRep.getZSimProfileDB().getClassProfList();
 
         ArrayList<MaxSimInterface.ClassProf> classProfArrayList =
@@ -716,15 +716,15 @@ public class MaxSimProfilePrinter {
             MaxSimInterfaceComparators.getClassProfComparatorBySortingType(classProfSortingType);
 
         Collections.sort(classProfArrayList, classEntryComparator);
-        MaxSimProfOut.println("=== MaxSim Info ===");
-        printBootCodeRegInfo(MaxSimProfOut);
-        printDumpEventStatInfo(MaxSimProfOut);
-        printMaxSimDataTransInfo(MaxSimProfOut);
-        MaxSimProfOut.println("");
-        MaxSimProfOut.println("=== Memory Accesses ===");
-        printClassProfInfoFromList(MaxSimProfOut, classProfArrayList);
-        printTaggedGPObjSummaryInfo(MaxSimProfOut);
-        MaxSimProfOut.println();
+        maxsimProfOut.println("=== MaxSim Info ===");
+        printBootCodeRegInfo(maxsimProfOut);
+        printDumpEventStatInfo(maxsimProfOut);
+        printMaxSimDataTransInfo(maxsimProfOut);
+        maxsimProfOut.println("");
+        maxsimProfOut.println("=== Memory Accesses ===");
+        printClassProfInfoFromList(maxsimProfOut, classProfArrayList);
+        printTaggedGPObjSummaryInfo(maxsimProfOut);
+        maxsimProfOut.println();
     }
 
     /**
@@ -735,11 +735,8 @@ public class MaxSimProfilePrinter {
         /**
          * Converts type descriptor to name.
          */
-        private static final String typeDescriptorToName(String string, boolean printVoid, boolean printFullQual) {
+        private static String typeDescriptorToName(String string, boolean printVoid, boolean printFullQual) {
             switch (string.charAt(0)) {
-                default:
-                    assert false : "invalid type descriptor:" + string;
-                    return string;
                 case 'B':
                     return "byte";
                 case 'C':
@@ -767,6 +764,9 @@ public class MaxSimProfilePrinter {
                     return string.substring(subInd, string.length() - 1).replace('/', '.');
                 case '[':
                     return typeDescriptorToName(string.substring(1), printVoid, printFullQual) + "[]";
+                default:
+                    assert false : "invalid type descriptor:" + string;
+                    return string;
             }
         }
 
@@ -776,8 +776,6 @@ public class MaxSimProfilePrinter {
          */
         private static int findTypeDescriptorEndIndex(String string, int typeDescBegInd) {
             switch (string.charAt(typeDescBegInd)) {
-                default:
-                    assert false : "invalid type descriptor:" + string.substring(typeDescBegInd);
                 case 'B':
                 case 'C':
                 case 'D':
@@ -792,13 +790,16 @@ public class MaxSimProfilePrinter {
                     return string.indexOf(';', typeDescBegInd) + 1;
                 case '[':
                     return findTypeDescriptorEndIndex(string, typeDescBegInd + 1);
+                default:
+                    assert false : "invalid type descriptor:" + string.substring(typeDescBegInd);
+                    return typeDescBegInd + 1;
             }
         }
 
         /**
          * Converts method descriptor to name.
          */
-        private static final String methodDescriptorToName(String string, boolean printRetDesc) {
+        private static String methodDescriptorToName(String string, boolean printRetDesc) {
             String resString = new String("");
             int opnPrnInd = string.indexOf('(');
             int clsPrnInd = string.indexOf(')');
@@ -835,34 +836,34 @@ public class MaxSimProfilePrinter {
     /**
      * Prints untyped tag name.
      */
-    public static void printUntypedTagName(PrintWriter MaxSimProfOut, short tag) {
+    public static void printUntypedTagName(PrintWriter maxsimProfOut, short tag) {
         switch (tag) {
             case (short) MaxSimInterface.PointerTag.TAG_UNDEFINED_VALUE:
-                MaxSimProfOut.print("TaggedAggregateMemoryAccesses.UndefinedLoadsAndStores");
+                maxsimProfOut.print("TaggedAggregateMemoryAccesses.UndefinedLoadsAndStores");
                 break;
             case (short) MaxSimInterface.PointerTag.TAG_FETCHES_VALUE:
-                MaxSimProfOut.print("TaggedAggregateMemoryAccesses.Fetches");
+                maxsimProfOut.print("TaggedAggregateMemoryAccesses.Fetches");
                 break;
             case (short) MaxSimInterface.PointerTag.TAG_CODE_VALUE:
-                MaxSimProfOut.print("TaggedAggregateMemoryAccesses.CodeLoadsAndStores");
+                maxsimProfOut.print("TaggedAggregateMemoryAccesses.CodeLoadsAndStores");
                 break;
             case (short) MaxSimInterface.PointerTag.TAG_HEAP_VALUE:
-                MaxSimProfOut.print("TaggedAggregateMemoryAccesses.HeapLoadsAndStores");
+                maxsimProfOut.print("TaggedAggregateMemoryAccesses.HeapLoadsAndStores");
                 break;
             case (short) MaxSimInterface.PointerTag.TAG_STACK_VALUE:
-                MaxSimProfOut.print("TaggedAggregateMemoryAccesses.StackLoadsAndStores");
+                maxsimProfOut.print("TaggedAggregateMemoryAccesses.StackLoadsAndStores");
                 break;
             case (short) MaxSimInterface.PointerTag.TAG_TLS_VALUE:
-                MaxSimProfOut.print("TaggedAggregateMemoryAccesses.TLSLoadsAndStores");
+                maxsimProfOut.print("TaggedAggregateMemoryAccesses.TLSLoadsAndStores");
                 break;
             case (short) MaxSimInterface.PointerTag.TAG_NATIVE_VALUE:
-                MaxSimProfOut.print("TaggedAggregateMemoryAccesses.NativeLoadsAndStores");
+                maxsimProfOut.print("TaggedAggregateMemoryAccesses.NativeLoadsAndStores");
                 break;
             case (short) MaxSimInterface.PointerTag.TAG_STATIC_VALUE:
-                MaxSimProfOut.print("TaggedAggregateMemoryAccesses.StaticLoadsAndStores");
+                maxsimProfOut.print("TaggedAggregateMemoryAccesses.StaticLoadsAndStores");
                 break;
             case (short) MaxSimInterface.PointerTag.TAG_UNDEFINED_GP_VALUE:
-                MaxSimProfOut.print("TaggedAggregateMemoryAccesses.UndefinedGPLoadsAndStores");
+                maxsimProfOut.print("TaggedAggregateMemoryAccesses.UndefinedGPLoadsAndStores");
                 break;
             default:
                 assert false : "Unexpected tag: " + tag;
