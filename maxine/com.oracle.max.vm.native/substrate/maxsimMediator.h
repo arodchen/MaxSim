@@ -70,5 +70,13 @@ static inline void maxsim_c_deregister_address_range(uint64_t lo, uint64_t hi, A
     maxsim_magic_op_arg(MAXSIM_M_OPC_DEREGISTER_ADDRESS_RANGE, (uint64_t) & range);
 }
 
+static inline void maxsim_c_activate_data_trans_via_addr_space_morph(uint64_t dataTransConfigBegin, uint64_t dataTransConfigEnd) {
+    AddressRange_t range;
+    range.lo = dataTransConfigBegin;
+    range.hi = dataTransConfigEnd;
+    range.type = PROTOBUF_MESSAGE_ADDRESS_RANGE;
+    maxsim_magic_op_arg(MAXSIM_M_OPC_ACTIVATE_DATA_TRANS_VIA_ADDR_SPACE_MORPH, (uint64_t) & range);
+}
+
 #endif /*__ZSIM_HOOKS_H__*/
 

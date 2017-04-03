@@ -48,7 +48,7 @@ class MaxSimAddressSpaceMorphing {
     //
     Address processMAAddressAndRemap(Address addr, Address base, MAOffset_t offset, PointerTag_t tag);
 
-    // Begin loop filtering.
+    // Begins loop filtering.
     //
     // Precondition: passed addresses should be untagged.
     //
@@ -60,10 +60,15 @@ class MaxSimAddressSpaceMorphing {
         }
     }
 
-    // End loop filtering.
+    // Ends loop filtering.
+    //
     void endLoopFiltering(ThreadId_t tid) {
         maxineSimulationState[tid] = MaxineSimulationState_t::Normal;
     }
+
+    // Activates data transformation via address space morhping.
+    //
+    void activateDataTransformation(AddressRange_t * dataTransInfoMessage);
 
   private:
     const int LAYOUT_SCALE_FACTOR = MaxSimConfig::default_instance().layoutscalefactor();
@@ -87,6 +92,12 @@ class MaxSimAddressSpaceMorphing {
 
     int filteredLoopPhase[MAX_THREADS];
 
+    PAD();
+    lock_t classIdToFieldOffsetRemapMapLock;
+    PAD();
+
+    std::map<PointerTag_t, std::map<MAOffset_t, MAOffset_t>> classIdToFieldOffsetRemapMap;
+
   // Singleton part
   public:
     // Get instance
@@ -104,7 +115,7 @@ class MaxSimAddressSpaceMorphing {
 
   private:
     // Privatize constructor and destructor
-    MaxSimAddressSpaceMorphing() {}
+    MaxSimAddressSpaceMorphing();
     ~MaxSimAddressSpaceMorphing() {}
 };
 

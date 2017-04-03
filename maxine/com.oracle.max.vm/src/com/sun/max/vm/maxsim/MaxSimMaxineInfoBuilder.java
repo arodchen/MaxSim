@@ -30,7 +30,10 @@ import com.sun.max.vm.actor.member.InjectedFieldActor;
 import com.sun.max.vm.code.Code;
 import com.sun.max.vm.code.CodeRegion;
 import com.sun.max.vm.compiler.target.TargetMethod;
+import com.sun.max.vm.type.TypeDescriptor;
+
 import java.io.FileOutputStream;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * ZSim-Maxine information builder.
@@ -48,6 +51,7 @@ public class MaxSimMaxineInfoBuilder {
 
             buildMaxineTypesInfo(maxineInfoDB);
             buildMaxineMethodsInfo(maxineInfoDB);
+            buildMaxineDataTransInfo(maxineInfoDB);
             buildMaxSimConfig(maxineInfoDB);
             maxineInfoDB.build().writeTo(output);
             output.close();
@@ -220,6 +224,16 @@ public class MaxSimMaxineInfoBuilder {
         ClassActor.allClassesDo(typeInfoBuilder);
         maxineInfo.setMaxClassInfoId(typeInfoBuilder.getMaxClassInfoId());
         maxineInfo.setNullCheckOffset(Platform.platform().nullCheckOffset);
+    }
+
+    private void buildMaxineDataTransInfo(MaxSimInterface.MaxineInfoDB.Builder maxineInfoDB) {
+        ConcurrentHashMap<TypeDescriptor, MaxSimInterface.DataTransInfo.Builder> typeDescriptorToDataTransInfoMap =
+            MaxSimDataTransformationScheme.getTypeDescriptorToDataTransInfoMap();
+        for (MaxSimInterface.DataTransInfo.Builder dataTransInfoBuilder : typeDescriptorToDataTransInfoMap.values()) {
+            if (dataTransInfoBuilder.hasTransTag()) {
+                maxineInfoDB.addDataTransInfo(dataTransInfoBuilder);
+            }
+        }
     }
 
     private void buildMaxSimConfig(MaxSimInterface.MaxineInfoDB.Builder maxineInfoDB) {

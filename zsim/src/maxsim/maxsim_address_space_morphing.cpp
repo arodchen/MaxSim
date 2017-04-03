@@ -59,6 +59,18 @@ Address MaxSimAddressSpaceMorphing::processMAAddressAndRemap(Address addr, Addre
     if ((addr == UNDEF_VIRTUAL_ADDRESS) || (addr == NOP_VIRTUAL_ADDRESS)) {
         return addr;
     }
+
+    futex_lock(& classIdToFieldOffsetRemapMapLock);
+    auto it = classIdToFieldOffsetRemapMap.find(tag);
+    if (it != classIdToFieldOffsetRemapMap.end()) {
+        std::map<MAOffset_t, MAOffset_t> & tagOffsetRemap = it->second;
+        auto it = tagOffsetRemap.find(offset);
+        if (it != tagOffsetRemap.end()) {
+            offset = it->second;
+        }
+    }
+    futex_unlock(& classIdToFieldOffsetRemapMapLock);
+
     if (LAYOUT_SCALE_FACTOR != 1) {
         AddressRange_t addressRange = MaxSimRuntimeInfo::getInst().getRegisteredAddressRange(addr, MaxSimRuntimeInfo::MaxineAddressSpace_t::Global);
         if (addressRange.type == HEAP_ADDRESS_RANGE) {
@@ -96,6 +108,33 @@ Address MaxSimAddressSpaceMorphing::processMAAddressAndRemap(Address addr, Addre
         }
     }
     return addr;
+}
+
+void MaxSimAddressSpaceMorphing::activateDataTransformation(AddressRange_t * dataTransInfoMessage) {
+    int dataTransInfoMessageSize = (int) ((Address) dataTransInfoMessage->hi - (Address) dataTransInfoMessage->lo);
+    DataTransInfo dataTransInfo;
+    PointerTag_t transTag;
+
+    dataTransInfo.ParseFromArray((const void *) dataTransInfoMessage->lo, dataTransInfoMessageSize);
+    transTag = (PointerTag_t) dataTransInfo.transtag();
+
+    futex_lock(& classIdToFieldOffsetRemapMapLock);
+    std::map<MAOffset_t, MAOffset_t> & tagOffsetRemap =
+        (classIdToFieldOffsetRemapMap.emplace(transTag, std::map<MAOffset_t, MAOffset_t>()).first)->second;
+
+    for (int i = 0; i < dataTransInfo.fieldoffsetremappairs_size(); i++) {
+        FieldOffsetRemapPair p = dataTransInfo.fieldoffsetremappairs(i);
+        tagOffsetRemap[p.fromoffset()] = p.tooffset();
+    }
+    futex_unlock(& classIdToFieldOffsetRemapMapLock);
+}
+
+MaxSimAddressSpaceMorphing::MaxSimAddressSpaceMorphing() : classIdToFieldOffsetRemapMapLock(0) {
+
+    futex_lock(& classIdToFieldOffsetRemapMapLock);
+    classIdToFieldOffsetRemapMap.clear();
+    futex_unlock(& classIdToFieldOffsetRemapMapLock);
+
 }
 
 #endif // MAXSIM_ENABLED

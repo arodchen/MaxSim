@@ -334,6 +334,20 @@ public class MaxSimProfilePrinter {
     }
 
     /**
+     * Prints data transformation information.
+     */
+    private void printMaxSimDataTransInfo(PrintWriter MaxSimProfOut) {
+        for(MaxSimInterface.DataTransInfo dataTransInfo : MaxSimProfRep.getMaxineInfoDB().getDataTransInfoList()) {
+            MaxSimProfOut.print("DataTansInfo(" + classIdShortName + ":" + dataTransInfo.getTransTag());
+            for (MaxSimInterface.FieldOffsetRemapPair fieldOffRemPair : dataTransInfo.getFieldOffsetRemapPairsList()) {
+                MaxSimProfOut.print(" " + offsetShortName + ":" + fieldOffRemPair.getFromOffset() + "->" +
+                    offsetShortName + ":" + fieldOffRemPair.getToOffset());
+            }
+            MaxSimProfOut.println(")");
+        }
+    }
+
+    /**
      * Initializes printing.
      */
     private void printInit() {
@@ -705,6 +719,7 @@ public class MaxSimProfilePrinter {
         MaxSimProfOut.println("=== MaxSim Info ===");
         printBootCodeRegInfo(MaxSimProfOut);
         printDumpEventStatInfo(MaxSimProfOut);
+        printMaxSimDataTransInfo(MaxSimProfOut);
         MaxSimProfOut.println("");
         MaxSimProfOut.println("=== Memory Accesses ===");
         printClassProfInfoFromList(MaxSimProfOut, classProfArrayList);

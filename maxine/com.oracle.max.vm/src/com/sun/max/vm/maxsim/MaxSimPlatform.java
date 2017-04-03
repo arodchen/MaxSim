@@ -95,6 +95,10 @@ public class MaxSimPlatform {
             // do pointer tagging of all object pointers
             isPointerTaggingGenerative = true;
             MaxSimTaggingScheme.doTagging();
+
+            // activate data transformation
+            MaxSimDataTransformationScheme.activate();
+
             // enable profiling collection
             if (isMaxSimProfiling()) {
                 MaxSimMediator.enableProfileCollection(

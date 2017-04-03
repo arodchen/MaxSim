@@ -38,6 +38,7 @@ import com.sun.max.vm.compiler.target.*;
 import com.sun.max.vm.heap.*;
 import com.sun.max.vm.layout.*;
 import com.sun.max.vm.layout.Layout.Category;
+import com.sun.max.vm.maxsim.MaxSimDataTransformationScheme;
 import com.sun.max.vm.monitor.modal.modehandlers.lightweight.biased.*;
 import com.sun.max.vm.object.*;
 import com.sun.max.vm.reference.*;
@@ -298,6 +299,7 @@ public abstract class Hub extends Hybrid {
         this.referenceMapLength = referenceMap.numberOfEntries();
         this.isJLRReference = isSupertypeOf(JLR_REFERENCE, classActor);
         this.isStatic = false;
+        MaxSimDataTransformationScheme.register(this);
     }
 
     private static boolean isSupertypeOf(ClassActor c, ClassActor sub) {

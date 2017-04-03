@@ -34,6 +34,7 @@ import com.sun.max.vm.compiler.target.TargetMethod;
 import com.sun.max.vm.intrinsics.MaxineIntrinsicIDs;
 import com.sun.max.vm.layout.Layout;
 import com.sun.max.vm.object.Hybrid;
+import com.sun.max.vm.reference.Reference;
 import com.sun.max.vm.runtime.FatalError;
 
 import java.lang.reflect.Array;
@@ -56,6 +57,9 @@ public class MaxSimMediator {
 
     @C_FUNCTION
     private static native void maxsim_j_deregister_address_range(long begin, long end, int type);
+
+    @C_FUNCTION
+    private static native int maxsim_j_activate_data_trans_via_addr_space_morph(long begin, long end);
 
     @INLINE
     public static void exitZSimFastForwardingMode() {
@@ -190,6 +194,13 @@ public class MaxSimMediator {
     @INLINE
     public static void endLoopFiltering() {
         MaxSimMediator.maxsimMagicOp(Address.fromLong(MaxSimInterface.MaxSimMagicOpcodes.MAXSIM_M_OPC_FILTER_LOOP_END_VALUE));
+    }
+
+    public static void activateDataTransViaAddrSpaceMorph(byte [] dataTransInfoMessage) {
+        Pointer byteArrayPointer = Reference.fromJava(dataTransInfoMessage).toOrigin().tagClear();
+        Pointer dataTransInfoMessageBegin = byteArrayPointer.plus(Layout.charArrayLayout().getElementOffsetFromOrigin(0).toInt());
+        Pointer dataTransInfoMessageEnd = dataTransInfoMessageBegin.plus(dataTransInfoMessage.length);
+        maxsim_j_activate_data_trans_via_addr_space_morph(dataTransInfoMessageBegin.toLong(), dataTransInfoMessageEnd.toLong());
     }
 
     public static void reportAllocationFrontierAddressRanges() {

@@ -34,3 +34,6 @@ void maxsim_j_deregister_address_range(jlong begin, jlong end, jint type) {
     maxsim_c_deregister_address_range((uint64_t) begin, (uint64_t) end, (AddressRangeType) type);
 }
 
+void maxsim_j_activate_data_trans_via_addr_space_morph(jlong begin, jlong end) {
+    maxsim_c_activate_data_trans_via_addr_space_morph((uint64_t) begin, (uint64_t) end);
+}

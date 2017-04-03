@@ -137,6 +137,11 @@ VOID MaxSimMediator::HandleMaxSimMagicOp(THREADID tid, ADDRINT * op, ADDRINT arg
             MaxSimAddressSpaceMorphing::getInst().endLoopFiltering(tid);
             return;
         }
+        case MAXSIM_M_OPC_ACTIVATE_DATA_TRANS_VIA_ADDR_SPACE_MORPH: {
+            AddressRange_t * dataTransInfoRange = (AddressRange_t *) arg;
+            MaxSimAddressSpaceMorphing::getInst().activateDataTransformation(dataTransInfoRange);
+            return;
+        }
         default:
             panic("Thread %d issued unknown MaxSim magic op %ld!", tid, *op);
     }

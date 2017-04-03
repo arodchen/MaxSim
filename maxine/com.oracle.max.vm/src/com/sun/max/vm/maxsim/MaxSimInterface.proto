@@ -164,6 +164,10 @@ enum MaxSimMagicOpcodes {
   //
   MAXSIM_M_OPC_FILTER_LOOP_END                           = 1115;
 
+  // Activates data transformation via address space morphing.
+  //
+  MAXSIM_M_OPC_ACTIVATE_DATA_TRANS_VIA_ADDR_SPACE_MORPH  = 1116;
+
   MAXSIM_M_OPC_HI                                        = 1200;
 }
 
@@ -209,9 +213,13 @@ enum AddressRangeType {
     //
     ALLOCATION_FRONTIER_ADDRESS_RANGE = 6;
 
+    // ProtoBuf message address range (for sending protocol buffer messages).
+    //
+    PROTOBUF_MESSAGE_ADDRESS_RANGE    = 7;
+
     // Undefined address range.
     //
-    UNDEFINED_ADDRESS_RANGE           = 7;
+    UNDEFINED_ADDRESS_RANGE           = 8;
 }
 
 // Maxine VM operation mode.
@@ -321,6 +329,27 @@ enum PointerTag {
   DEFINED_TAGS_NUM           = 0xFFFF;
 }
 
+// Field offset remapping pair.
+//
+message FieldOffsetRemapPair {
+  required int32 fromOffset = 1;
+  required int32 toOffset = 2;
+}
+
+// Data transformation information.
+//
+message DataTransInfo {
+  required string typeDesc = 1;
+  optional int32 transTag = 2;
+  repeated FieldOffsetRemapPair fieldOffsetRemapPairs = 3;
+}
+
+// Data transformation data base.
+//
+message DataTransDB {
+  repeated DataTransInfo dataTransInfo = 1;
+}
+
 // Offset-BCI pair.
 //
 message OffsetBCIPair {
@@ -388,6 +417,7 @@ message MaxineInfoDB {
   required MethodInfo bootCodeRegInfo = 5;
   required MaxSimConfig MaxSimConfig = 6;
   required int32 nullCheckOffset = 7;
+  repeated DataTransInfo dataTransInfo = 8;
 }
 
 // Allocation profe.
