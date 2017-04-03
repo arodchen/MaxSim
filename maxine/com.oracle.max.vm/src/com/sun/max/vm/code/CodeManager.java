@@ -428,7 +428,7 @@ public abstract class CodeManager {
             nextCell = v.visitCell(cell);
             if (MaxSimInterfaceHelpers.getLayoutScaleFactor() != MaxSimPlatform.LSF_ONE) {
                 final Pointer nextCellFirstElementOffset = cell.plus(Layout.firstElementIndex() * Word.size());
-                final Pointer origin = MaxSimTaggingScheme.setTagUsingObjectHub(Layout.cellToOrigin(cell));
+                final Pointer origin = MaxSimTaggingScheme.setTagDuringCodeCellVisit(Layout.cellToOrigin(cell));
                 final Hub hub = Layout.getHub(origin);
                 int length = Layout.readArrayLength(origin);
                 if (hub.maxsimHubType == MaxSimInterface.HubType.HUB_TYPE_ARRAY_OF_REFERENCES_VALUE) {
