@@ -33,7 +33,7 @@
 #include "maxsim/maxsim_address_space_morphing.h"
 #endif // MAXSIM_ENABLED
 
-SimpleCore::SimpleCore(FilterCache* _l1i, FilterCache* _l1d, g_string& _name) : Core(_name), l1i(_l1i), l1d(_l1d), instrs(0), curCycle(0), haltedCycles(0), isCondBrunch(false), doSimulateBbl(true) {
+SimpleCore::SimpleCore(FilterCache* _l1i, FilterCache* _l1d, g_string& _name) : Core(_name), l1i(_l1i), l1d(_l1d), instrs(0), curCycle(0), haltedCycles(0), isCondBrunch(false), doSimulateBbl(true), maNum(0) {
 #ifdef MA_PROF_ENABLED
     curBblAddr = UNDEF_VIRTUAL_ADDRESS;
 #endif
@@ -57,6 +57,15 @@ uint64_t SimpleCore::getPhaseCycles() const {
 }
 
 void SimpleCore::load(Address addr, MASize_t size, Address base) {
+    assert(maNum < MA_NUM_MAX);
+    if (maNum == MA_NUM_MAX) panic("Memory access storage is out of bounds!");
+    maAddr[maNum] = addr;
+    maSize[maNum] = size;
+    maBase[maNum] = base;
+    maIsLoad[maNum++] = true;
+}
+
+void SimpleCore::loadSim(Address addr, MASize_t size, Address base) {
 #ifdef MA_PROF_ENABLED
 #   ifdef POINTER_TAGGING_ENABLED
     PointerTag_t tag = getPointerTag(base);
@@ -71,9 +80,6 @@ void SimpleCore::load(Address addr, MASize_t size, Address base) {
     addr = getUntaggedPointerSE(addr);
     base = getUntaggedPointerSE(base);
 #   ifdef MAXSIM_ENABLED
-    if (!doSimulateBbl) {
-        return;
-    }
     MaxSimRuntimeInfo::getInst().adjustTagAndOffset(tag, offset, addr);
     addr = MaxSimAddressSpaceMorphing::getInst().processMAAddressAndRemap(addr, base, offset, tag);
     MaxSimProfiling::getInst().addMemoryAccess(tag, offset, curBblAddr, false);
@@ -92,6 +98,15 @@ void SimpleCore::load(Address addr, MASize_t size, Address base) {
 }
 
 void SimpleCore::store(Address addr, MASize_t size, Address base) {
+    assert(maNum < MA_NUM_MAX);
+    if (maNum == MA_NUM_MAX) panic("Memory access storage is out of bounds!");
+    maAddr[maNum] = addr;
+    maSize[maNum] = size;
+    maBase[maNum] = base;
+    maIsLoad[maNum++] = false;
+}
+
+void SimpleCore::storeSim(Address addr, MASize_t size, Address base) {
 #ifdef MA_PROF_ENABLED
 #   ifdef POINTER_TAGGING_ENABLED
     PointerTag_t tag = getPointerTag(base);
@@ -106,9 +121,6 @@ void SimpleCore::store(Address addr, MASize_t size, Address base) {
     addr = getUntaggedPointerSE(addr);
     base = getUntaggedPointerSE(base);
 #   ifdef MAXSIM_ENABLED
-    if (!doSimulateBbl) {
-        return;
-    }
     MaxSimRuntimeInfo::getInst().adjustTagAndOffset(tag, offset, addr);
     addr = MaxSimAddressSpaceMorphing::getInst().processMAAddressAndRemap(addr, base, offset, tag);
     MaxSimProfiling::getInst().addMemoryAccess(tag, offset, curBblAddr, true);
@@ -130,11 +142,19 @@ void SimpleCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
 #ifdef MAXSIM_ENABLED
     doSimulateBbl = MaxSimAddressSpaceMorphing::getInst().processBBlAndDoSimulate(tid, bblAddr, isCondBrunch);
     if (!doSimulateBbl) {
+        maNum = 0;
         isCondBrunch = false;
         return;
     }
 #endif // MAXSIM_ENABLED
 
+    for (int i = 0; i < maNum; i++) {
+        if (maIsLoad[i]) {
+            loadSim(maAddr[i], maSize[i], maBase[i]);
+        } else {
+            storeSim(maAddr[i], maSize[i], maBase[i]);
+        }
+    }
     //info("BBL %s %p", name.c_str(), bblInfo);
     //info("%d %d", bblInfo->instrs, bblInfo->bytes);
     instrs += bblInfo->instrs;
@@ -142,6 +162,7 @@ void SimpleCore::bbl(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
 #ifdef MA_PROF_ENABLED
     curBblAddr = bblAddr;
 #endif
+    maNum = 0;
     isCondBrunch = false;
 
     Address endBblAddr = bblAddr + bblInfo->bytes;

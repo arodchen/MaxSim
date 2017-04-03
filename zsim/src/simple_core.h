@@ -48,6 +48,13 @@ class SimpleCore : public Core {
         bool isCondBrunch;
         bool doSimulateBbl;
 
+        static const int MA_NUM_MAX = 512;
+        Address maAddr[MA_NUM_MAX];
+        MASize_t maSize[MA_NUM_MAX];
+        Address maBase[MA_NUM_MAX];
+        bool maIsLoad[MA_NUM_MAX];
+        int maNum;
+
 #ifdef MA_PROF_ENABLED
         Address curBblAddr;
 #endif
@@ -69,6 +76,8 @@ class SimpleCore : public Core {
         //Simulation functions
         inline void load(Address addr, MASize_t size, Address base);
         inline void store(Address addr, MASize_t size, Address base);
+        inline void loadSim(Address addr, MASize_t size, Address base);
+        inline void storeSim(Address addr, MASize_t size, Address base);
         inline void bbl(THREADID tid, Address bblAddr, BblInfo* bblInstrs);
 
         static void LoadFunc(THREADID tid, ADDRINT addr, UINT32 size, ADDRINT base);

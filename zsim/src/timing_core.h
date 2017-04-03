@@ -50,6 +50,13 @@ class TimingCore : public Core {
         bool isCondBrunch;
         bool doSimulateBbl;
 
+        static const int MA_NUM_MAX = 512;
+        Address maAddr[MA_NUM_MAX];
+        MASize_t maSize[MA_NUM_MAX];
+        Address maBase[MA_NUM_MAX];
+        bool maIsLoad[MA_NUM_MAX];
+        int maNum;
+
 #ifdef MA_PROF_ENABLED
         Address curBblAddr;
 #endif
@@ -76,6 +83,8 @@ class TimingCore : public Core {
     private:
         inline void loadAndRecord(Address addr, MASize_t size, Address base);
         inline void storeAndRecord(Address addr, MASize_t size, Address base);
+        inline void loadSim(Address addr, MASize_t size, Address base);
+        inline void storeSim(Address addr, MASize_t size, Address base);
         inline void bblAndRecord(THREADID tid, Address bblAddr, BblInfo* bblInstrs);
         inline void record(uint64_t startCycle);
 

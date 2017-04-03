@@ -37,7 +37,7 @@
 //#define DEBUG_MSG(args...) info(args)
 
 TimingCore::TimingCore(FilterCache* _l1i, FilterCache* _l1d, uint32_t _domain, g_string& _name)
-    : Core(_name), l1i(_l1i), l1d(_l1d), instrs(0), curCycle(0), cRec(_domain, _name), isCondBrunch(false), doSimulateBbl(true) {
+    : Core(_name), l1i(_l1i), l1d(_l1d), instrs(0), curCycle(0), cRec(_domain, _name), isCondBrunch(false), doSimulateBbl(true), maNum(0) {
 #ifdef MA_PROF_ENABLED
     curBblAddr = UNDEF_VIRTUAL_ADDRESS;
 #endif
@@ -91,6 +91,15 @@ void TimingCore::leave() {
 }
 
 void TimingCore::loadAndRecord(Address addr, MASize_t size, Address base) {
+    assert(maNum < MA_NUM_MAX);
+    if (maNum == MA_NUM_MAX) panic("Memory access storage is out of bounds!");
+    maAddr[maNum] = addr;
+    maSize[maNum] = size;
+    maBase[maNum] = base;
+    maIsLoad[maNum++] = true;
+}
+
+void TimingCore::loadSim(Address addr, MASize_t size, Address base) {
     uint64_t startCycle = curCycle;
 #ifdef MA_PROF_ENABLED
 #   ifdef POINTER_TAGGING_ENABLED
@@ -103,9 +112,6 @@ void TimingCore::loadAndRecord(Address addr, MASize_t size, Address base) {
     addr = getUntaggedPointerSE(addr);
     base = getUntaggedPointerSE(base);
 #   ifdef MAXSIM_ENABLED
-    if (!doSimulateBbl) {
-        return;
-    }
     MaxSimRuntimeInfo::getInst().adjustTagAndOffset(tag, offset, addr);
     addr = MaxSimAddressSpaceMorphing::getInst().processMAAddressAndRemap(addr, base, offset, tag);
     MaxSimProfiling::getInst().addMemoryAccess(tag, offset, curBblAddr, false);
@@ -125,6 +131,15 @@ void TimingCore::loadAndRecord(Address addr, MASize_t size, Address base) {
 }
 
 void TimingCore::storeAndRecord(Address addr, MASize_t size, Address base) {
+    assert(maNum < MA_NUM_MAX);
+    if (maNum == MA_NUM_MAX) panic("Memory access storage is out of bounds!");
+    maAddr[maNum] = addr;
+    maSize[maNum] = size;
+    maBase[maNum] = base;
+    maIsLoad[maNum++] = false;
+}
+
+void TimingCore::storeSim(Address addr, MASize_t size, Address base) {
     uint64_t startCycle = curCycle;
 #ifdef MA_PROF_ENABLED
 #   ifdef POINTER_TAGGING_ENABLED
@@ -137,9 +152,6 @@ void TimingCore::storeAndRecord(Address addr, MASize_t size, Address base) {
     addr = getUntaggedPointerSE(addr);
     base = getUntaggedPointerSE(base);
 #   ifdef MAXSIM_ENABLED
-    if (!doSimulateBbl) {
-        return;
-    }
     MaxSimRuntimeInfo::getInst().adjustTagAndOffset(tag, offset, addr);
     addr = MaxSimAddressSpaceMorphing::getInst().processMAAddressAndRemap(addr, base, offset, tag);
     MaxSimProfiling::getInst().addMemoryAccess(tag, offset, curBblAddr, true);
@@ -162,10 +174,19 @@ void TimingCore::bblAndRecord(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
 #ifdef MAXSIM_ENABLED
     doSimulateBbl = MaxSimAddressSpaceMorphing::getInst().processBBlAndDoSimulate(tid, bblAddr, isCondBrunch);
     if (!doSimulateBbl) {
+        maNum = 0;
         isCondBrunch = false;
         return;
     }
 #endif // MAXSIM_ENABLED
+
+    for (int i = 0; i < maNum; i++) {
+        if (maIsLoad[i]) {
+            loadSim(maAddr[i], maSize[i], maBase[i]);
+        } else {
+            storeSim(maAddr[i], maSize[i], maBase[i]);
+        }
+    }
 
     instrs += bblInfo->instrs;
     curCycle += bblInfo->instrs;
@@ -173,6 +194,7 @@ void TimingCore::bblAndRecord(THREADID tid, Address bblAddr, BblInfo* bblInfo) {
 #ifdef MA_PROF_ENABLED
     curBblAddr = bblAddr;
 #endif
+    maNum = 0;
     isCondBrunch = false;
 
     Address endBblAddr = bblAddr + bblInfo->bytes;
