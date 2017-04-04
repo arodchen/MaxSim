@@ -34,13 +34,13 @@ public class MaxSimProfileRepresentation {
         new String("ZSimProfileDB");
 
     private static String ZSimProfileDBOptionHelp =
-        new String("Location of the file containing ZSim profile data base.");
+        new String("Location of the file containing ZSim profile database.");
 
     private static String MaxineInfoDBOptionName =
         new String("MaxineInfoDB");
 
     private static String MaxineInfoDBOptionHelp =
-        new String("Location of the file containing Maxine information data base.");
+        new String("Location of the file containing Maxine information database.");
 
     private boolean profileLoaded;
 

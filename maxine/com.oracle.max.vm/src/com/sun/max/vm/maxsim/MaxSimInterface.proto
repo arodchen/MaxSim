@@ -344,7 +344,7 @@ message DataTransInfo {
   repeated FieldOffsetRemapPair fieldOffsetRemapPairs = 3;
 }
 
-// Data transformation data base.
+// Data transformation database.
 //
 message DataTransDB {
   repeated DataTransInfo dataTransInfo = 1;
@@ -407,7 +407,7 @@ message ClassInfo {
   }
 }
 
-// Maxine information data base.
+// Maxine information database.
 //
 message MaxineInfoDB {
   optional int64 key = 1;
@@ -484,7 +484,7 @@ message ClassProf {
 }
 
 
-// ZSim profile data base.
+// ZSim profile database.
 //
 message ZSimProfDB {
   required int32 maxAllocSiteProfId = 1;

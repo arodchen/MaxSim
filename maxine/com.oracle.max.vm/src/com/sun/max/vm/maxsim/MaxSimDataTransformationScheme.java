@@ -103,5 +103,5 @@ public class MaxSimDataTransformationScheme {
         new ConcurrentHashMap<TypeDescriptor, MaxSimInterface.DataTransInfo.Builder>();
 
     private static VMStringOption MaxSimDataTransDB = VMOptions.register(new VMStringOption("-XX:MaxSimDataTransDB=", false, null,
-        "MaxSim data transformation data base for address space morphing."), MaxineVM.Phase.PRISTINE);
+        "MaxSim data transformation database for address space morphing."), MaxineVM.Phase.PRISTINE);
 }
