@@ -77,16 +77,16 @@ Default values of `message MaxSimConfig` define a build-time MaxSim configuratio
 `isMaxSimEnabled` indicates whether Maxine and ZSim are configured to work in tandem (`true`) or separately (`false`).
 
 `pointerTaggingType` indicates a type of active pointer tagging. Three types of pointer tagging are available:
-`NO_TAGGING` - native x86-64 tagging (sign-extention of the 47th bit),
+`NO_TAGGING` - native x86-64 tagging (sign-extension of the 47th bit),
 `CLASS_ID_TAGGING` - objects tagging by IDs of their classes,
 `ALLOC_SITE_ID_TAGGING` - objects tagging by IDs of allocation sites.
 
-`layoutScaleFactor` and `layoutScaleRefFactor` are paremeters of two bijections of the address space morphing scheme described in the paper. `layoutScaleRefFactor` is the second parameter of f<sub>e</sub> and the first paramter of f<sub>c</sub> bijection. `layoutScaleRefFactor` is the first parameter of f<sub>e</sub> bijection.
+`layoutScaleFactor` and `layoutScaleRefFactor` are parameters of two bijections of the address space morphing scheme described in the paper. `layoutScaleRefFactor` is the second parameter of f<sub>e</sub> and the first parameter of f<sub>c</sub> bijection. `layoutScaleRefFactor` is the first parameter of f<sub>e</sub> bijection.
 
 ##### ZSim MaxSim-Related Configuration Parameters
 `pointerTagging` simulation parameter indicates whether pointer tagging simulation is enabled in ZSim. 
 
-`MAProfCacheGroupId` compact ID can be assigned to a cache. When MaxSim profiling is active, the event related to a specific cache will be aggregated in the corresponding MAProfCacheGroup. `MAProfCacheGroupNames` parameter is associated with caches and it defines names of MAProfCacheGroups delimited by `|` symbol (e.g. ./zsim/tests/*.tmpl).
+`MAProfCacheGroupId` compact ID can be assigned to a cache. When MaxSim profiling is active, the event related to a specific cache will be aggregated in the corresponding MAProfCacheGroup. `MAProfCacheGroupNames` parameter is associated with caches, and it defines names of MAProfCacheGroups delimited by `|` symbol (e.g. ./zsim/tests/*.tmpl).
 
 NOTE: When working in tandem with Maxine VM `startFastForwarded` Maxine VM process parameter should be set to true. Exiting fast forwarding should be performed explicitly in Maxine VM.
 
@@ -105,7 +105,7 @@ NOTE: When working in tandem with Maxine VM `startFastForwarded` Maxine VM proce
 
 `-XX:-TraceMaxSimTagging`               Traces MaxSim tagging.
 
-`-XX:MaxSimDataTransDB=<value>`         MaxSim data transformation data base for address space morphing.
+`-XX:MaxSimDataTransDB=<value>`         MaxSim data transformation database for address space morphing.
 
 NOTE: All flags related to profiling have effect only when `pointerTaggingType [default = CLASS_ID_TAGGING]` or
 `pointerTaggingType [default = ALLOC_SITE_ID_TAGGING]`. `-XX:MaxSimDataTransDB=` accepts `DataTransDB` message with `DataTransInfo`s having `FieldOffsetRemapPair`s representing m<sub>e</sub> reordering map described in the paper.
@@ -134,9 +134,9 @@ cd maxine
 Flags:
 ```
     -MaxineInfoDB=<arg>
-        Location of the file containing Maxine information data base.
+        Location of the file containing Maxine information database.
     -ZSimProfileDB=<arg>
-        Location of the file containing ZSim profile data base.
+        Location of the file containing ZSim profile database.
     -help[=true|false, t|f, y|n] (default: false)
         Show help message and exit.
     -o=<arg> (default: maxsim-prof.txt)
@@ -225,7 +225,7 @@ mkdir dacapo_characterization
 EXTRA_MAXINE_FLAGS="-XX:+MaxSimProfiling -XX:+MaxSimPrintProfileOnVMExit" ./scripts/runMaxSimDacapo.sh dacapo_characterization ./zsim/tests/Nehalem-1CQ.tmpl 1
 sed -i 's/pointerTaggingType = 2 \[default = ALLOC_SITE_ID_TAGGING/pointerTaggingType = 2 \[default = NO_TAGGING/' ./maxine/com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto
 ```
-Retrieves L3 Cache Missed per Kilo Instruction:
+Retrieves L3 Cache Misses per Kilo Instruction:
 ```shell
 ./scripts/retrieveZSimStat.py ./dacapo_characterization/zsim/DaCapo-9.12-bach_eclipse_product_0 1,2 CMLDPKI l3
 ```
@@ -237,7 +237,7 @@ Models energy spent in the non-GC part of the workload:
 ```shell
 ./scripts/runMcPAT.py -z ./dacapo_characterization/zsim/DaCapo-9.12-bach_eclipse_product_0 -e 1
 ```
-Profiles simple `./maxine/com.oracle.max.tests/src/test/output/HelloWorld.java` application using `1CQ` ZSim configuration, modeling compressed object pointers and `String` objects' fields reoredring using `./misc/DataTrans/HelloWorldCompPointDataTrans.db` as described in the example shown in Figure 7 in the paper:
+Profiles simple `./maxine/com.oracle.max.tests/src/test/output/HelloWorld.java` application using `1CQ` ZSim configuration, modeling compressed object pointers and `String` objects' fields reordering using `./misc/DataTrans/HelloWorldCompPointDataTrans.db` as described in the example shown in Figure 7 in the paper:
 ```shell
 # Changes pointerTaggingType default type to CLASS_ID_TAGGING and layoutScaleFactor to 2
 sed -i 's/pointerTaggingType = 2 \[default = NO_TAGGING/pointerTaggingType = 2 \[default = CLASS_ID_TAGGING/' ./maxine/com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto
