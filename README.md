@@ -8,7 +8,7 @@ MaxSim is able to simulate fast and accurately managed workloads running on top 
 It features pointer tagging, low-intrusive microarchitectural profiling based on tagged pointers and modeling of complex software changes via address-space morphing. You can find more details in the paper:
 
 *"MaxSim: A Simulation Platform for Managed Applications",
-Andrey Rodchenko, Christos Kotselidis, Andy Nisbet, Antoniu Pop, and Mikel Lujan, ISPASS 2017*. [[paper]](https://www.researchgate.net/publication/316473850_MaxSim_A_Simulation_Platform_for_Managed_Applications) [[slides]](http://apt.cs.manchester.ac.uk/people/arodchenko/MaxSim_A_Simulation_Platform_for_Managed_Applications_Slides.pdf)
+Andrey Rodchenko, Christos Kotselidis, Andy Nisbet, Antoniu Pop, and Mikel Lujan, ISPASS 2017 (Best Paper Award)*. [[paper]](https://www.researchgate.net/publication/316473850_MaxSim_A_Simulation_Platform_for_Managed_Applications) [[slides]](http://apt.cs.manchester.ac.uk/people/arodchenko/MaxSim_A_Simulation_Platform_for_Managed_Applications_Slides.pdf)
 
 ##### Acknowledgements
 This work is partially supported by EPSRC grants PAMELA EP/K008730/1,
