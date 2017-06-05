@@ -24,7 +24,7 @@ Dependencies
 
 Environment Variables
 ---------------------
-`Maxine VM, ZSim, McPAT enviroment variables`
+`Maxine VM, ZSim, McPAT environment variables`
 
 `PROTOBUFPATH=<protobuf-2.6.1 install path>`
 
