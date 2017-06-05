@@ -81,7 +81,7 @@ Default values of `message MaxSimConfig` define a build-time MaxSim configuratio
 `CLASS_ID_TAGGING` - objects tagging by IDs of their classes,
 `ALLOC_SITE_ID_TAGGING` - objects tagging by IDs of allocation sites.
 
-`layoutScaleFactor` and `layoutScaleRefFactor` are parameters of two bijections of the address space morphing scheme described in the paper. `layoutScaleRefFactor` is the second parameter of f<sub>e</sub> and the first parameter of f<sub>c</sub> bijection. `layoutScaleRefFactor` is the first parameter of f<sub>e</sub> bijection.
+`layoutScaleFactor` and `layoutScaleRefFactor` are parameters of two bijections of the address space morphing scheme described in the paper. `layoutScaleFactor` is the second parameter of f<sub>e</sub> and the first parameter of f<sub>c</sub> bijection. `layoutScaleRefFactor` is the first parameter of f<sub>e</sub> bijection.
 
 ##### ZSim MaxSim-Related Configuration Parameters
 `pointerTagging` simulation parameter indicates whether pointer tagging simulation is enabled in ZSim. 
