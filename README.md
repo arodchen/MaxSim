@@ -97,7 +97,7 @@ NOTE: When working in tandem with Maxine VM `startFastForwarded` Maxine VM proce
 
 `-XX:MaxSimMaxineInfoFileName=<value>`  - MaxSim Maxine information file name (default: maxine-info.db).
 
-`-XX:-MaxSimPrintProfileOnVMExit`       - makes MaxSim to print profiling information on VM exit (default: `false`).
+`-XX:-MaxSimPrintProfileOnVMExit`       - makes MaxSim print profiling information on VM exit (default: `false`).
 
 `-XX:-MaxSimProfiling`                  - enables MaxSim profiling (default: `false`).
 
@@ -107,7 +107,7 @@ NOTE: When working in tandem with Maxine VM `startFastForwarded` Maxine VM proce
 
 `-XX:MaxSimDataTransDB=<value>`         - MaxSim data transformation database for address space morphing.
 
-NOTE: All flags related to profiling have effect only when `pointerTaggingType [default = CLASS_ID_TAGGING]` or
+NOTE: All the flags, related to collecting and printing profiling information, have effect only either when `pointerTaggingType [default = CLASS_ID_TAGGING]` or when
 `pointerTaggingType [default = ALLOC_SITE_ID_TAGGING]`. `-XX:MaxSimDataTransDB=` accepts `DataTransDB` message with `DataTransInfo`s having `FieldOffsetRemapPair`s representing m<sub>e</sub> reordering map described in the paper.
 `-XX:MaxSimDataTransDB=` has effect only when `pointerTaggingType [default = CLASS_ID_TAGGING]`.
 
