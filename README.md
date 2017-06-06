@@ -190,7 +190,7 @@ Flags:
     [-t <type: total|dynamic|static|peak|peakdynamic|area>]
     [-o <output-file (power{.png,.txt,.py})>]
 ```
-NOTE: The parts of this script were obtained from [the Sniper simulator](http://snipersim.org/w/The_Sniper_Multi-Core_Simulator) under [MIT License](http://snipersim.org/w/License).
+NOTE: The parts of this script were obtained from [the Sniper simulator](http://snipersim.org/w/The_Sniper_Multi-Core_Simulator) under the [MIT License](http://snipersim.org/w/License).
 
 Recipes
 -------
