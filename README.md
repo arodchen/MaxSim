@@ -114,13 +114,13 @@ NOTE: All the flags, related to collecting and printing profiling information, h
 ##### Controlling Simulation by Managed Applications
 MaxSim simulation can be controlled by managed applications by setting `MaxSim.Command` property (via a call to `System.setProperty("MaxSim.Command", <value>)`) the following values:
 
-`"ROI_BEGIN()"` Exits fast-forwarding mode and starts simulation of a region of interest.
+`"ROI_BEGIN()"` - exits fast-forwarding mode and starts simulation of a region of interest.
 
-`"ROI_END()"`   Enters fast-forwarding mode and stops simulation of a region of interest.
+`"ROI_END()"`   - enters fast-forwarding mode and stops simulation of a region of interest.
 
-`"PRINT_PROFILE_TO_FILE(<file name>)"` Prints profile to a file with a specified name.
+`"PRINT_PROFILE_TO_FILE(<file name>)"` - prints profile to a file with a specified name.
 
-`"RESET_PROFILE_COLLECTION()"` Resets profile collection.
+`"RESET_PROFILE_COLLECTION()"` - resets profile collection.
 
 NOTE: All commands related to profiling have effect only when `pointerTaggingType [default = CLASS_ID_TAGGING]` or
 `pointerTaggingType [default = ALLOC_SITE_ID_TAGGING]` and `-XX:+MaxSimProfiling` flag is passed to Maxine VM.
