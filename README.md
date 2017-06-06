@@ -170,7 +170,7 @@ Arguments:
                            ST      - stores
                            LDST    - loads and stores
                            PKI     - per kilo instruction
-    <cahe name> - cache name required only for cache characteristics listed avove
+    <cahe name> - cache name required only for cache characteristics listed above
 ```
 NOTE: The parts of this script were obtained from [the ZSim-NVMain simulator](https://github.com/AXLEproject/axle-zsim-nvmain).
 
