@@ -33,25 +33,25 @@ Environment Variables
 Usage
 -----
 ##### Building, Cleaning, Style Checking, and Setting Kernel Parameters
-`./scripts/generateMaxSimInterface.sh`             - generates MaxSim interface
+`./scripts/generateMaxSimInterface.sh`             - generates MaxSim interface.
 
-`./scripts/setZSimKernelParameters.sh`             - sets ZSim kernel parameters (requires sudo)
+`./scripts/setZSimKernelParameters.sh`             - sets ZSim kernel parameters (requires sudo).
 
-`./scripts/buildMaxine<Debug|Product>.sh`          - builds Maxine VM (and re-generates MaxSim interface)
+`./scripts/buildMaxine<Debug|Product>.sh`          - builds Maxine VM (and re-generates MaxSim interface).
 
-`./scripts/buildImageC1X<Debug|Product>.sh`        - builds Maxine VM image
+`./scripts/buildImageC1X<Debug|Product>.sh`        - builds Maxine VM image.
 
-`./scripts/buildZSim<Debug|Product>.sh`            - builds ZSim (and re-generates MaxSim interface)
+`./scripts/buildZSim<Debug|Product>.sh`            - builds ZSim (and re-generates MaxSim interface).
 
-`./scripts/buildMaxSim<Debug|Product>.sh`          - builds MaxSim (does all mentioned above)
+`./scripts/buildMaxSim<Debug|Product>.sh`          - builds MaxSim (does all mentioned above).
 
-`./scripts/cleanMaxine.sh`                         - cleans Maxine VM
+`./scripts/cleanMaxine.sh`                         - cleans Maxine VM.
 
-`./scripts/cleanZSim.sh`                           - cleans ZSim
+`./scripts/cleanZSim.sh`                           - cleans ZSim.
 
-`./scripts/cleanMaxSim.sh`                         - cleans Maxine VM and ZSim
+`./scripts/cleanMaxSim.sh`                         - cleans Maxine VM and ZSim.
 
-`./scripts/checkStyle.sh`                          - checks style in Maxine VM
+`./scripts/checkStyle.sh`                          - checks style in Maxine VM.
 
 ##### Running DaCapo-9.12-bach Benchmarks
 Command:
@@ -91,21 +91,21 @@ Default values of `message MaxSimConfig` define a build-time MaxSim configuratio
 NOTE: When working in tandem with Maxine VM `startFastForwarded` Maxine VM process parameter should be set to `true`. Exiting fast forwarding should be performed explicitly in Maxine VM.
 
 ##### MaxineVM MaxSim-Related Flags
-`-XX:-MaxSimEnterFFOnVMExit`            Makes MaxSim enter fast forwarding mode on VM exit (default: `false`).
+`-XX:-MaxSimEnterFFOnVMExit`            - makes MaxSim enter fast forwarding mode on VM exit (default: `false`).
 
-`-XX:-MaxSimExitFFOnVMEnter`            Makes MaxSim exit fast forwarding mode on VM enter (default: `false`).
+`-XX:-MaxSimExitFFOnVMEnter`            - makes MaxSim exit fast forwarding mode on VM enter (default: `false`).
 
-`-XX:MaxSimMaxineInfoFileName=<value>`  MaxSim Maxine information file name (default: maxine-info.db).
+`-XX:MaxSimMaxineInfoFileName=<value>`  - MaxSim Maxine information file name (default: maxine-info.db).
 
-`-XX:-MaxSimPrintProfileOnVMExit`       Makes MaxSim to print profiling information on VM exit (default: `false`).
+`-XX:-MaxSimPrintProfileOnVMExit`       - makes MaxSim to print profiling information on VM exit (default: `false`).
 
-`-XX:-MaxSimProfiling`                  Enables MaxSim profiling (default: `false`).
+`-XX:-MaxSimProfiling`                  - enables MaxSim profiling (default: `false`).
 
-`-XX:MaxSimZSimProfileFileName=<value>` MaxSim ZSim profile file name (default: zsim-prof.db).
+`-XX:MaxSimZSimProfileFileName=<value>` - MaxSim ZSim profile file name (default: zsim-prof.db).
 
-`-XX:-TraceMaxSimTagging`               Traces MaxSim tagging.
+`-XX:-TraceMaxSimTagging`               - traces MaxSim tagging.
 
-`-XX:MaxSimDataTransDB=<value>`         MaxSim data transformation database for address space morphing.
+`-XX:MaxSimDataTransDB=<value>`         - MaxSim data transformation database for address space morphing.
 
 NOTE: All flags related to profiling have effect only when `pointerTaggingType [default = CLASS_ID_TAGGING]` or
 `pointerTaggingType [default = ALLOC_SITE_ID_TAGGING]`. `-XX:MaxSimDataTransDB=` accepts `DataTransDB` message with `DataTransInfo`s having `FieldOffsetRemapPair`s representing m<sub>e</sub> reordering map described in the paper.
