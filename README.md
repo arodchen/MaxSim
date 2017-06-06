@@ -213,7 +213,7 @@ popd
 # Changes back pointerTaggingType to NO_TAGGING
 sed -i 's/pointerTaggingType = 2 \[default = CLASS_ID_TAGGING/pointerTaggingType = 2 \[default = NO_TAGGING/' ./maxine/com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto
 ```
-Profiles simple `./maxine/com.oracle.max.tests/src/test/output/MaxSimSingleLinkedList.java` application using `1CQ` ZSim configuration (the configuration description is in the paper):
+Profiles a simple application performing various operations with a singly linked list `./maxine/com.oracle.max.tests/src/test/output/MaxSimSingleLinkedList.java` using `1CQ` ZSim configuration (the configuration description is in the paper):
 ```shell
 # Changes pointerTaggingType default type to CLASS_ID_TAGGING
 sed -i 's/pointerTaggingType = 2 \[default = NO_TAGGING/pointerTaggingType = 2 \[default = CLASS_ID_TAGGING/' ./maxine/com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto
