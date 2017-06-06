@@ -107,8 +107,8 @@ NOTE: When working in tandem with Maxine VM `startFastForwarded` Maxine VM proce
 
 `-XX:MaxSimDataTransDB=<value>`         - MaxSim data transformation database for address space morphing.
 
-NOTE: All the flags, related to collecting and printing profiling information, have effect only either when `pointerTaggingType [default = CLASS_ID_TAGGING]` or when
-`pointerTaggingType [default = ALLOC_SITE_ID_TAGGING]`. `-XX:MaxSimDataTransDB=` accepts `DataTransDB` message with `DataTransInfo`s having `FieldOffsetRemapPair`s representing m<sub>e</sub> reordering map described in the paper.
+NOTE: All the flags, related to collecting and printing profiling information, have effect only when either `pointerTaggingType [default = ALLOC_SITE_ID_TAGGING]` or
+`pointerTaggingType [default = CLASS_ID_TAGGING]`. `-XX:MaxSimDataTransDB=` accepts `DataTransDB` message with `DataTransInfo`s having `FieldOffsetRemapPair`s representing m<sub>e</sub> reordering map described in the paper.
 `-XX:MaxSimDataTransDB=` has effect only when `pointerTaggingType [default = CLASS_ID_TAGGING]`.
 
 ##### Controlling Simulation by Managed Applications
@@ -122,8 +122,10 @@ MaxSim simulation can be controlled by managed applications by setting `MaxSim.C
 
 `"RESET_PROFILE_COLLECTION()"` - resets profile collection.
 
-NOTE: All commands related to profiling have effect only when `pointerTaggingType [default = CLASS_ID_TAGGING]` or
-`pointerTaggingType [default = ALLOC_SITE_ID_TAGGING]` and `-XX:+MaxSimProfiling` flag is passed to Maxine VM.
+NOTE: All the commands, related to collecting and printing profiling information,
+have effect only when either `pointerTaggingType [default = CLASS_ID_TAGGING]` or
+`pointerTaggingType [default = ALLOC_SITE_ID_TAGGING]`, and when, at the same time,
+`-XX:+MaxSimProfiling` flag is passed to Maxine VM.
 
 ##### Printing Profiling Information in the Textual Format
 Command:
