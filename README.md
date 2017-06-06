@@ -158,8 +158,8 @@ Arguments:
                              listed in MaxineVMOperationMode in MaxSimInterface.proto
     <characteristic> - retrieved characteristic. Supported characteristics are:
                        C - cycles
-                       I - intructions
-                       IPC - intructions per clock
+                       I - instructions
+                       IPC - instructions per clock
                        C[H|M|A][LD|ST|LDST](PKI) - cache characteristics
                            [..|..] - required alternatives
                            (..|..) - optional alternatives
