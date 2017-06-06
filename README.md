@@ -198,14 +198,18 @@ Profiles simple `./maxine/com.oracle.max.tests/src/test/output/HelloWorld.java` 
 ```shell
 # Changes pointerTaggingType default type to CLASS_ID_TAGGING
 sed -i 's/pointerTaggingType = 2 \[default = NO_TAGGING/pointerTaggingType = 2 \[default = CLASS_ID_TAGGING/' ./maxine/com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto
+
 # Builds MaxSim
 ./scripts/buildMaxSimProduct.sh
+
 # Simulates HelloWorld application and produces ZSim profile and Maxine information files (zsim-prof.db and maxine-info.db).
 ./zsim/build/release/zsim ./zsim/tests/Nehalem-4C_MaxineHelloWorld.cfg
+
 # Prints profile to maxsim-prof.txt
 pushd maxine
 ../graal/mxtool/mx maxsimprofprint -MaxineInfoDB=../maxine-info.db -ZSimProfileDB=../zsim-prof.db -o=../maxsim-prof.txt
 popd
+
 # Changes back pointerTaggingType to NO_TAGGING
 sed -i 's/pointerTaggingType = 2 \[default = CLASS_ID_TAGGING/pointerTaggingType = 2 \[default = NO_TAGGING/' ./maxine/com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto
 ```
@@ -213,18 +217,24 @@ Profiles simple `./maxine/com.oracle.max.tests/src/test/output/MaxSimSingleLinke
 ```shell
 # Changes pointerTaggingType default type to CLASS_ID_TAGGING
 sed -i 's/pointerTaggingType = 2 \[default = NO_TAGGING/pointerTaggingType = 2 \[default = CLASS_ID_TAGGING/' ./maxine/com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto
+
 # Builds MaxSim
 ./scripts/buildMaxSimProduct.sh
+
 # Simulates MaxSimSingleLinkedList application and produces three ZSim profile and one Maxine information files.
 ./zsim/build/release/zsim ./zsim/tests/Nehalem-1CQ_MaxSimSingleLinkedList.cfg
+
 # Change back pointerTaggingType to NO_TAGGING
 sed -i 's/pointerTaggingType = 2 \[default = CLASS_ID_TAGGING/pointerTaggingType = 2 \[default = NO_TAGGING/' ./maxine/com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto
 ```
 Characterizes and profiles `DaCapo-9.12-bach` using `1CQ` ZSim configuration (the configuration description is in the paper):
 ```shell
 sed -i 's/pointerTaggingType = 2 \[default = NO_TAGGING/pointerTaggingType = 2 \[default = ALLOC_SITE_ID_TAGGING/' ./maxine/com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto
+
 mkdir dacapo_characterization
+
 EXTRA_MAXINE_FLAGS="-XX:+MaxSimProfiling -XX:+MaxSimPrintProfileOnVMExit" ./scripts/runMaxSimDacapo.sh dacapo_characterization ./zsim/tests/Nehalem-1CQ.tmpl 1
+
 sed -i 's/pointerTaggingType = 2 \[default = ALLOC_SITE_ID_TAGGING/pointerTaggingType = 2 \[default = NO_TAGGING/' ./maxine/com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto
 ```
 Retrieves L3 Cache Misses per Kilo Instruction:
@@ -244,14 +254,18 @@ Profiles simple `./maxine/com.oracle.max.tests/src/test/output/HelloWorld.java` 
 # Changes pointerTaggingType default type to CLASS_ID_TAGGING and layoutScaleFactor to 2
 sed -i 's/pointerTaggingType = 2 \[default = NO_TAGGING/pointerTaggingType = 2 \[default = CLASS_ID_TAGGING/' ./maxine/com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto
 sed -i 's/layoutScaleFactor = 3 \[default = 1/layoutScaleFactor = 3 \[default = 2/' maxine/com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto
+
 # Builds MaxSim
 ./scripts/buildMaxSimProduct.sh
+
 # Simulates HelloWorld application and produces ZSim profile and Maxine information files (zsim-prof.db and maxine-info.db).
 ./zsim/build/release/zsim ./zsim/tests/Nehalem-1CQ_MaxineHelloWorldCompPointDataTrans.cfg
+
 # Prints profile to maxsim-prof.txt
 pushd maxine
 ../graal/mxtool/mx maxsimprofprint -MaxineInfoDB=../maxine-info.db -ZSimProfileDB=../zsim-prof.db -o=../maxsim-prof.txt
 popd
+
 # Change back pointerTaggingType to NO_TAGGING and layoutScaleFactor to 1
 sed -i 's/pointerTaggingType = 2 \[default = CLASS_ID_TAGGING/pointerTaggingType = 2 \[default = NO_TAGGING/' ./maxine/com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto
 sed -i 's/layoutScaleFactor = 3 \[default = 2/layoutScaleFactor = 3 \[default = 1/' maxine/com.oracle.max.vm/src/com/sun/max/vm/maxsim/MaxSimInterface.proto
