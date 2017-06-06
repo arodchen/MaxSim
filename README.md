@@ -88,18 +88,18 @@ Default values of `message MaxSimConfig` define a build-time MaxSim configuratio
 
 `MAProfCacheGroupId` compact ID can be assigned to a cache. When MaxSim profiling is active, the event related to a specific cache will be aggregated in the corresponding MAProfCacheGroup. `MAProfCacheGroupNames` parameter is associated with caches, and it defines names of MAProfCacheGroups delimited by `|` symbol (e.g. ./zsim/tests/*.tmpl).
 
-NOTE: When working in tandem with Maxine VM `startFastForwarded` Maxine VM process parameter should be set to true. Exiting fast forwarding should be performed explicitly in Maxine VM.
+NOTE: When working in tandem with Maxine VM `startFastForwarded` Maxine VM process parameter should be set to `true`. Exiting fast forwarding should be performed explicitly in Maxine VM.
 
 ##### MaxineVM MaxSim-Related Flags
-`-XX:-MaxSimEnterFFOnVMExit`            Makes MaxSim enter fast forwarding mode on VM exit (default: false).
+`-XX:-MaxSimEnterFFOnVMExit`            Makes MaxSim enter fast forwarding mode on VM exit (default: `false`).
 
-`-XX:-MaxSimExitFFOnVMEnter`            Makes MaxSim exit fast forwarding mode on VM enter (default: false).
+`-XX:-MaxSimExitFFOnVMEnter`            Makes MaxSim exit fast forwarding mode on VM enter (default: `false`).
 
 `-XX:MaxSimMaxineInfoFileName=<value>`  MaxSim Maxine information file name (default: maxine-info.db).
 
-`-XX:-MaxSimPrintProfileOnVMExit`       Makes MaxSim to print profiling information on VM exit (default: false).
+`-XX:-MaxSimPrintProfileOnVMExit`       Makes MaxSim to print profiling information on VM exit (default: `false`).
 
-`-XX:-MaxSimProfiling`                  Enables MaxSim profiling (default: false).
+`-XX:-MaxSimProfiling`                  Enables MaxSim profiling (default: `false`).
 
 `-XX:MaxSimZSimProfileFileName=<value>` MaxSim ZSim profile file name (default: zsim-prof.db).
 
