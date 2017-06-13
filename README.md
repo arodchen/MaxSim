@@ -84,9 +84,9 @@ Default values of `message MaxSimConfig` define a build-time MaxSim configuratio
 `layoutScaleFactor` and `layoutScaleRefFactor` are parameters of two bijections of the address space morphing scheme described in the paper. `layoutScaleFactor` is the second parameter of f<sub>e</sub> and the first parameter of f<sub>c</sub> bijection. `layoutScaleRefFactor` is the first parameter of f<sub>e</sub> bijection.
 
 ##### ZSim MaxSim-Related Configuration Parameters
-`pointerTagging` simulation parameter indicates whether pointer tagging simulation is enabled in ZSim. 
+The `pointerTagging` simulation parameter indicates whether pointer tagging simulation is enabled in ZSim. 
 
-`MAProfCacheGroupId` compact ID can be assigned to a cache. When MaxSim profiling is active, the event related to a specific cache will be aggregated in the corresponding MAProfCacheGroup. `MAProfCacheGroupNames` parameter is associated with caches, and it defines names of MAProfCacheGroups delimited by `|` symbol (e.g. ./zsim/tests/*.tmpl).
+The `MAProfCacheGroupId` compact ID can be assigned to a cache. When MaxSim profiling is active, the event related to a specific cache will be aggregated in the corresponding MAProfCacheGroup. `MAProfCacheGroupNames` parameter is associated with caches, and it defines names of MAProfCacheGroups delimited by `|` symbol (e.g. ./zsim/tests/*.tmpl).
 
 NOTE: When working in tandem with Maxine VM `startFastForwarded` Maxine VM process parameter should be set to `true`. Exiting fast forwarding should be performed explicitly in Maxine VM.
 
@@ -177,7 +177,7 @@ NOTE: The parts of this script were obtained from [the ZSim-NVMain simulator](ht
 ##### Modeling Power and Energy Using McPAT
 Command:
 ```shell
-./scripts/runMcPAT.py
+./scripts/runMcPAT.py <flags>
 ```
 Flags:
 ```
