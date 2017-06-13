@@ -22,9 +22,9 @@ Dependencies
 ------------
 `Maxine VM dependencies, ZSim dependencies, McPAT dependencies, protobuf-2.6.1, timelimit`
 
-Environment Variables
+Required Environment Variables
 ---------------------
-`Maxine VM, ZSim, McPAT environment variables`
+`Maxine VM, ZSim, McPAT required environment variables`
 
 `PROTOBUFPATH=<protobuf-2.6.1 install path>`
 
