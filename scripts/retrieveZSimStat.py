@@ -192,7 +192,7 @@ elif char == 'CALDSTPKI':
           
 else:
   print char + " characteristic is not supported!"
-  print "Valid characteristics are:"
+  print "Supported characteristics are:"
   print "  C - cycles"
   print "  I - instructions"
   print "  IPC - instructions per clock"
