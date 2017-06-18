@@ -53,7 +53,7 @@ def total_cores(a):
 def cache_levels(a):
   last_level = 0
   for k, v in a['sys']['caches'].items():
-      if k == 'MAStatsCacheGroupNames':
+      if k == 'MAProfCacheGroupNames':
           continue
       assert(k.lower().startswith('l'))
       curr_level = int(k[1:2])
