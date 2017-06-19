@@ -3,7 +3,7 @@ MaxSim
 
 Description
 -----------
-**MaxSim** is a simulation platform based on the [Maxine VM 2.0.5](https://github.com/beehive-lab/Maxine-VM/releases/tag/v2.0.5), the [ZSim simulator](https://github.com/s5z/zsim), and the McPAT 1.0 modeling framework.
+**MaxSim** is a simulation platform based on the [Maxine VM 2.0.5](https://github.com/beehive-lab/Maxine-VM/releases/tag/v2.0.5) with [updates](https://github.com/arodchen/maxine), the [ZSim simulator](https://github.com/s5z/zsim) with [updates](https://github.com/arodchen/zsim), and the [McPAT 1.0 modeling framework](https://github.com/HewlettPackard/mcpat).
 MaxSim is able to simulate fast and accurately managed workloads running on top of Maxine VM.
 It features pointer tagging, low-intrusive microarchitectural profiling based on tagged pointers and modeling of complex software changes via address-space morphing. You can find more details in the paper:
 
