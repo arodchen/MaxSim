@@ -3,7 +3,7 @@ MaxSim
 
 Description
 -----------
-**MaxSim** is a simulation platform based on the Maxine VM 2.0, the ZSim simulator, and the McPAT 1.0 modeling framework.
+**MaxSim** is a simulation platform based on the [Maxine VM 2.0.5](https://github.com/beehive-lab/Maxine-VM/releases/tag/v2.0.5), the [ZSim simulator](https://github.com/s5z/zsim), and the McPAT 1.0 modeling framework.
 MaxSim is able to simulate fast and accurately managed workloads running on top of Maxine VM.
 It features pointer tagging, low-intrusive microarchitectural profiling based on tagged pointers and modeling of complex software changes via address-space morphing. You can find more details in the paper:
 
@@ -20,11 +20,11 @@ and M. Lujan is funded by a Royal Society University Research Fellowship.
 
 Dependencies
 ------------
-`Maxine VM 2.0 dependencies, Oracle JDK 7u25 for Linux x64, ZSim dependencies, McPAT 1.0 dependencies, protobuf-2.6.1, timelimit`
+`Maxine VM 2.0.5 dependencies, Oracle JDK 7u25 for Linux x64, ZSim dependencies, McPAT 1.0 dependencies, protobuf-2.6.1, timelimit`
 
 Required Environment Variables
 ---------------------
-`Maxine VM 2.0, ZSim, McPAT 1.0 required environment variables`
+`Maxine VM 2.0.5, ZSim, McPAT 1.0 required environment variables`
 
 `PROTOBUFPATH=<protobuf-2.6.1 install path>`
 
